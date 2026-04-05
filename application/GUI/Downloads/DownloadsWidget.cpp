@@ -72,8 +72,38 @@ void DownloadsDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opt
       case Protos::GUI::State::Download::PAUSED:
          progressBarOption.text = tr("Paused");
          break;
+      case Protos::GUI::State::Download::UNKNOWN_PEER_SOURCE:
+         progressBarOption.text = tr("Peer offline");
+         break;
+      case Protos::GUI::State::Download::ENTRY_NOT_FOUND:
+         progressBarOption.text = tr("Not found");
+         break;
+      case Protos::GUI::State::Download::NO_SOURCE:
+         progressBarOption.text = tr("No source");
+         break;
+      case Protos::GUI::State::Download::NO_SHARED_DIRECTORY_TO_WRITE:
+         progressBarOption.text = tr("No incoming dir");
+         break;
+      case Protos::GUI::State::Download::NO_ENOUGH_FREE_SPACE:
+         progressBarOption.text = tr("No space");
+         break;
+      case Protos::GUI::State::Download::UNABLE_TO_CREATE_THE_FILE:
+         progressBarOption.text = tr("Can't create file");
+         break;
+      case Protos::GUI::State::Download::UNABLE_TO_CREATE_THE_DIRECTORY:
+         progressBarOption.text = tr("Can't create dir");
+         break;
+      case Protos::GUI::State::Download::UNABLE_TO_RETRIEVE_THE_HASHES:
+         progressBarOption.text = tr("Hash retrieval failed");
+         break;
+      case Protos::GUI::State::Download::REMOTE_SCANNING_IN_PROGRESS:
+         progressBarOption.text = tr("Remote scanning..");
+         break;
+      case Protos::GUI::State::Download::LOCAL_SCANNING_IN_PROGRESS:
+         progressBarOption.text = tr("Local scanning..");
+         break;
       default:
-         progressBarOption.text = tr("Waiting..");
+         progressBarOption.text = tr("Error (0x%1)").arg(progress.status, 0, 16);
          break;
       }
 
