@@ -221,38 +221,23 @@ void File::populateEntry(Protos::Common::Entry* entry, bool setSharedDir) const
 
 void File::populateEntry(Protos::Common::Entry* entry, bool setSharedDir, int maxHashes) const
 {
-   L_WARN(QString("File::populateEntry: ENTER file='%1' chunks=%2").arg(this->getName()).arg(this->chunks.size()));
    QMutexLocker locker(&this->mutex);
-   L_WARN("File::populateEntry: mutex acquired, calling Entry::populateEntry");
 
    Entry::populateEntry(entry, setSharedDir);
-   L_WARN("File::populateEntry: Entry::populateEntry done, setting type");
 
    entry->set_type(Protos::Common::Entry_Type_FILE);
 
    entry->clear_chunk();
-   L_WARN(QString("File::populateEntry: iterating %1 chunks").arg(this->chunks.size()));
 
    int nb = 0;
-   int chunkIdx = 0;
    for (QVectorIterator<QSharedPointer<Chunk>> i(this->chunks); i.hasNext();)
    {
-      L_WARN(QString("File::populateEntry: chunk[%1] add_chunk").arg(chunkIdx));
       Protos::Common::Hash* protoHash = entry->add_chunk();
 
-      L_WARN(QString("File::populateEntry: chunk[%1] getHash").arg(chunkIdx));
       Common::Hash hash = i.next()->getHash();
-
-      L_WARN(QString("File::populateEntry: chunk[%1] isNull check").arg(chunkIdx));
       if (!hash.isNull() && ++nb <= maxHashes)
-      {
-         L_WARN(QString("File::populateEntry: chunk[%1] set_hash").arg(chunkIdx));
          protoHash->set_hash(hash.getData(), Common::Hash::HASH_SIZE);
-      }
-      L_WARN(QString("File::populateEntry: chunk[%1] OK").arg(chunkIdx));
-      ++chunkIdx;
    }
-   L_WARN("File::populateEntry: DONE");
 }
 
 bool File::matchesEntry(const Protos::Common::Entry& entry) const
@@ -277,9 +262,9 @@ bool File::correspondTo(const QFileInfo& fileInfo, bool checkTheDateToo)
 Common::Path File::getPath() const
 {
    if (this->dir)
-      this->dir->getPath().appendDir(this->dir->getName()).setFilename(this->name);
+      return this->dir->getPath().appendDir(this->dir->getName()).setFilename(this->name);
    else
-      Common::Path();
+      return Common::Path();
 }
 
 Common::Path File::getFullPath() const
