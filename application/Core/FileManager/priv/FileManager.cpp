@@ -84,6 +84,15 @@ FileManager::~FileManager()
 {
    L_DEBU("~FileManager: Stopping the file updater . . .");
    this->fileUpdater.stop();
+
+   // Save the cache one final time before shutdown.
+   this->timerPersistCache.stop();
+   this->mutexCacheChanged.lock();
+   this->cacheChanged = true;
+   this->cacheLoading = false;
+   this->mutexCacheChanged.unlock();
+   this->persistCacheToFile();
+
    this->cache.disconnect(this);
    L_DEBU("FileManager deleted");
 }

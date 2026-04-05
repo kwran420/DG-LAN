@@ -92,16 +92,22 @@ Filename: {app}/DG-LAN.Core.exe; Parameters: -u;
 Filename: {sys}/netsh.exe; Parameters: "firewall delete allowedprogram program=""{app}/DG-LAN.Core.exe"""; Flags: runhidden; MinVersion: 0,5.01.2600sp2; Tasks: Firewall;
 
 [code]
-// Will stop the Core service.
+// Will stop the Core service gracefully to allow cache persistence.
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ResultCode: integer;
 begin
+  // Request graceful stop of the service (allows cache to be saved).
   Exec(ExpandConstant('{sys}/sc.exe'), 'stop "DG-LAN Core"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec(ExpandConstant('{sys}/sc.exe'), 'stop "D-LAN Core"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec(ExpandConstant('{sys}/taskkill.exe'), '/F /IM DG-LAN.Core.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec(ExpandConstant('{sys}/taskkill.exe'), '/F /IM DG-LAN.GUI.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Sleep(1000);
+
+  // Wait for the Core service to stop gracefully and persist the file cache.
+  Sleep(5000);
+
+  // Force-kill only as a last resort if the service didn't stop in time.
+  Exec(ExpandConstant('{sys}/taskkill.exe'), '/F /IM DG-LAN.Core.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(500);
   NeedsRestart := False;
   Result := '';
 end;

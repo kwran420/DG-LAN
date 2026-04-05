@@ -213,7 +213,7 @@ void FileUpdater::run()
       Entry* entry = this->entriesToScan.takeFirst();
       this->scan(entry, true);
       if (this->fileCacheInformation)
-         if (SharedDirectory* sharedDir = dynamic_cast<SharedDirectory*>(entry))
+         if (SharedDirectory* sharedDir = dynamic_cast<SharedDirectory*>(entry->getRoot()))
             this->restoreFromFileCache(sharedDir);
    }
 
