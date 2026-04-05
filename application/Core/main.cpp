@@ -22,6 +22,14 @@
 #include <QTextCodec>
 #include <QTextStream>
 #include <QLocale>
+#include <QDateTime>
+#include <QDir>
+#include <QFile>
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <dbghelp.h>
+#endif
 
 #include <Common/Global.h>
 #include <Common/LogManager/Builder.h>
@@ -54,12 +62,57 @@ void printUsage(QString appName)
           "  --version : Print the version" << endl;
 }
 
+#ifdef Q_OS_WIN
+static LONG WINAPI crashHandler(EXCEPTION_POINTERS* exInfo)
+{
+   // Write a minidump
+   QString dumpDir = Common::Global::getDataFolder(Common::Global::DataFolderType::LOCAL);
+   if (dumpDir.isEmpty())
+      dumpDir = QDir::tempPath();
+   QString dumpPath = dumpDir + "/DG-LAN_crash_" + QDateTime::currentDateTime().toString("yyyy-MM-dd_HH-mm-ss") + ".dmp";
+   HANDLE hFile = CreateFileW(reinterpret_cast<const wchar_t*>(dumpPath.utf16()), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+   if (hFile != INVALID_HANDLE_VALUE)
+   {
+      MINIDUMP_EXCEPTION_INFORMATION mei;
+      mei.ThreadId = GetCurrentThreadId();
+      mei.ExceptionPointers = exInfo;
+      mei.ClientPointers = FALSE;
+      MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile, MiniDumpWithDataSegs, &mei, nullptr, nullptr);
+      CloseHandle(hFile);
+   }
+
+   // Also write a human-readable crash log
+   QString logPath = dumpDir + "/DG-LAN_crash_" + QDateTime::currentDateTime().toString("yyyy-MM-dd_HH-mm-ss") + ".log";
+   QFile logFile(logPath);
+   if (logFile.open(QIODevice::WriteOnly | QIODevice::Text))
+   {
+      QTextStream out(&logFile);
+      out << "DG-LAN Core Crash Report" << Qt::endl;
+      out << "Time: " << QDateTime::currentDateTime().toString(Qt::ISODate) << Qt::endl;
+      out << "Exception code: 0x" << QString::number(exInfo->ExceptionRecord->ExceptionCode, 16) << Qt::endl;
+      out << "Exception address: 0x" << QString::number(reinterpret_cast<quint64>(exInfo->ExceptionRecord->ExceptionAddress), 16) << Qt::endl;
+      out << "Dump file: " << dumpPath << Qt::endl;
+      logFile.close();
+   }
+
+   // Write to stderr too
+   std::cerr << "FATAL CRASH: exception 0x" << std::hex << exInfo->ExceptionRecord->ExceptionCode
+             << " at 0x" << reinterpret_cast<void*>(exInfo->ExceptionRecord->ExceptionAddress) << std::endl;
+   std::cerr << "Crash dump: " << dumpPath.toStdString() << std::endl;
+
+   return EXCEPTION_EXECUTE_HANDLER;
+}
+#endif
+
 /**
   * See 'printUsage(..)' for more information about arguments.
   */
 int main(int argc, char* argv[])
 try
 {
+#ifdef Q_OS_WIN
+   SetUnhandledExceptionFilter(crashHandler);
+#endif
 #if defined(DEBUG) && defined(ENABLE_NVWA)
    new_progname = argv[0];
 #endif

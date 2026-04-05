@@ -605,6 +605,13 @@ void RemoteConnection::onNewMessage(const Common::Message& message)
          Common::Hash peerID(browseMessage.peer_id().hash());
          PM::IPeer* peer = this->peerManager->getPeer(peerID);
 
+         L_WARN(QString("RCM::GUI_BROWSE: peerID=%1 peer=%2 isSelf=%3 dirs=%4 get_roots=%5")
+            .arg(peerID.toStr())
+            .arg(peer ? "found" : "NULL")
+            .arg(peer == this->peerManager->getSelf() ? "yes" : "no")
+            .arg(browseMessage.dirs().entry_size())
+            .arg(browseMessage.get_roots()));
+
          const quint64 tag = QRandomGenerator64::global()->generate64();
          Protos::GUI::Tag tagMess;
          tagMess.set_tag(tag);
@@ -639,7 +646,22 @@ void RemoteConnection::onNewMessage(const Common::Message& message)
             if (peerID == this->peerManager->getSelf()->getID())
             {
                for (int i = 0; i < browseMessage.dirs().entry_size(); i++)
-                  result.add_entries()->CopyFrom(this->fileManager->getEntries(browseMessage.dirs().entry(i)));
+               {
+                  L_WARN(QString("RCM::GUI_BROWSE self: getEntries for dir entry %1").arg(i));
+                  try
+                  {
+                     result.add_entries()->CopyFrom(this->fileManager->getEntries(browseMessage.dirs().entry(i)));
+                     L_WARN(QString("RCM::GUI_BROWSE self: getEntries[%1] OK").arg(i));
+                  }
+                  catch (const std::exception& e)
+                  {
+                     L_ERRO(QString("RCM::GUI_BROWSE self: getEntries[%1] EXCEPTION: %2").arg(i).arg(e.what()));
+                  }
+                  catch (...)
+                  {
+                     L_ERRO(QString("RCM::GUI_BROWSE self: getEntries[%1] UNKNOWN EXCEPTION").arg(i));
+                  }
+               }
 
                // Add the root directories if asked. Populate shared dirs with their base path.
                if (browseMessage.dirs().entry_size() == 0 || browseMessage.get_roots())

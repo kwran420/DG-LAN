@@ -259,12 +259,17 @@ void PeerMessageSocket::onNewMessage(const Common::Message& message)
    case Common::MessageHeader::CORE_GET_ENTRIES:
       {
          if (!this->entriesResultsToReceive.isEmpty())
+         {
+            L_WARN("PM::CORE_GET_ENTRIES: already have pending results — ignoring");
             return;
+         }
 
          const Protos::Core::GetEntries& getEntries = message.getMessage<Protos::Core::GetEntries>();
+         L_WARN(QString("PM::CORE_GET_ENTRIES: entry_size=%1 get_roots=%2").arg(getEntries.dirs().entry_size()).arg(getEntries.get_roots()));
 
          for (int i = 0; i < getEntries.dirs().entry_size(); i++)
          {
+            L_WARN(QString("PM::CORE_GET_ENTRIES: creating scanned entries for dir %1").arg(i));
             QSharedPointer<FM::IGetEntriesResult> result = this->fileManager->getScannedEntries(getEntries.dirs().entry(i), getEntries.nb_max_hashes_per_entry() > 0 ? getEntries.nb_max_hashes_per_entry() : std::numeric_limits<int>::max());
             connect(result.data(), &FM::IGetEntriesResult::result, this, &PeerMessageSocket::entriesResult, Qt::QueuedConnection);
             connect(result.data(), &FM::IGetEntriesResult::timeout, this, &PeerMessageSocket::entriesResultTimeout, Qt::QueuedConnection);

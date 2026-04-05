@@ -110,12 +110,21 @@ Protos::Common::Entries Cache::getProtoEntries(const Protos::Common::Entry& dir,
 
    if (Directory* directory = this->getDirectory(dir))
    {
-      foreach (Directory* subDir, directory->getSubDirs())
-         subDir->populateEntry(result.add_entry());
+      QLinkedList<Directory*> subDirs = directory->getSubDirs();
+      QLinkedList<File*> files = directory->getFiles();
 
-      foreach (File* file, directory->getFiles())
-         if (file->isComplete())
-            file->populateEntry(result.add_entry(), false, maxNbHashesPerEntry);
+      for (auto it = subDirs.begin(); it != subDirs.end(); ++it)
+      {
+         if (!*it) continue;
+         (*it)->populateEntry(result.add_entry());
+      }
+
+      for (auto it = files.begin(); it != files.end(); ++it)
+      {
+         if (!*it) continue;
+         if ((*it)->isComplete())
+            (*it)->populateEntry(result.add_entry(), false, maxNbHashesPerEntry);
+      }
    }
 
    return result;
