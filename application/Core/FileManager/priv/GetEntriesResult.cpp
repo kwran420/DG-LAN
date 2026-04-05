@@ -28,6 +28,7 @@ using namespace FM;
 GetEntriesResult::GetEntriesResult(Directory* dir, int maxNbHashesPerEntry) :
    IGetEntriesResult(SETTINGS.get<quint32>("get_entries_timeout")), dir(dir), maxNbHashesPerEntry(maxNbHashesPerEntry)
 {
+   qRegisterMetaType<Protos::Core::GetEntriesResult::EntryResult>("Protos::Core::GetEntriesResult::EntryResult");
    L_WARN(QString("FM::GetEntriesResult CTOR dir=%1 maxHash=%2").arg(dir ? dir->getFullPath().getPath() : QString("NULL")).arg(maxNbHashesPerEntry));
 }
 
