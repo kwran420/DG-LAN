@@ -84,6 +84,7 @@ namespace FM
       quint64 getAmount() const;
 
       FilePool& getFilePool() { return this->filePool; }
+      QMutex& getMutex() const { return this->mutex; }
 
       void onEntryAdded(Entry* entry);
       void onEntryRemoved(Entry* entry);

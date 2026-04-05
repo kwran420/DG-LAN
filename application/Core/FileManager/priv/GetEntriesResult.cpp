@@ -19,6 +19,8 @@
 #include <priv/GetEntriesResult.h>
 using namespace FM;
 
+#include <QMutexLocker>
+
 #include <Common/Settings.h>
 
 #include <priv/Log.h>
@@ -58,7 +60,7 @@ void GetEntriesResult::directoryScanned(Directory* dir)
    if (dir != this->dir)
       return;
 
-   L_DEBU(QString("FM::GetEntriesResult::directoryScanned(): directory just scanned: %1").arg(this->dir->getFullPath()));
+   L_DEBU(QString("FM::GetEntriesResult::directoryScanned(): directory just scanned: %1").arg(dir->getFullPath()));
 
    this->buildResult();
 
@@ -67,7 +69,8 @@ void GetEntriesResult::directoryScanned(Directory* dir)
 
 void GetEntriesResult::sendResult()
 {
-   disconnect(this->dir->getCache(), &Cache::directoryScanned, this, &GetEntriesResult::directoryScanned);
+   if (this->dir)
+      disconnect(this->dir->getCache(), &Cache::directoryScanned, this, &GetEntriesResult::directoryScanned);
    this->stopTimer();
 
    L_DEBU("FM::GetEntriesResult::sendResult()");
@@ -76,6 +79,8 @@ void GetEntriesResult::sendResult()
 
 void GetEntriesResult::buildResult()
 {
+   QMutexLocker locker(&this->dir->getCache()->getMutex());
+
    this->res.set_status(Protos::Core::GetEntriesResult::EntryResult::OK);
 
    foreach (Directory* dir, this->dir->getSubDirs())

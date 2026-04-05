@@ -148,6 +148,35 @@ Clients check for updates via the GitHub Releases API.
 3. Iterates all non-draft releases, finds the highest semver tag
 4. If newer than current `VERSION`, emits `updateAvailable` with the `.exe` download URL
 5. `UpdateDialog` downloads the `.exe` to temp, launches it with `/VERYSILENT /NORESTART`
+
+---
+
+## Architecture Notes
+
+### Core ↔ GUI Connection
+- GUI connects to Core via TCP on localhost (default port 59485)
+- Communication uses protobuf messages with `Common::MessageHeader` type codes
+- `RemoteConnection` (in `Core/RemoteControlManager`) handles all GUI→Core commands
+
+### Peer-to-Peer Browsing
+- **Local browse** (browsing own files): `RemoteConnection` → `FileManager::getEntries()` (sync, mutex-protected)
+- **Remote browse** (peer A asks peer B): 
+  - GUI → `RemoteConnection` → `Peer::getEntries()` → sends `CORE_GET_ENTRIES` over network
+  - Remote peer receives in `PeerMessageSocket::onNewMessage()` → `FileManager::getScannedEntries()` (async)
+  - Remote peer's `GetEntriesResult` waits for directory scan, then sends back `CORE_GET_ENTRIES_RESULT`
+- Key files: `GUI/Browse/BrowseModel.cpp`, `Core/RemoteControlManager/priv/RemoteConnection.cpp`,
+  `Core/PeerManager/priv/PeerMessageSocket.cpp`, `Core/FileManager/priv/GetEntriesResult.cpp`
+
+### File Scanning & Caching
+- `FileUpdater` thread continuously scans shared directories
+- `Cache` stores the directory tree; `Directory*` raw pointers are used throughout
+- `Cache::directoryScanned` signal fires when a directory finishes scanning
+- Shared directories can be added/removed at runtime, invalidating `Directory*` pointers
+
+### Build & Release
+- `build-release.ps1` redirects ISCC output to `installer_log.txt` (avoids terminal image flood)
+- `-Publish` flag uses `--latest` to ensure GitHub release is not marked pre-release
+- CI workflow (`.github/workflows/build.yml`) is lightweight fallback only
 6. App quits, Inno Setup installs over the existing installation
 
 **Important**: The endpoint is `/releases` (list), NOT `/releases/latest`.

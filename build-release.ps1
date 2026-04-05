@@ -6,20 +6,20 @@
   Builds Core + GUI, patches Version.h with build time/git hash,
   then produces the Inno Setup installer .exe.
 
-  With -Publish: also commits, tags, pushes, and creates a GitHub Release
+  By default, also commits, tags, pushes, and creates a GitHub Release
   with the installer attached. Clients auto-update from there.
+  Use -SkipPublish to build locally without pushing.
 
 .EXAMPLE
-  .\build-release.ps1                        # build with version from Version.h
-  .\build-release.ps1 -Version 1.3.0         # override version
-  .\build-release.ps1 -SkipBuild             # just rebuild the installer
-  .\build-release.ps1 -Publish               # build + push + create GitHub Release
-  .\build-release.ps1 -Version 1.3.0 -Publish
+  .\build-release.ps1                        # build + publish (default)
+  .\build-release.ps1 -Version 2.0.0         # override version + publish
+  .\build-release.ps1 -SkipBuild             # just rebuild the installer + publish
+  .\build-release.ps1 -SkipPublish           # build only, no push
 #>
 param(
     [string]$Version,
     [switch]$SkipBuild,
-    [switch]$Publish
+    [switch]$SkipPublish
 )
 
 $ErrorActionPreference = 'Stop'
@@ -53,9 +53,16 @@ $hash = (git rev-parse HEAD).Substring(0, 12)
 if ($Version) {
     $content = $content -replace '#define VERSION "[^"]*"', "#define VERSION `"$Version`""
     Write-Host "Version set to: $Version" -ForegroundColor Cyan
+} elseif ($content -match '#define VERSION "(\d+)\.(\d+)\.(\d+)"') {
+    $major = [int]$Matches[1]
+    $minor = [int]$Matches[2]
+    $patch = [int]$Matches[3] + 1
+    $Version = "$major.$minor.$patch"
+    $content = $content -replace '#define VERSION "[^"]*"', "#define VERSION `"$Version`""
+    Write-Host "Version auto-incremented to: $Version" -ForegroundColor Cyan
 } elseif ($content -match '#define VERSION "([^"]+)"') {
     $Version = $Matches[1]
-    Write-Host "Version from Version.h: $Version" -ForegroundColor Cyan
+    Write-Host "Version from Version.h (no auto-increment): $Version" -ForegroundColor Yellow
 }
 
 $content = $content -replace '#define BUILD_TIME "[^"]*"',  "#define BUILD_TIME `"$bt`""
@@ -127,7 +134,7 @@ Write-Host "Installer: $($installer.FullName)" -ForegroundColor Cyan
 Write-Host "Size: $([math]::Round($installer.Length / 1MB, 1)) MB"
 
 # ── Publish to GitHub ─────────────────────────────────────────
-if ($Publish) {
+if (-not $SkipPublish) {
     $tag = "v$Version"
     Write-Host "`n=== Publishing $tag ===" -ForegroundColor Green
 
