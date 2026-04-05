@@ -14,7 +14,9 @@ QT += core gui widgets network xml
 TARGET = "DG-LAN.GUI"
 TEMPLATE = app
 
-RC_FILE = ../Common/version.rc
+win32 {
+   RC_FILE = ../Common/version.rc
+}
 
 include(../Common/common.pri)
 include(../Libs/protobuf.pri)

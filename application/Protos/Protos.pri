@@ -32,14 +32,18 @@ proto_common.target = $$PWD/common.pb.cc
 proto_common.depends = $$PWD/common.proto
 proto_common.commands = cd $$PWD && protoc --cpp_out . common.proto
 
-QMAKE_EXTRA_TARGETS += proto_queue proto_gui_settings proto_gui_protocol proto_files_cache proto_core_settings proto_core_protocol proto_common
-PRE_TARGETDEPS += $$PWD/queue.pb.cc $$PWD/gui_settings.pb.cc $$PWD/gui_protocol.pb.cc $$PWD/core_settings.pb.cc $$PWD/core_protocol.pb.cc $$PWD/common.pb.cc
+proto_file_cache.target = $$PWD/file_cache.pb.cc
+proto_file_cache.depends = $$PWD/file_cache.proto
+proto_file_cache.commands = cd $$PWD && protoc --cpp_out . file_cache.proto
+
+QMAKE_EXTRA_TARGETS += proto_queue proto_gui_settings proto_gui_protocol proto_file_cache proto_core_settings proto_core_protocol proto_common
+PRE_TARGETDEPS += $$PWD/queue.pb.cc $$PWD/gui_settings.pb.cc $$PWD/gui_protocol.pb.cc $$PWD/file_cache.pb.cc $$PWD/core_settings.pb.cc $$PWD/core_protocol.pb.cc $$PWD/common.pb.cc
 
 OTHER_FILES += \
    $$PWD/queue.proto \
    $$PWD/gui_settings.proto \
    $$PWD/gui_protocol.proto \
-   $$PWD/files_cache.proto \
+   $$PWD/file_cache.proto \
    $$PWD/core_settings.proto \
    $$PWD/core_protocol.proto \
    $$PWD/common.proto

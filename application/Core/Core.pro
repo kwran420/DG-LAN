@@ -9,7 +9,9 @@ QT += network
 TARGET = "DG-LAN.Core"
 CONFIG += link_prl
 
-RC_FILE = ../Common/version.rc
+win32 {
+   RC_FILE = ../Common/version.rc
+}
 
 include(../Common/common.pri)
 include(../Libs/protobuf.pri)

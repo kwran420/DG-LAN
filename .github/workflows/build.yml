@@ -29,10 +29,10 @@ jobs:
         working-directory: application
         run: |
           qmake Core.pro CONFIG+=release
-          make -j$(nproc)
+          make -f Makefile-Core -j$(nproc)
 
       - name: Build GUI (release)
         working-directory: application
         run: |
           qmake GUI.pro CONFIG+=release
-          make -j$(nproc)
+          make -f Makefile-GUI -j$(nproc)
