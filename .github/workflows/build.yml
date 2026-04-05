@@ -65,12 +65,30 @@ jobs:
           "BUILD_TIME=$bt"     >> $env:GITHUB_OUTPUT
           Write-Host "Version bumped to $ver $tag  ($bt)"
 
+      # ── Discover MSYS2 root (differs between local and runner) ─
+      - name: Detect MSYS2 root
+        id: msys2root
+        shell: pwsh
+        run: |
+          # msys2/setup-msys2 installs to RUNNER_TEMP\msys64 on GH Actions
+          $candidates = @(
+            (Join-Path $env:RUNNER_TEMP "msys64\mingw64"),
+            "D:\a\_temp\msys64\mingw64",
+            "C:\msys64\mingw64"
+          )
+          foreach ($c in $candidates) { Write-Host "Checking: $c  exists=$(Test-Path "$c\bin\Qt5Core.dll")" }
+          $root = $candidates | Where-Object { Test-Path "$_\bin\Qt5Core.dll" } | Select-Object -First 1
+          if (-not $root) { Write-Error "Cannot find MSYS2 MinGW64 root with Qt5Core.dll"; exit 1 }
+          Write-Host "MSYS2 MinGW64 root: $root"
+          "MINGW_ROOT=$root" >> $env:GITHUB_OUTPUT
+
       # ── Patch .iss for whatever ICU version MSYS2 ships ─────
       - name: Fix ICU version in installer script
         shell: pwsh
         run: |
+          $root = "${{ steps.msys2root.outputs.MINGW_ROOT }}"
           $iss = "application/Setups/Windows/windows_setup.iss"
-          $dll = Get-ChildItem C:\msys64\mingw64\bin\libicuin*.dll -EA SilentlyContinue |
+          $dll = Get-ChildItem "$root/bin/libicuin*.dll" -EA SilentlyContinue |
                  Select-Object -First 1
           if ($dll -and $dll.Name -match 'libicuin(\d+)\.dll') {
             $v = $Matches[1]
@@ -104,14 +122,15 @@ jobs:
       - name: Verify outputs & DLLs
         shell: pwsh
         run: |
+          $root = "${{ steps.msys2root.outputs.MINGW_ROOT }}"
+          Write-Host "=== MSYS2 MinGW64 root: $root ==="
           Write-Host "=== Build outputs ==="
           Get-ChildItem application/Core/output/release/*.exe -EA SilentlyContinue
           Get-ChildItem application/GUI/output/release/*.exe -EA SilentlyContinue
           Write-Host "=== Qt5 DLLs ==="
-          Get-ChildItem C:\msys64\mingw64\bin\Qt5*.dll -EA SilentlyContinue | Select-Object Name
-          Write-Host "=== MSYS2 root ==="
-          Test-Path C:\msys64\mingw64\bin
-          Get-ChildItem C:\msys64\mingw64\bin\libicu*.dll -EA SilentlyContinue | Select-Object Name
+          Get-ChildItem "$root/bin/Qt5*.dll" -EA SilentlyContinue | Select-Object Name
+          Write-Host "=== ICU DLLs ==="
+          Get-ChildItem "$root/bin/libicu*.dll" -EA SilentlyContinue | Select-Object Name
 
       # ── Installer ──────────────────────────────────────────
       - name: Install Inno Setup
@@ -122,7 +141,9 @@ jobs:
         shell: pwsh
         working-directory: application/Setups/Windows
         run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" windows_setup.iss
+          $root = "${{ steps.msys2root.outputs.MINGW_ROOT }}"
+          # Override QtDir and MingwDir so .iss finds DLLs at the actual MSYS2 location
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DQtDir="$root" /DMingwDir="$root" windows_setup.iss
 
       # ── Release (only on push, not PRs) ────────────────────
       - name: Commit version bump, tag & publish release
