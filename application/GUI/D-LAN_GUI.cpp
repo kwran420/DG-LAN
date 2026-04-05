@@ -160,6 +160,7 @@ void D_LAN_GUI::updateTrayIconMenu()
 {
    this->trayIconMenu.clear();
    this->trayIconMenu.addAction(tr("Show DG-LAN"), this, SLOT(showMainWindow()));
+   this->trayIconMenu.addAction(tr("Check for Updates..."), this, SLOT(checkForUpdates()));
    if (this->coreConnection->getLocalCoreStatus() == RCC::RUNNING_AS_SERVICE) // We cannot stop a parent process without killing his child (case with RCC::RUNNING_AS_SUB_PROCESS).
       this->trayIconMenu.addAction(tr("Stop the user interface"), this, SLOT(exitGUI()));
    this->trayIconMenu.addSeparator();
@@ -195,6 +196,7 @@ void D_LAN_GUI::showMainWindow()
       this->mainWindow = new MainWindow(this->coreConnection);
       connect(this->mainWindow, SIGNAL(languageChanged(QString)), this, SLOT(loadLanguage(QString)));
       connect(this->mainWindow, SIGNAL(destroyed()), this, SLOT(mainWindowClosed()));
+      connect(this->mainWindow, &MainWindow::checkForUpdatesRequested, this, &D_LAN_GUI::checkForUpdates);
       this->mainWindow->show();
 
       // Show the welcome dialog on the very first ever run.

@@ -28,6 +28,7 @@ using namespace GUI;
 #include <QMdiSubWindow>
 #include <QPainter>
 #include <QMenu>
+#include <QMenuBar>
 #include <QSettings>
 #include <QHBoxLayout>
 #include <QScrollBar>
@@ -111,6 +112,12 @@ MainWindow::MainWindow(QSharedPointer<RCC::ICoreConnection> coreConnection, QWid
    connect(this->ui->butClose, SIGNAL(clicked()), this, SLOT(close()));
    connect(this->ui->butMinimize, SIGNAL(clicked()), this, SLOT(showMinimized()));
    connect(this->ui->butMaximize, SIGNAL(clicked()), this, SLOT(maximize()));
+
+   // ── Help menu bar ─────────────────────────────────────────────────────────
+   QMenu* helpMenu = menuBar()->addMenu(tr("Help"));
+   QAction* actCheckUpdate = helpMenu->addAction(tr("Check for Updates..."));
+   connect(actCheckUpdate, &QAction::triggered, this, &MainWindow::checkForUpdatesRequested);
+   // ─────────────────────────────────────────────────────────────────────────
    if (!SETTINGS.get<QString>("style").isEmpty())
       this->loadCustomStyle(QCoreApplication::applicationDirPath() % "/" % Common::Constants::STYLE_DIRECTORY % "/" % SETTINGS.get<QString>("style") % "/" % Common::Constants::STYLE_FILE_NAME);
 

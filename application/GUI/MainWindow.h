@@ -54,6 +54,7 @@ namespace GUI
 
    signals:
       void languageChanged(const QString& filename);
+      void checkForUpdatesRequested();
 
    private slots:
       void coreConnectionError(RCC::ICoreConnection::ConnectionErrorCode errorCode);
