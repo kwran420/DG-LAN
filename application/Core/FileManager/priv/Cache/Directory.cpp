@@ -230,12 +230,20 @@ Common::Path Directory::getPath() const
 {
    Common::Path path;
    const Directory* dir = this;
-   while (dir->parent) // We don't care about the name of the root (SharedDirectory).
+   while (dir->parent && dir->parent->parent) // We don't care about the name of the root (SharedDirectory).
    {
       dir = dir->parent;
       path.prependDir(dir->getName());
    }
    return path;
+}
+
+Common::Path Directory::getRelativePath() const
+{
+   if (this->parent)
+      return this->getPath().appendDir(this->getName());
+   else
+      return Common::Path(); // Root directory: no relative path.
 }
 
 /**

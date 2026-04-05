@@ -262,7 +262,7 @@ bool File::correspondTo(const QFileInfo& fileInfo, bool checkTheDateToo)
 Common::Path File::getPath() const
 {
    if (this->dir)
-      return this->dir->getPath().appendDir(this->dir->getName()).setFilename(this->name);
+      return this->dir->getRelativePath();
    else
       return Common::Path();
 }

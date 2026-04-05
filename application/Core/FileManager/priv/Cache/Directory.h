@@ -66,6 +66,7 @@ namespace FM
 
    public:
       Common::Path getPath() const;
+      Common::Path getRelativePath() const; // Path including this directory's name, relative to its shared root.
       Common::Path getFullPath() const;
 
       void rename(const QString& newName);
