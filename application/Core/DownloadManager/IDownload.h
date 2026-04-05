@@ -31,12 +31,12 @@ namespace DM
 {
    enum Status
    {
-      QUEUED = 0x1,
-      GETTING_THE_HASHES = 0x2,
-      DOWNLOADING = 0x3,
-      COMPLETE = 0x4,
-      PAUSED = 0x5,
-      DELETED = 0x6,
+      QUEUED = 0x0, // Values must match Protos::GUI::State::Download::Status and Protos::Queue::Queue::Entry::Status.
+      GETTING_THE_HASHES = 0x1,
+      DOWNLOADING = 0x2,
+      COMPLETE = 0x3,
+      PAUSED = 0x4,
+      DELETED = 0x5,
 
       UNKNOWN_PEER_SOURCE = 0x10, // The source peer can't be found.
       ENTRY_NOT_FOUND = 0x11, // The source peer can't find the entry.

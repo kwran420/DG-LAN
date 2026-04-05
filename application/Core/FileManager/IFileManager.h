@@ -158,9 +158,10 @@ namespace FM
       virtual quint64 getAmount() = 0;
 
       enum CacheStatus {
-         SCANNING_IN_PROGRESS = 0,
-         HASHING_IN_PROGRESS = 1,
-         UP_TO_DATE = 2
+         LOADING_CACHE_IN_PROGRESS = 0,
+         SCANNING_IN_PROGRESS = 1,
+         HASHING_IN_PROGRESS = 2,
+         UP_TO_DATE = 3
       };
 
       virtual CacheStatus getCacheStatus() const = 0;

@@ -324,6 +324,9 @@ quint64 FileManager::getAmount()
 
 FileManager::CacheStatus FileManager::getCacheStatus() const
 {
+   if (this->cacheLoading)
+      return LOADING_CACHE_IN_PROGRESS;
+
    if (this->fileUpdater.isScanning())
       return SCANNING_IN_PROGRESS;
 
