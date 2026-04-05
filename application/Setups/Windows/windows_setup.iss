@@ -43,11 +43,30 @@ Source: "{#QtDir}/bin/libdouble-conversion.dll"; DestDir: "{app}"; Flags: ignore
 Source: "{#QtDir}/bin/libpcre2-16-0.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#QtDir}/bin/zlib1.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#QtDir}/bin/libzstd.dll"; DestDir: "{app}"; Flags: ignoreversion
+; OpenSSL (for HTTPS update checker)
 Source: "{#QtDir}/bin/libssl-3-x64.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#QtDir}/bin/libcrypto-3-x64.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#QtDir}/bin/libssl-1_1-x64.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#QtDir}/bin/libcrypto-1_1-x64.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+; Qt5 GUI/font/image dependencies
+Source: "{#QtDir}/bin/libmd4c.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#QtDir}/bin/libpng16-16.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#QtDir}/bin/libharfbuzz-0.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#QtDir}/bin/libfreetype-6.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#QtDir}/bin/libbrotlidec.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#QtDir}/bin/libbrotlicommon.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#QtDir}/bin/libbz2-1.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#QtDir}/bin/libglib-2.0-0.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#QtDir}/bin/libgraphite2.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#QtDir}/bin/libiconv-2.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#QtDir}/bin/libintl-8.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#QtDir}/bin/libpcre2-8-0.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#QtDir}/bin/libjpeg-8.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#QtDir}/share/qt5/plugins/platforms/qwindows.dll"; DestDir: "{app}/platforms"; Flags: ignoreversion
+; Qt5 image format plugins
+Source: "{#QtDir}/share/qt5/plugins/imageformats/qjpeg.dll"; DestDir: "{app}/imageformats"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#QtDir}/share/qt5/plugins/imageformats/qpng.dll"; DestDir: "{app}/imageformats"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#QtDir}/share/qt5/plugins/imageformats/qsvg.dll"; DestDir: "{app}/imageformats"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
 Name: "{group}\DG-LAN"; Filename: "{app}/D-LAN.GUI.exe"; WorkingDir: "{app}"
