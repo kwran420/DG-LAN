@@ -24,9 +24,9 @@ using namespace RCC;
 #include <priv/Log.h>
 
 #ifdef Q_OS_WIN32
-   const QString CoreController::CORE_EXE_NAME("D-LAN.Core.exe");
+   const QString CoreController::CORE_EXE_NAME("DG-LAN.Core.exe");
 #else
-   const QString CoreController::CORE_EXE_NAME("D-LAN.Core");
+   const QString CoreController::CORE_EXE_NAME("DG-LAN.Core");
 #endif
 
 const int CoreController::TIMEOUT_SUBPROCESS_WAIT_FOR_STARTED(2000); // 2s.
@@ -59,7 +59,7 @@ void CoreController::startCore(int port)
    if (!debug && !this->controller.isInstalled())
    {
       if (!QtServiceController::install(CORE_EXE_NAME)) // FIXME: This call generates a zombie thread on Linux.
-         L_WARN(QObject::tr("D-LAN Core cannot be installed as a service"));
+         L_WARN(QObject::tr("DG-LAN Core cannot be installed as a service"));
    }
 
    if (!this->controller.isRunning())

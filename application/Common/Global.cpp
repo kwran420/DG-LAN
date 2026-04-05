@@ -578,7 +578,7 @@ QString Global::setCurrentDirToTemp(const QString& dirname)
 {
    Q_ASSERT(!dirname.isEmpty());
 
-   const QString TEMP_DIRNAME("D-LAN " + dirname);
+   const QString TEMP_DIRNAME("DG-LAN " + dirname);
    QDir::setCurrent(QDir::tempPath());
    if (!QDir::current().exists(TEMP_DIRNAME))
       if (!QDir::current().mkdir(TEMP_DIRNAME))

@@ -4,7 +4,7 @@
 #define ApplicationDir "../.."
 
 #define AppName "DG-LAN"
-#define ExePath ApplicationDir + "/Core/output/release/D-LAN.Core.exe"
+#define ExePath ApplicationDir + "/Core/output/release/DG-LAN.Core.exe"
 #define Version GetStringFileInfo(ExePath, 'ProductVersion')
 #define VersionTag GetStringFileInfo(ExePath, 'VersionTag')
 #define BuildTime GetStringFileInfo(ExePath, 'BuildTime')
@@ -16,15 +16,15 @@ SetupIconFile={#ApplicationDir}/Common/ressources/icon.ico
 ArchitecturesInstallIn64BitMode=x64
 DefaultDirName={pf}/{#AppName}
 DefaultGroupName={#AppName}
-UninstallDisplayIcon={app}/D-LAN.Core.exe
+UninstallDisplayIcon={app}/DG-LAN.Core.exe
 Compression=lzma2
 SolidCompression=yes
 OutputDir=Installations
 OutputBaseFilename={#AppName}-{#Version}{#VersionTag}-{#BuildTime}-Setup
 
 [Files]
-Source: "{#ApplicationDir}/Core/output/release/D-LAN.Core.exe"; DestDir: "{app}"; Flags: comparetimestamp
-Source: "{#ApplicationDir}/GUI/output/release/D-LAN.GUI.exe"; DestDir: "{app}"; Flags: comparetimestamp
+Source: "{#ApplicationDir}/Core/output/release/DG-LAN.Core.exe"; DestDir: "{app}"; Flags: comparetimestamp
+Source: "{#ApplicationDir}/GUI/output/release/DG-LAN.GUI.exe"; DestDir: "{app}"; Flags: comparetimestamp
 Source: "{#ApplicationDir}/translations/*.qm"; DestDir: "{app}/languages"; Flags: comparetimestamp skipifsourcedoesntexist
 Source: "{#ApplicationDir}/styles/*"; DestDir: "{app}/styles"; Flags: comparetimestamp recursesubdirs createallsubdirs
 Source: "{#ApplicationDir}/GUI/ressources/emoticons/*"; DestDir: "{app}/Emoticons"; Flags: comparetimestamp recursesubdirs createallsubdirs
@@ -69,7 +69,7 @@ Source: "{#QtDir}/share/qt5/plugins/imageformats/qpng.dll"; DestDir: "{app}/imag
 Source: "{#QtDir}/share/qt5/plugins/imageformats/qsvg.dll"; DestDir: "{app}/imageformats"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
-Name: "{group}\DG-LAN"; Filename: "{app}/D-LAN.GUI.exe"; WorkingDir: "{app}"
+Name: "{group}\DG-LAN"; Filename: "{app}/DG-LAN.GUI.exe"; WorkingDir: "{app}"
 
 [Languages]
 ; Name has to be coded as ISO-639 (two letters).
@@ -81,15 +81,15 @@ Name: "Firewall"; Description: {cm:firewallException}; MinVersion: 0,5.01.2600sp
 Name: "ResetSettings"; Description: {cm:resetSettings}
 
 [Run]
-Filename: "{sys}/netsh.exe"; Parameters: "firewall add allowedprogram ""{app}/D-LAN.Core.exe"" ""DG-LAN.Core"" ENABLE ALL"; Flags: runhidden; MinVersion: 0,5.01.2600sp2; Tasks: Firewall
-Filename: "{app}/D-LAN.Core.exe"; Parameters: "--reset-settings"; Flags: RunHidden; Description: "Reset settings"; Tasks: ResetSettings
-Filename: "{app}/D-LAN.Core.exe"; Parameters: "-i --lang {language}"; Flags: RunHidden; Description: "Install the D-LAN service and define the language"
-Filename: "{app}/D-LAN.GUI.exe"; Parameters: "--lang {language}"; Flags: RunHidden; Description: "Define the language for the GUI"
-Filename: "{app}/D-LAN.GUI.exe"; Flags: nowait postinstall runasoriginaluser; Description: "{cm:launchDLAN}"
+Filename: "{sys}/netsh.exe"; Parameters: "firewall add allowedprogram ""{app}/DG-LAN.Core.exe"" ""DG-LAN.Core"" ENABLE ALL"; Flags: runhidden; MinVersion: 0,5.01.2600sp2; Tasks: Firewall
+Filename: "{app}/DG-LAN.Core.exe"; Parameters: "--reset-settings"; Flags: RunHidden; Description: "Reset settings"; Tasks: ResetSettings
+Filename: "{app}/DG-LAN.Core.exe"; Parameters: "-i --lang {language}"; Flags: RunHidden; Description: "Install the DG-LAN service and define the language"
+Filename: "{app}/DG-LAN.GUI.exe"; Parameters: "--lang {language}"; Flags: RunHidden; Description: "Define the language for the GUI"
+Filename: "{app}/DG-LAN.GUI.exe"; Flags: nowait postinstall runasoriginaluser; Description: "{cm:launchDLAN}"
 
 [UninstallRun]
-Filename: {app}/D-LAN.Core.exe; Parameters: -u;
-Filename: {sys}/netsh.exe; Parameters: "firewall delete allowedprogram program=""{app}/D-LAN.Core.exe"""; Flags: runhidden; MinVersion: 0,5.01.2600sp2; Tasks: Firewall;
+Filename: {app}/DG-LAN.Core.exe; Parameters: -u;
+Filename: {sys}/netsh.exe; Parameters: "firewall delete allowedprogram program=""{app}/DG-LAN.Core.exe"""; Flags: runhidden; MinVersion: 0,5.01.2600sp2; Tasks: Firewall;
 
 [code]
 // Will stop the Core service.

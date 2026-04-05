@@ -100,7 +100,7 @@ void Core::start()
    QCoreApplication::instance()->installTranslator(&this->translator);
    this->setLanguage(SETTINGS.get<QLocale>("language"), true);
 
-   L_USER(QObject::tr("D-LAN Core version %1 is starting . . .").arg(Common::Global::getVersionFull()));
+   L_USER(QObject::tr("DG-LAN Core version %1 is starting . . .").arg(Common::Global::getVersionFull()));
 
    this->fileManager = FM::Builder::newFileManager();
    this->peerManager = PM::Builder::newPeerManager(this->fileManager);

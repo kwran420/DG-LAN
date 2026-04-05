@@ -11,7 +11,7 @@ QT += core gui widgets network xml
 
 # winextras removed: not available in MSYS2 Qt 5.15; replaced with direct Win32 APIs
 
-TARGET = "D-LAN.GUI"
+TARGET = "DG-LAN.GUI"
 TEMPLATE = app
 
 RC_FILE = ../Common/version.rc

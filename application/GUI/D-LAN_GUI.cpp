@@ -40,7 +40,7 @@ using namespace GUI;
 #include <UpdateChecker.h>
 #include <UpdateDialog.h>
 
-const QString D_LAN_GUI::SHARED_MEMORY_KEYNAME("D-LAN GUI instance");
+const QString D_LAN_GUI::SHARED_MEMORY_KEYNAME("DG-LAN GUI instance");
 static const QString IPC_SERVER_NAME("DG-LAN-GUI-IPC");
 
 /**

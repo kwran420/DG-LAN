@@ -1,5 +1,5 @@
 QT += core network
-TARGET = "D-LAN.Client"
+TARGET = "DG-LAN.Client"
 TEMPLATE = app
 CONFIG += console
 

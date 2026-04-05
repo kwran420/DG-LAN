@@ -168,6 +168,7 @@ void File::setToUnfinished(qint64 size, const Common::Hashes& hashes)
   */
 bool File::restoreFromFileCache(const Protos::FileCache::Hashes::File& file)
 {
+   QMutexLocker locker(&this->mutex);
    if (
       static_cast<qint64>(file.size()) == this->getSize() &&
       Common::ProtoHelper::getStr(file, &Protos::FileCache::Hashes_File::filename) == this->getName() &&
@@ -431,6 +432,7 @@ qint64 File::read(char* buffer, qint64 offset, int maxBytesToRead)
 
 QVector<QSharedPointer<Chunk>> File::getChunks() const
 {
+   QMutexLocker locker(&this->mutex);
    return this->chunks;
 }
 
@@ -449,6 +451,7 @@ bool File::hasAllHashes()
 
 bool File::hasOneOrMoreHashes()
 {
+   QMutexLocker locker(&this->mutex);
    for (QVectorIterator<QSharedPointer<Chunk>> i(this->chunks); i.hasNext();)
      if (i.next()->hasHash())
          return true;
@@ -689,11 +692,13 @@ void FileForHasher::updateDateLastModified(const QDateTime& date)
 
 void FileForHasher::addChunk(const QSharedPointer<Chunk>& chunk)
 {
+   QMutexLocker locker(&this->mutex);
    this->chunks << chunk;
 }
 
 QSharedPointer<Chunk> FileForHasher::removeLastChunk()
 {
+   QMutexLocker locker(&this->mutex);
    if (this->chunks.isEmpty())
       return QSharedPointer<Chunk>();
 

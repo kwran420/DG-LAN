@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
 
    LM::Builder::setLogDirName("log_gui");
 
-   LM::Builder::newLogger("Main")->log(QObject::tr("D-LAN GUI version %1").arg(Common::Global::getVersionFull()), LM::SV_END_USER);
+   LM::Builder::newLogger("Main")->log(QObject::tr("DG-LAN GUI version %1").arg(Common::Global::getVersionFull()), LM::SV_END_USER);
 
    try
    {

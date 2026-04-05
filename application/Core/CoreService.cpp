@@ -39,7 +39,7 @@ CoreService::CoreService(bool resetSettings, QLocale locale, int argc, char** ar
       if (currentArg == "-e" || currentArg == "--exec")
       {
          QTextStream out(stdout);
-         out << "D-LAN Core started with console support" << endl;
+         out << "DG-LAN Core started with console support" << endl;
          this->consoleSupport = true;
          CoreService::printCommands();
          break;
