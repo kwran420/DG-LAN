@@ -25,7 +25,7 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
-          update: false
+          update: true
           install: >-
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-qt5-base
@@ -99,6 +99,19 @@ jobs:
           QMAKE=$(command -v qmake-qt5 || command -v qmake || echo /mingw64/bin/qmake)
           $QMAKE GUI.pro -r -spec win32-g++ "CONFIG+=release"
           mingw32-make -f Makefile-GUI -j$(nproc)
+
+      # ── Verify build outputs ──────────────────────────────
+      - name: Verify outputs & DLLs
+        shell: pwsh
+        run: |
+          Write-Host "=== Build outputs ==="
+          Get-ChildItem application/Core/output/release/*.exe -EA SilentlyContinue
+          Get-ChildItem application/GUI/output/release/*.exe -EA SilentlyContinue
+          Write-Host "=== Qt5 DLLs ==="
+          Get-ChildItem C:\msys64\mingw64\bin\Qt5*.dll -EA SilentlyContinue | Select-Object Name
+          Write-Host "=== MSYS2 root ==="
+          Test-Path C:\msys64\mingw64\bin
+          Get-ChildItem C:\msys64\mingw64\bin\libicu*.dll -EA SilentlyContinue | Select-Object Name
 
       # ── Installer ──────────────────────────────────────────
       - name: Install Inno Setup
