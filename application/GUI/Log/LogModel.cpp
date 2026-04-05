@@ -19,16 +19,24 @@
 #include <Log/LogModel.h>
 using namespace GUI;
 
+#include <QDateTime>
+
 #include <Common/Settings.h>
+#include <Common/Global.h>
 #include <Common/LogManager/Builder.h>
 
 LogModel::LogModel(QSharedPointer<RCC::ICoreConnection> coreConnection) :
-   coreConnection(coreConnection)
+   coreConnection(coreConnection),
+   prevCacheStatus(-1)
 {
    connect(this->coreConnection.data(), &RCC::ICoreConnection::newLogMessages, this, &LogModel::newLogEntries);
 
    this->loggerHook = LM::Builder::newLoggerHook(LM::Severity(LM::SV_FATAL_ERROR | LM::SV_ERROR | LM::SV_END_USER | LM::SV_WARNING));
    connect(this->loggerHook.data(), &LM::ILoggerHook::newLogEntry, this, &LogModel::newLogEntry);
+
+   connect(this->coreConnection.data(), &RCC::ICoreConnection::newState, this, &LogModel::newState);
+   connect(this->coreConnection.data(), &RCC::ICoreConnection::connected, this, &LogModel::coreConnected);
+   connect(this->coreConnection.data(), &RCC::ICoreConnection::disconnected, this, &LogModel::coreDisconnected);
 }
 
 int LogModel::rowCount(const QModelIndex& /*parent*/) const
@@ -121,4 +129,73 @@ void LogModel::newLogEntries(const QList<QSharedPointer<LM::IEntry>>& entries)
       this->entries.erase(this->entries.begin(), this->entries.begin() + (quint32(this->entries.size()) - MAX_LOG_MESSAGE_DISPLAYED));
       this->endRemoveRows();
    }
+}
+
+void LogModel::newState(const Protos::GUI::State& state)
+{
+   QList<QSharedPointer<LM::IEntry>> batch;
+   const QDateTime now = QDateTime::currentDateTime();
+
+   // ── Peer join / leave detection (index 0 = ourself, skip) ────────────────
+   QHash<QByteArray, QString> currPeers;
+   for (int i = 1; i < state.peer_size(); ++i)
+   {
+      const QByteArray id = QByteArray::fromStdString(state.peer(i).peer_id().hash());
+      const QString nick = QString::fromStdString(state.peer(i).nick());
+      currPeers.insert(id, nick);
+
+      if (!this->prevPeers.contains(id))
+      {
+         const quint64 sharing = state.peer(i).sharing_amount();
+         batch << LM::Builder::newEntry(now, LM::SV_END_USER,
+            QString("[Network] %1 joined  (sharing %2)").arg(nick).arg(Common::Global::formatByteSize(sharing)));
+      }
+   }
+   for (auto it = this->prevPeers.cbegin(); it != this->prevPeers.cend(); ++it)
+      if (!currPeers.contains(it.key()))
+         batch << LM::Builder::newEntry(now, LM::SV_END_USER,
+            QString("[Network] %1 left the network").arg(it.value()));
+   this->prevPeers = currPeers;
+
+   // ── Cache / file index status changes ────────────────────────────────────
+   const int cacheStatus = static_cast<int>(state.stats().cache_status());
+   if (cacheStatus != this->prevCacheStatus)
+   {
+      QString msg;
+      switch (state.stats().cache_status())
+      {
+      case Protos::GUI::State::Stats::LOADING_CACHE_IN_PROGRESS:
+         msg = "[File Index] Loading saved index from disk...";
+         break;
+      case Protos::GUI::State::Stats::SCANNING_IN_PROGRESS:
+         msg = "[File Index] Scanning shared folders for changes...";
+         break;
+      case Protos::GUI::State::Stats::HASHING_IN_PROGRESS:
+         msg = "[File Index] Hashing files to build content index...";
+         break;
+      case Protos::GUI::State::Stats::UP_TO_DATE:
+         msg = "[File Index] Index is up to date";
+         break;
+      default:
+         break;
+      }
+      if (!msg.isEmpty())
+         batch << LM::Builder::newEntry(now, LM::SV_END_USER, msg);
+      this->prevCacheStatus = cacheStatus;
+   }
+
+   if (!batch.isEmpty())
+      this->newLogEntries(batch);
+}
+
+void LogModel::coreConnected()
+{
+   this->prevPeers.clear();
+   this->prevCacheStatus = -1;
+}
+
+void LogModel::coreDisconnected(bool)
+{
+   this->prevPeers.clear();
+   this->prevCacheStatus = -1;
 }

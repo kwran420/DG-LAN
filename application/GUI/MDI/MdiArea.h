@@ -35,8 +35,6 @@
 #include <Browse/BrowseWidget.h>
 #include <Search/SearchWidget.h>
 #include <Taskbar/Taskbar.h>
-#include <Activity/ActivityWidget.h>
-#include <Hashing/HashingProgressWidget.h>
 
 namespace GUI
 {
@@ -95,12 +93,6 @@ namespace GUI
       void addUploadsWindow();
       void removeUploadsWindow();
 
-      void addActivityWindow();
-      void removeActivityWindow();
-
-      void addHashingWindow();
-      void removeHashingWindow();
-
       BrowseWidget* addBrowseWindow(const Common::Hash& peerID);
 
    private slots:
@@ -126,8 +118,6 @@ namespace GUI
       ChatWidget*            chatWidget;
       DownloadsWidget*       downloadsWidget;
       UploadsWidget*         uploadsWidget;
-      ActivityWidget*        activityWidget;
-      HashingProgressWidget* hashingWidget;
 
       QList<BrowseWidget*> browseWidgets;
       QList<SearchWidget*> searchWidgets;

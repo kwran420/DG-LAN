@@ -19,6 +19,7 @@
 #pragma once
 
 #include <QAbstractTableModel>
+#include <QHash>
 
 #include <Common/LogManager/IEntry.h>
 #include <Common/LogManager/ILoggerHook.h>
@@ -41,10 +42,15 @@ namespace GUI
    private slots:
       void newLogEntry(QSharedPointer<LM::IEntry> entry);
       void newLogEntries(const QList<QSharedPointer<LM::IEntry>>& entries);
+      void newState(const Protos::GUI::State& state);
+      void coreConnected();
+      void coreDisconnected(bool);
 
    private:
       QSharedPointer<RCC::ICoreConnection> coreConnection;
       QSharedPointer<LM::ILoggerHook> loggerHook;
       QList<QSharedPointer<LM::IEntry>> entries;
+      QHash<QByteArray, QString> prevPeers;
+      int prevCacheStatus;
    };
 }

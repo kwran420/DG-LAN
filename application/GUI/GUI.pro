@@ -85,8 +85,6 @@ SOURCES += main.cpp\
     MDI/TabButtons.cpp \
     MDI/MdiArea.cpp \
     Browse/BrowseWidget.cpp \
-    Activity/ActivityWidget.cpp \
-    Hashing/HashingProgressWidget.cpp \
     WelcomeDialog.cpp \
     UpdateChecker.cpp \
     UpdateDialog.cpp \
@@ -150,8 +148,6 @@ HEADERS  += MainWindow.h \
     MDI/MdiArea.h \
     MDI/MdiWidget.h \
     Browse/BrowseWidget.h \
-    Activity/ActivityWidget.h \
-    Hashing/HashingProgressWidget.h \
     WelcomeDialog.h \
     UpdateChecker.h \
     UpdateDialog.h \

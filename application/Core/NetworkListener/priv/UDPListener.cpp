@@ -31,6 +31,7 @@ using namespace NL;
 #endif
 
 #include <QRandomGenerator64>
+#include <QDateTime>          // DG-LAN: heartbeat time logging
 #include <QNetworkInterface>  // DG-LAN
 #include <QNetworkAddressEntry> // DG-LAN
 
@@ -81,7 +82,8 @@ UDPListener::UDPListener(
    multicastFailureCount(0),
    broadcastFallbackActive(false),
    subnetScanActive(false),
-   subnetScanIndex(0)
+   subnetScanIndex(0),
+   imAliveCounter(0)
 {
    this->initMulticastUDPSocket();
    this->initUnicastUDPSocket();
@@ -237,12 +239,20 @@ void UDPListener::sendIMAliveMessage()
 
    this->send(Common::MessageHeader::CORE_IM_ALIVE, IMAliveMessage);
 
+   // DG-LAN: periodic heartbeat log to GUI — every 12 sends (~1 min at default 5s period)
+   if (++this->imAliveCounter % 12 == 0)
+      L_USER(QString("Network [%1]: heartbeat \u2014 %2 peer(s) online")
+         .arg(QDateTime::currentDateTime().toString("HH:mm"))
+         .arg(numberOfPeers));
+
    // DG-LAN: if broadcast fallback is active, also send via broadcast
    if (this->broadcastFallbackActive)
       this->sendBroadcastIMAlive();
 
    // DG-LAN: drain gossip candidates from PeerManager and probe each one
    const auto gossipCandidates = this->peerManager->takeGossipCandidates();
+   if (!gossipCandidates.isEmpty())
+      L_USER(QString("Network: sharing peer info with %1 new contact(s)").arg(gossipCandidates.size()));
    for (const auto& candidate : gossipCandidates)
       this->sendUnicastIMAlive(candidate.first, candidate.second);
 
@@ -253,7 +263,7 @@ void UDPListener::sendIMAliveMessage()
    // DG-LAN: if peers were discovered (scan succeeded), stop scan
    if (this->subnetScanActive && this->peerManager->getNbOfPeers() > 0)
    {
-      L_DEBU("DG-LAN: peers discovered, stopping subnet scan");
+      L_USER(QString("Network: subnet scan found %1 peer(s)").arg(numberOfPeers));
       this->timerSubnetScan.stop();
       this->subnetScanActive = false;
       this->subnetScanTargets.clear();
@@ -331,7 +341,7 @@ void UDPListener::runSubnetScan()
       if (numHosts == 0)
          continue;
 
-      L_DEBU(QString("DG-LAN: Starting subnet scan — %1 hosts in %2/%3")
+      L_USER(QString("Network: no peers found \u2014 scanning %1 host(s) in %2/%3")
          .arg(numHosts)
          .arg(QHostAddress(network).toString())
          .arg(QHostAddress(mask).toString()));
@@ -374,7 +384,7 @@ void UDPListener::sendNextSubnetScanProbe()
       this->subnetScanActive = false;
       this->subnetScanTargets.clear();
       this->subnetScanIndex = 0;
-      L_DEBU("DG-LAN: Subnet scan complete");
+      L_USER("Network: subnet scan complete \u2014 no new peers found");
       return;
    }
 
@@ -385,7 +395,7 @@ void UDPListener::sendNextSubnetScanProbe()
       this->subnetScanActive = false;
       this->subnetScanTargets.clear();
       this->subnetScanIndex = 0;
-      L_DEBU("DG-LAN: Subnet scan stopped — peers discovered");
+      L_USER(QString("Network: subnet scan stopped \u2014 %1 peer(s) found").arg(this->peerManager->getNbOfPeers()));
       return;
    }
 

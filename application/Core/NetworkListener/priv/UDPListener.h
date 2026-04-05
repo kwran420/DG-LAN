@@ -131,6 +131,7 @@ namespace NL
 
       QList<QHostAddress> subnetScanTargets;   // addresses remaining to probe
       int subnetScanIndex;                     // current probe position
+      int imAliveCounter;                      // DG-LAN: counts sends for periodic heartbeat log
       QTimer timerSubnetScan;                  // fires once per probe slot
    };
 }
