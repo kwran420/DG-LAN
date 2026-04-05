@@ -103,29 +103,49 @@ Protos::Common::Entries Cache::getProtoSharedEntries() const
 
 Protos::Common::Entries Cache::getProtoEntries(const Protos::Common::Entry& dir, int maxNbHashesPerEntry) const
 {
+   L_WARN("Cache::getProtoEntries: ENTER, acquiring mutex");
    QMutexLocker locker(&this->mutex);
+   L_WARN("Cache::getProtoEntries: mutex acquired");
 
    Protos::Common::Entries result;
 
-   if (Directory* directory = this->getDirectory(dir))
-   {
-      QLinkedList<Directory*> subDirs = directory->getSubDirs();
-      QLinkedList<File*> files = directory->getFiles();
+   L_WARN("Cache::getProtoEntries: calling getDirectory");
+   Directory* directory = this->getDirectory(dir);
+   L_WARN(QString("Cache::getProtoEntries: getDirectory returned %1").arg(directory ? "valid" : "null"));
 
-      for (auto it = subDirs.begin(); it != subDirs.end(); ++it)
+   if (directory)
+   {
+      L_WARN("Cache::getProtoEntries: calling getSubDirs");
+      QLinkedList<Directory*> subDirs = directory->getSubDirs();
+      L_WARN(QString("Cache::getProtoEntries: got %1 subDirs, calling getFiles").arg(subDirs.size()));
+      QLinkedList<File*> files = directory->getFiles();
+      L_WARN(QString("Cache::getProtoEntries: got %1 files, iterating subDirs").arg(files.size()));
+
+      int dirIdx = 0;
+      for (auto it = subDirs.begin(); it != subDirs.end(); ++it, ++dirIdx)
       {
-         if (!*it) continue;
+         if (!*it) { L_WARN(QString("Cache::getProtoEntries: subDir[%1] is null, skipping").arg(dirIdx)); continue; }
+         L_WARN(QString("Cache::getProtoEntries: populating subDir[%1]").arg(dirIdx));
          (*it)->populateEntry(result.add_entry());
+         L_WARN(QString("Cache::getProtoEntries: subDir[%1] OK").arg(dirIdx));
       }
 
-      for (auto it = files.begin(); it != files.end(); ++it)
+      L_WARN("Cache::getProtoEntries: iterating files");
+      int fileIdx = 0;
+      for (auto it = files.begin(); it != files.end(); ++it, ++fileIdx)
       {
-         if (!*it) continue;
+         if (!*it) { L_WARN(QString("Cache::getProtoEntries: file[%1] is null, skipping").arg(fileIdx)); continue; }
+         L_WARN(QString("Cache::getProtoEntries: checking isComplete for file[%1]").arg(fileIdx));
          if ((*it)->isComplete())
+         {
+            L_WARN(QString("Cache::getProtoEntries: populating file[%1]").arg(fileIdx));
             (*it)->populateEntry(result.add_entry(), false, maxNbHashesPerEntry);
+            L_WARN(QString("Cache::getProtoEntries: file[%1] OK").arg(fileIdx));
+         }
       }
    }
 
+   L_WARN("Cache::getProtoEntries: DONE, returning result");
    return result;
 }
 
@@ -137,31 +157,50 @@ Directory* Cache::getDirectory(const Protos::Common::Entry& dir) const
 {
    // If we can't find the shared directory . . .
    if (!dir.has_shared_entry())
+   {
+      L_WARN("Cache::getDirectory: no shared_entry, returning null");
       return nullptr;
+   }
 
    QMutexLocker locker(&this->mutex);
+
+   L_WARN(QString("Cache::getDirectory: searching %1 shared entries").arg(this->sharedEntries.size()));
 
    foreach (SharedDirectory* sharedDir, this->sharedEntries)
    {
       if (sharedDir->getId() == dir.shared_entry().id().hash())
       {
-         QStringList folders = QDir::cleanPath(Common::ProtoHelper::getStr(dir, &Protos::Common::Entry::path)).split('/', QString::SkipEmptyParts);
+         QString pathStr = Common::ProtoHelper::getStr(dir, &Protos::Common::Entry::path);
+         QString nameStr = Common::ProtoHelper::getStr(dir, &Protos::Common::Entry::name);
+         L_WARN(QString("Cache::getDirectory: found shared dir, path='%1' name='%2'").arg(pathStr).arg(nameStr));
+
+         QStringList folders = QDir::cleanPath(pathStr).split('/', QString::SkipEmptyParts);
 
          if (!dir.path().empty()) // An empty path means the dir is the root (a SharedDirectory).
-            folders << Common::ProtoHelper::getStr(dir, &Protos::Common::Entry::name);
+            folders << nameStr;
+
+         L_WARN(QString("Cache::getDirectory: traversing %1 folders").arg(folders.size()));
 
          Directory* currentDir = static_cast<Directory*>(sharedDir->getRootEntry());
+         int folderIdx = 0;
          foreach (QString folder, folders)
          {
+            L_WARN(QString("Cache::getDirectory: getSubDir[%1]='%2'").arg(folderIdx).arg(folder));
             currentDir = currentDir->getSubDir(folder);
             if (!currentDir)
+            {
+               L_WARN(QString("Cache::getDirectory: folder[%1] not found, returning null").arg(folderIdx));
                return nullptr;
+            }
+            ++folderIdx;
          }
 
+         L_WARN("Cache::getDirectory: found target directory");
          return currentDir;
       }
    }
 
+   L_WARN("Cache::getDirectory: shared dir not found, returning null");
    return nullptr;
 }
 
