@@ -16,11 +16,7 @@ using namespace GUI;
 #include <Common/Version.h>
 
 // ── Configuration ─────────────────────────────────────────────────────────────
-// Update this to your GitHub username and repository name.
-// e.g. if your fork is at https://github.com/KieranHollis/DG-LAN set:
-//   GITHUB_OWNER = "KieranHollis"
-//   GITHUB_REPO  = "DG-LAN"
-static const QString GITHUB_OWNER = "KieranHollis";
+static const QString GITHUB_OWNER = "kwran420";
 static const QString GITHUB_REPO  = "DG-LAN";
 
 // The current version as a clean semver string (matches release tag format).
