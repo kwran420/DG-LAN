@@ -60,7 +60,7 @@ Source: "{#QtDir}/bin/libglib-2.0-0.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#QtDir}/bin/libgraphite2.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#QtDir}/bin/libiconv-2.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#QtDir}/bin/libintl-8.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#QtDir}/bin/libpcre2-8-0.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#QtDir}/bin/libpcre2-8-0.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#QtDir}/bin/libjpeg-8.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#QtDir}/share/qt5/plugins/platforms/qwindows.dll"; DestDir: "{app}/platforms"; Flags: ignoreversion
 ; Qt5 image format plugins
