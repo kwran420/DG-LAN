@@ -2,37 +2,134 @@ name: Build DG-LAN
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [master]
   pull_request:
-    branches: [ master, main ]
+    branches: [master]
+
+permissions:
+  contents: write
 
 jobs:
-  build-linux:
-    runs-on: ubuntu-22.04
+  build-and-release:
+    runs-on: windows-latest
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Install dependencies
+      # ── MSYS2 / MinGW64 tool-chain ──────────────────────────
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-qt5-base
+            mingw-w64-x86_64-qt5-tools
+            mingw-w64-x86_64-protobuf
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-make
+            make
+
+      # ── Auto-increment patch version ────────────────────────
+      - name: Bump version
+        id: version
+        shell: pwsh
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y \
-            qt5-qmake \
-            qtbase5-dev \
-            qttools5-dev \
-            protobuf-compiler \
-            libprotobuf-dev \
-            libssl-dev \
-            build-essential
+          $file = "application/Common/Version.h"
+          $c = Get-Content $file -Raw
 
-      - name: Build Core (release)
+          if ($c -match '#define VERSION "(\d+)\.(\d+)\.(\d+)"') {
+            $ver = "$($Matches[1]).$($Matches[2]).$([int]$Matches[3] + 1)"
+          } else {
+            Write-Error "Cannot parse VERSION from Version.h"; exit 1
+          }
+
+          $bt   = [DateTime]::UtcNow.ToString("yyyy-MM-dd_HH-mm")
+          $hash = git rev-parse HEAD
+
+          $c = $c -replace '#define VERSION "[^"]*"',     "#define VERSION `"$ver`""
+          $c = $c -replace '#define BUILD_TIME "[^"]*"',   "#define BUILD_TIME `"$bt`""
+          $c = $c -replace '#define GIT_VERSION "[^"]*"',  "#define GIT_VERSION `"$hash`""
+          Set-Content $file $c -NoNewline
+
+          $tag = ""
+          if ($c -match '#define VERSION_TAG "([^"]*)"') { $tag = $Matches[1] }
+
+          "VERSION=$ver"       >> $env:GITHUB_OUTPUT
+          "VERSION_TAG=$tag"   >> $env:GITHUB_OUTPUT
+          "BUILD_TIME=$bt"     >> $env:GITHUB_OUTPUT
+          Write-Host "Version bumped to $ver $tag  ($bt)"
+
+      # ── Patch .iss for whatever ICU version MSYS2 ships ─────
+      - name: Fix ICU version in installer script
+        shell: pwsh
+        run: |
+          $iss = "application/Setups/Windows/windows_setup.iss"
+          $dll = Get-ChildItem C:\msys64\mingw64\bin\libicuin*.dll -EA SilentlyContinue |
+                 Select-Object -First 1
+          if ($dll -and $dll.Name -match 'libicuin(\d+)\.dll') {
+            $v = $Matches[1]
+            (Get-Content $iss) `
+              -replace 'libicuin\d+', "libicuin$v" `
+              -replace 'libicuuc\d+', "libicuuc$v" `
+              -replace 'libicudt\d+', "libicudt$v" |
+              Set-Content $iss
+            Write-Host "ICU version patched to $v"
+          }
+
+      # ── Build ───────────────────────────────────────────────
+      - name: Build Core
+        shell: msys2 {0}
         working-directory: application
         run: |
-          qmake Core.pro CONFIG+=release
-          make -f Makefile-Core -j$(nproc)
+          qmake Core.pro -r -spec win32-g++ "CONFIG+=release"
+          mingw32-make -f Makefile-Core -j$(nproc)
 
-      - name: Build GUI (release)
+      - name: Build GUI
+        shell: msys2 {0}
         working-directory: application
         run: |
-          qmake GUI.pro CONFIG+=release
-          make -f Makefile-GUI -j$(nproc)
+          qmake GUI.pro -r -spec win32-g++ "CONFIG+=release"
+          mingw32-make -f Makefile-GUI -j$(nproc)
+
+      # ── Installer ──────────────────────────────────────────
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Build Installer
+        shell: pwsh
+        working-directory: application/Setups/Windows
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" windows_setup.iss
+
+      # ── Release (only on push, not PRs) ────────────────────
+      - name: Commit version bump, tag & publish release
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $v   = "${{ steps.version.outputs.VERSION }}"
+          $vt  = "${{ steps.version.outputs.VERSION_TAG }}"
+          $bt  = "${{ steps.version.outputs.BUILD_TIME }}"
+          $tag = "v$v"
+          $exe = (Get-ChildItem "application/Setups/Windows/Installations/*.exe")[0].FullName
+
+          # Commit the version bump back to master
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add application/Common/Version.h
+          git commit -m "ci: bump version to $v [skip ci]"
+          git tag $tag
+          git push origin master --tags
+
+          # Create the GitHub release with the installer attached
+          gh release create $tag $exe `
+            --title "DG-LAN $v $vt" `
+            --notes "Automated build $bt`nVersion: $v $vt" `
+            --prerelease
