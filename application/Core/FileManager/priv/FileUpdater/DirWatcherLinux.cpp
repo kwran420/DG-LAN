@@ -128,6 +128,25 @@ DirWatcherLinux::File* DirWatcherLinux::getFile(int wd) const
 }
 
 /**
+  * Recursively search a Dir tree for a node with the given watch descriptor.
+  * Return 'nullptr' if not found.
+  */
+DirWatcherLinux::Dir* DirWatcherLinux::getDir(int wd) const
+{
+   // Use a stack-based search over all root dirs and their children.
+   QList<Dir*> stack(this->dirs);
+   while (!stack.isEmpty())
+   {
+      Dir* dir = stack.takeLast();
+      if (dir->wd == wd)
+         return dir;
+      for (auto i = dir->children.constBegin(); i != dir->children.constEnd(); ++i)
+         stack.append(i.value());
+   }
+   return nullptr;
+}
+
+/**
   * @copydoc FM::DirWatcher::rmPath(..)
   */
 void DirWatcherLinux::rmPath(const QString& path)
