@@ -10,6 +10,7 @@ using namespace GUI;
 #include <QNetworkRequest>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QSettings>
 #include <QVersionNumber>
 
@@ -103,8 +104,22 @@ void UpdateChecker::onReplyFinished(QNetworkReply* reply)
    const QVersionNumber latest  = QVersionNumber::fromString(strip(tag));
    const QVersionNumber current = QVersionNumber::fromString(strip(CURRENT_VERSION));
 
+   // Find the .exe installer asset in the release
+   QString downloadUrl;
+   const QJsonArray assets = obj.value("assets").toArray();
+   for (const auto& a : assets)
+   {
+      const QJsonObject asset = a.toObject();
+      const QString name = asset.value("name").toString();
+      if (name.endsWith(".exe", Qt::CaseInsensitive))
+      {
+         downloadUrl = asset.value("browser_download_url").toString();
+         break;
+      }
+   }
+
    if (latest > current)
-      emit updateAvailable(tag, url);
+      emit updateAvailable(tag, url, downloadUrl);
    else
       emit upToDate(CURRENT_VERSION);
 }

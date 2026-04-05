@@ -7,30 +7,47 @@
 #pragma once
 
 #include <QDialog>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QProgressBar>
+#include <QLabel>
+#include <QPushButton>
 
 namespace GUI
 {
    /**
     * Modal dialog shown when an update is available.
-    * Displays the new version tag and a "Download" button that
-    * opens the GitHub releases page in the default browser.
+    * If a direct installer download URL is available it will download the
+    * installer inline and launch it via ShellExecute, then quit the app.
+    * Falls back to opening the GitHub release page in the browser.
     */
    class UpdateDialog : public QDialog
    {
       Q_OBJECT
    public:
-      /**
-       * @param latestVersion  Version tag from GitHub, e.g. "v1.3.0"
-       * @param releaseUrl     URL to the release page on GitHub
-       * @param silent         If true, show a tray notification instead of
-       *                       opening the dialog (for background checks).
-       */
       explicit UpdateDialog(const QString& latestVersion,
                             const QString& releaseUrl,
+                            const QString& downloadUrl,
                             QWidget* parent = nullptr);
 
    protected:
       void paintEvent(QPaintEvent* event) override;
+
+   private slots:
+      void startDownload();
+      void onProgress(qint64 received, qint64 total);
+      void onDownloadDone();
+
+   private:
+      QNetworkAccessManager* m_dlNam;
+      QNetworkReply*         m_reply   = nullptr;
+      QProgressBar*          m_progress;
+      QLabel*                m_status;
+      QPushButton*           m_btnAction;
+      QPushButton*           m_btnLater;
+      QString                m_downloadUrl;
+      QString                m_releaseUrl;
+      QString                m_tempFile;
    };
 
    /**

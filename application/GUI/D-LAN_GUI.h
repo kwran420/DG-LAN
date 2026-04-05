@@ -59,7 +59,7 @@ namespace GUI
       void checkForUpdates();   // manual tray menu action
 
       // UpdateChecker result slots
-      void onUpdateAvailable(QString latestVersion, QString releaseUrl);
+      void onUpdateAvailable(QString latestVersion, QString releaseUrl, QString downloadUrl);
       void onUpToDate(QString currentVersion);
       void onUpdateCheckFailed(QString error);
 

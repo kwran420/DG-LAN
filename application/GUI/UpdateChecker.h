@@ -39,8 +39,9 @@ namespace GUI
       static void setAutoCheckEnabled(bool enabled);
 
    signals:
-      /** Emitted when GitHub reports a newer version. */
-      void updateAvailable(QString latestVersion, QString releaseUrl);
+      /** Emitted when GitHub reports a newer version.
+       *  @param downloadUrl  Direct URL to the installer asset (may be empty if no assets). */
+      void updateAvailable(QString latestVersion, QString releaseUrl, QString downloadUrl);
 
       /** Emitted when already on the latest version. */
       void upToDate(QString currentVersion);

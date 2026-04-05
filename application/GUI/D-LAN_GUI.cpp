@@ -243,11 +243,11 @@ void D_LAN_GUI::checkForUpdates()
    this->updateChecker->check();
 }
 
-void D_LAN_GUI::onUpdateAvailable(QString latestVersion, QString releaseUrl)
+void D_LAN_GUI::onUpdateAvailable(QString latestVersion, QString releaseUrl, QString downloadUrl)
 {
    if (this->mainWindow)
    {
-      UpdateDialog dlg(latestVersion, releaseUrl, this->mainWindow);
+      UpdateDialog dlg(latestVersion, releaseUrl, downloadUrl, this->mainWindow);
       dlg.exec();
    }
    else
