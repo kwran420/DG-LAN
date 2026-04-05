@@ -86,14 +86,17 @@ jobs:
         shell: msys2 {0}
         working-directory: application
         run: |
-          qmake Core.pro -r -spec win32-g++ "CONFIG+=release"
+          QMAKE=$(command -v qmake-qt5 || command -v qmake || echo /mingw64/bin/qmake)
+          echo "Using qmake: $QMAKE"
+          $QMAKE Core.pro -r -spec win32-g++ "CONFIG+=release"
           mingw32-make -f Makefile-Core -j$(nproc)
 
       - name: Build GUI
         shell: msys2 {0}
         working-directory: application
         run: |
-          qmake GUI.pro -r -spec win32-g++ "CONFIG+=release"
+          QMAKE=$(command -v qmake-qt5 || command -v qmake || echo /mingw64/bin/qmake)
+          $QMAKE GUI.pro -r -spec win32-g++ "CONFIG+=release"
           mingw32-make -f Makefile-GUI -j$(nproc)
 
       # ── Installer ──────────────────────────────────────────
