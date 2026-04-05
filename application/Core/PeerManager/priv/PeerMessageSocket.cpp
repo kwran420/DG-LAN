@@ -271,8 +271,8 @@ void PeerMessageSocket::onNewMessage(const Common::Message& message)
          {
             L_WARN(QString("PM::CORE_GET_ENTRIES: creating scanned entries for dir %1").arg(i));
             QSharedPointer<FM::IGetEntriesResult> result = this->fileManager->getScannedEntries(getEntries.dirs().entry(i), getEntries.nb_max_hashes_per_entry() > 0 ? getEntries.nb_max_hashes_per_entry() : std::numeric_limits<int>::max());
-            connect(result.data(), &FM::IGetEntriesResult::result, this, &PeerMessageSocket::entriesResult, Qt::QueuedConnection);
-            connect(result.data(), &FM::IGetEntriesResult::timeout, this, &PeerMessageSocket::entriesResultTimeout, Qt::QueuedConnection);
+            connect(result.data(), &FM::IGetEntriesResult::result, this, &PeerMessageSocket::entriesResult, Qt::DirectConnection);
+            connect(result.data(), &FM::IGetEntriesResult::timeout, this, &PeerMessageSocket::entriesResultTimeout, Qt::DirectConnection);
             this->entriesResultsToReceive << result;
             this->entriesResultMessage.add_result();
          }
