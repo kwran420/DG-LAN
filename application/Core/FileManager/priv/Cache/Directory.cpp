@@ -213,6 +213,7 @@ void Directory::moveInto(Directory* directory)
   */
 void Directory::fileDeleted(File* file)
 {
+   QMutexLocker locker(&this->mutex);
    L_DEBU(QString("Directory::fileDeleted() remove %1").arg(file->getFullPath().getPath()));
 
    (*this) -= file->getSize();
@@ -370,6 +371,7 @@ void Directory::fileSizeChanged(qint64 oldSize, qint64 newSize)
 void Directory::stealContent(Directory* dir)
 {
    QMutexLocker locker(&this->mutex);
+   QMutexLocker lockerSrc(&dir->mutex);
    if (dir == this)
    {
       L_ERRO("Directory::stealSubDirs(..): dir == this");
