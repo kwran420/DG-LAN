@@ -41,7 +41,7 @@ namespace GUI
    signals:
       void download();
       void downloadTo();
-      void downloadTo(const Common::Path&, const Common::Hash&);
+      void downloadTo(const QString&, const Common::Hash&);
 
    private slots:
       void actionTriggered();

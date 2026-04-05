@@ -99,6 +99,9 @@ var
 begin
   Exec(ExpandConstant('{sys}/sc.exe'), 'stop "DG-LAN Core"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec(ExpandConstant('{sys}/sc.exe'), 'stop "D-LAN Core"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{sys}/taskkill.exe'), '/F /IM DG-LAN.Core.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{sys}/taskkill.exe'), '/F /IM DG-LAN.GUI.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(1000);
   NeedsRestart := False;
   Result := '';
 end;

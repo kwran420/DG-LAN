@@ -53,7 +53,7 @@ $hash = (git rev-parse HEAD).Substring(0, 12)
 if ($Version) {
     $content = $content -replace '#define VERSION "[^"]*"', "#define VERSION `"$Version`""
     Write-Host "Version set to: $Version" -ForegroundColor Cyan
-} elseif ($content -match '#define VERSION "(\d+)\.(\d+)\.(\d+)"') {
+} elseif (-not $SkipBuild -and $content -match '#define VERSION "(\d+)\.(\d+)\.(\d+)"') {
     $major = [int]$Matches[1]
     $minor = [int]$Matches[2]
     $patch = [int]$Matches[3] + 1
@@ -62,14 +62,17 @@ if ($Version) {
     Write-Host "Version auto-incremented to: $Version" -ForegroundColor Cyan
 } elseif ($content -match '#define VERSION "([^"]+)"') {
     $Version = $Matches[1]
-    Write-Host "Version from Version.h (no auto-increment): $Version" -ForegroundColor Yellow
+    Write-Host "Using existing version: $Version" -ForegroundColor Yellow
 }
 
-$content = $content -replace '#define BUILD_TIME "[^"]*"',  "#define BUILD_TIME `"$bt`""
-$content = $content -replace '#define GIT_VERSION "[^"]*"', "#define GIT_VERSION `"$hash`""
-Set-Content $versionFile $content -NoNewline
-
-Write-Host "Build time: $bt  Git: $hash" -ForegroundColor DarkGray
+if (-not $SkipBuild) {
+    $content = $content -replace '#define BUILD_TIME "[^"]*"',  "#define BUILD_TIME `"$bt`""
+    $content = $content -replace '#define GIT_VERSION "[^"]*"', "#define GIT_VERSION `"$hash`""
+    Set-Content $versionFile $content -NoNewline
+    Write-Host "Build time: $bt  Git: $hash" -ForegroundColor DarkGray
+} else {
+    Write-Host "SkipBuild: using existing Version.h (no changes)" -ForegroundColor Yellow
+}
 
 # ── Build Core + GUI ─────────────────────────────────────────
 if (-not $SkipBuild) {

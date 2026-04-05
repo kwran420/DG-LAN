@@ -91,6 +91,6 @@ void DownloadMenu::actionTriggered()
    if (!action->data().isNull())
    {
       Common::SharedEntry sharedDir = action->data().value<Common::SharedEntry>();
-      emit downloadTo(sharedDir.path, sharedDir.ID);
+      emit downloadTo(sharedDir.path.getPath(), sharedDir.ID);
    }
 }
