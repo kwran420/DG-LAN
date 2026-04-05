@@ -46,8 +46,7 @@ using namespace FM;
   *  - Serialize or deserialize the hashes of the files in a 'Protos::FileCache::Hashes' structure (to be saved/loaded in/from a physical file).
   */
 
-Cache::Cache() :
-   mutex(QMutex::Recursive)
+Cache::Cache()
 {
    qRegisterMetaType<Entry*>("Entry*");
 }

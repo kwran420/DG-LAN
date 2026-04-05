@@ -26,6 +26,7 @@
 #include <QList>
 #include <QStringList>
 #include <QMutex>
+#include <QRecursiveMutex>
 #include <QSharedPointer>
 
 #include <Protos/file_cache.pb.h>
@@ -84,7 +85,7 @@ namespace FM
       quint64 getAmount() const;
 
       FilePool& getFilePool() { return this->filePool; }
-      QMutex& getMutex() const { return this->mutex; }
+      QRecursiveMutex& getMutex() const { return this->mutex; }
 
       void onEntryAdded(Entry* entry);
       void onEntryRemoved(Entry* entry);
@@ -125,6 +126,6 @@ namespace FM
 
       FilePool filePool;
 
-      mutable QMutex mutex;
+      mutable QRecursiveMutex mutex;
    };
 }
