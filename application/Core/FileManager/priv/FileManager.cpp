@@ -74,6 +74,8 @@ FileManager::FileManager(QSharedPointer<HC::IHashCache> hashCache) :
    connect(&this->fileUpdater, &FileUpdater::fileCacheLoaded, this, &FileManager::fileCacheLoadingComplete, Qt::QueuedConnection);
    connect(&this->fileUpdater, &FileUpdater::deleteSharedEntry, this, &FileManager::deleteSharedEntry, Qt::QueuedConnection); // If the 'FileUpdater' wants to delete a shared directory.
 
+   this->loadCacheFromFile();
+
    // Shared entries are restored via setSharedPaths() when the GUI sends settings.
    this->fileUpdater.start();
 }
@@ -468,55 +470,50 @@ void FileManager::chunkRemoved(const QSharedPointer<Chunk>& chunk)
   * Load the cache from a file. Called at start, by the constructor.
   * It will give the file cache to the fileUpdater and ask it
   * to load the cache.
-  * It will also start the timer to persist the cache.
   */
-//void FileManager::loadCacheFromFile()
-//{
-   // TODO : move old shared dir from cache file to settings.
+void FileManager::loadCacheFromFile()
+{
+   // The hashes will be unallocated by the fileUpdater after use.
+   Protos::FileCache::Hashes* savedCache = new Protos::FileCache::Hashes();
 
-   // This hashes will be unallocated by the fileUpdater.
-//   Protos::FileCache::Hashes* savedCache = new Protos::FileCache::Hashes();
+   try
+   {
+      Common::PersistentData::getValue(Common::Constants::FILE_CACHE, *savedCache, Common::Global::DataFolderType::LOCAL);
+      if (static_cast<int>(savedCache->version()) != FILE_CACHE_VERSION)
+      {
+         L_ERRO(QString("The version (%1) of the file cache \"%2\" doesn't match the current version (%3)").arg(savedCache->version()).arg(Common::Constants::FILE_CACHE).arg(FILE_CACHE_VERSION));
+         Common::PersistentData::rmValue(Common::Constants::FILE_CACHE, Common::Global::DataFolderType::LOCAL);
+         delete savedCache;
+         return;
+      }
 
-//   try
-//   {
-//      Common::PersistentData::getValue(Common::Constants::FILE_CACHE, *savedCache, Common::Global::DataFolderType::LOCAL);
-//      if (static_cast<int>(savedCache->version()) != FILE_CACHE_VERSION)
-//      {
-//         L_ERRO(QString("The version (%1) of the file cache \"%2\" doesn't match the current version (%3)").arg(savedCache->version()).arg(Common::Constants::FILE_CACHE).arg(FILE_CACHE_VERSION));
-//         Common::PersistentData::rmValue(Common::Constants::FILE_CACHE, Common::Global::DataFolderType::LOCAL);
-//         delete savedCache;
-//         return;
-//      }
+      try
+      {
+         this->cache.createSharedEntries(*savedCache);
+      }
+      catch (ItemsNotFoundException& e)
+      {
+         foreach (QString path, e.paths)
+            L_WARN(QString("During the file cache loading, this directory hasn't been found: %1").arg(path));
+      }
+   }
+   catch (Common::UnknownValueException& e)
+   {
+      L_WARN(QString("The persisted file cache cannot be retrieved (the file doesn't exist): %1").arg(Common::Constants::FILE_CACHE));
+   }
+   catch (...)
+   {
+      L_WARN(QString("The persisted file cache cannot be retrieved (Unknown exception): %1").arg(Common::Constants::FILE_CACHE));
+   }
 
-//      // Scan the shared directories and try to match the files against the saved cache.
-//      try
-//      {
-//         this->cache.createSharedDirs(*savedCache);
-//      }
-//      catch (ItemsNotFoundException& e)
-//      {
-//         foreach (QString path, e.paths)
-//            L_WARN(QString("During the file cache loading, this directory hasn't been found: %1").arg(path));
-//      }
-//   }
-//   catch (Common::UnknownValueException& e)
-//   {
-//      L_WARN(QString("The persisted file cache cannot be retrieved (the file doesn't exist): %1").arg(Common::Constants::FILE_CACHE));
-//   }
-//   catch (...)
-//   {
-//      L_WARN(QString("The persisted file cache cannot be retrieved (Unknown exception): %1").arg(Common::Constants::FILE_CACHE));
-//   }
-
-//   this->fileUpdater.setFileCache(savedCache);
-//}
+   this->fileUpdater.setFileCache(savedCache);
+}
 
 /**
   * Save the cache to a file.
   * Restart the timer at the end of the operation.
-  * Called by the fileUpdater when it needs to persist the cache.
+  * Called by the timer to persist the cache.
   */
-/*
 void FileManager::persistCacheToFile()
 {
    QMutexLocker locker(&this->mutexPersistCache);
@@ -548,7 +545,6 @@ void FileManager::persistCacheToFile()
 
    this->timerPersistCache.start();
 }
-*/
 
 /*
 void FileManager::forcePersistCacheToFile()
@@ -584,6 +580,12 @@ void FileManager::fileCacheLoadingComplete()
    );
 
    this->cacheLoading = false;
+
+   // Start the periodic cache-persistence timer.
+   connect(&this->timerPersistCache, &QTimer::timeout, this, &FileManager::persistCacheToFile);
+   this->timerPersistCache.setInterval(static_cast<int>(SETTINGS.get<quint32>("save_cache_period")));
+   this->timerPersistCache.setSingleShot(true);
+   this->timerPersistCache.start();
 
    emit fileCacheLoaded();
 }

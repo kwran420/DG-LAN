@@ -208,20 +208,17 @@ void FileUpdater::run()
 
    // First: retrieve the directories and file from the file cache and
    // synchronize it with the file system.
-   //if (this->fileCacheInformation)
-   //{
    while (!this->entriesToScan.isEmpty())
    {
       Entry* entry = this->entriesToScan.takeFirst();
       this->scan(entry, true);
-      //this->restoreFromFileCache(static_cast<SharedDirectory*>(dir));
+      if (this->fileCacheInformation)
+         if (SharedDirectory* sharedDir = dynamic_cast<SharedDirectory*>(entry))
+            this->restoreFromFileCache(sharedDir);
    }
 
-   /*
-      delete this->fileCacheInformation;
-      this->fileCacheInformation = nullptr;
-   }
-   */
+   delete this->fileCacheInformation;
+   this->fileCacheInformation = nullptr;
 
    emit fileCacheLoaded();
 
@@ -630,27 +627,33 @@ void FileUpdater::removeFromFilesWithoutHashes(Entry* entry)
 }
 
 /**
-  * Try to restore the chunk hashes from 'fileCache'.
-  * 'fileCache' is set by 'retrieveFromFile(..)'.
+  * Set the saved file cache so hashes can be restored during the initial scan.
+  * Must be called before addRoot() to have effect on the first scan pass.
   */
-/*void FileUpdater::restoreFromFileCache(SharedDirectory* dir)
+void FileUpdater::setFileCache(const Protos::FileCache::Hashes* savedCache)
 {
-   //TODO
+   delete this->fileCacheInformation;
+   this->fileCacheInformation = savedCache ? new FileCacheInformation(savedCache) : nullptr;
+}
 
-   L_DEBU("Start restoring hashes of a shared directory : " + dir->getFullPath());
+/**
+  * Try to restore the chunk hashes from 'fileCache'.
+  * 'fileCache' is set by 'setFileCache(..)'.
+  */
+void FileUpdater::restoreFromFileCache(SharedDirectory* dir)
+{
+   L_DEBU("Start restoring hashes of a shared directory : " + dir->getFullPath().getPath());
 
    if (!this->fileCacheInformation)
-   {
-      L_ERRO("FileUpdater::restoreFromFileCache(..) : 'this->fileCache' must be previously set. Unable to restore from the file cache.");
       return;
-   }
 
    for (int i = 0; i < this->fileCacheInformation->getFileCache()->shareddir_size(); i++)
       if (this->fileCacheInformation->getFileCache()->shareddir(i).id().hash() == dir->getId())
       {
-         auto filesWithHashesList = dir->restoreFromFileCache(this->fileCacheInformation->getFileCache()->shareddir(i).root());
+         auto filesWithHashesList = static_cast<Directory*>(dir->getRootEntry())->restoreFromFileCache(this->fileCacheInformation->getFileCache()->shareddir(i).root());
          QSet<File*> filesWithHashes(filesWithHashesList.begin(), filesWithHashesList.end());
 
+         QMutexLocker locker(&this->mutex);
          for (QMutableListIterator<File*> i(this->filesWithoutHashes); i.hasNext();)
          {
             File* f = i.next();
@@ -660,13 +663,11 @@ void FileUpdater::removeFromFilesWithoutHashes(Entry* entry)
                i.remove();
             }
          }
-
          break;
       }
 
-   L_DEBU("Restoring terminated: " + dir->getFullPath());
+   L_DEBU("Restoring terminated: " + dir->getFullPath().getPath());
 }
-*/
 
 /**
   * Event from the filesystem like a new created file or a renamed file.

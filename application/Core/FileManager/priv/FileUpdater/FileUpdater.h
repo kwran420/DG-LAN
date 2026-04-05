@@ -33,6 +33,7 @@ namespace FM
 {
    class FileManager;
    class SharedEntry;
+   class SharedDirectory;
    class Directory;
    class File;
    class Entry;
@@ -56,6 +57,8 @@ namespace FM
       void addRoot(SharedEntry* sharedEntry);
       void rmRoot(SharedEntry* sharedEntry, Directory* dir2 = nullptr);
 
+      void setFileCache(const Protos::FileCache::Hashes* savedCache);
+
    signals:
       void fileCacheLoaded();
       void deleteSharedEntry(SharedEntry*);
@@ -78,7 +81,7 @@ namespace FM
       void removeFromEntriesToScan(Entry* entry);
       void removeFromFilesWithoutHashes(Entry* entry);
 
-      //void restoreFromFileCache(SharedDirectory* dir);
+      void restoreFromFileCache(SharedDirectory* dir);
 
       bool processEvents(const QList<WatcherEvent>& events);
 

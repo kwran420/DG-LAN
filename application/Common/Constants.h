@@ -58,5 +58,6 @@ namespace Common
 
       static const int MAX_NB_HASHES_PER_ENTRY_GUI_BROWSE;
       static const int CHUNK_SIZE;
+      static const QString FILE_CACHE;
    };
 }

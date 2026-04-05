@@ -103,8 +103,11 @@ namespace FM
    private slots:
       void setCacheChanged();
       void fileCacheLoadingComplete();
+      void persistCacheToFile();
 
    private:
+      void loadCacheFromFile();
+
       LOG_INIT_H("FileManager")
 
       FileUpdater fileUpdater;
@@ -118,5 +121,8 @@ namespace FM
       QMutex mutexCacheChanged;
       bool cacheLoading;
       bool cacheChanged;
+
+      QTimer timerPersistCache;
+      QMutex mutexPersistCache;
    };
 }
