@@ -24,10 +24,11 @@ static const QString GITHUB_REPO  = "DG-LAN";
 // Tags on GitHub should be like "v1.2.0" to match this.
 static const QString CURRENT_VERSION = QString("v") + VERSION;
 
-// GitHub releases API endpoint.
+// GitHub releases API endpoint — uses the list endpoint so pre-releases
+// are included (the /releases/latest endpoint skips them).
 static QString apiUrl()
 {
-   return QString("https://api.github.com/repos/%1/%2/releases/latest")
+   return QString("https://api.github.com/repos/%1/%2/releases?per_page=10")
       .arg(GITHUB_OWNER, GITHUB_REPO);
 }
 
@@ -80,46 +81,66 @@ void UpdateChecker::onReplyFinished(QNetworkReply* reply)
    QJsonParseError parseErr;
    const QJsonDocument doc = QJsonDocument::fromJson(data, &parseErr);
 
-   if (doc.isNull() || !doc.isObject())
+   // The endpoint returns an array of releases.
+   if (doc.isNull() || !doc.isArray())
    {
       emit checkFailed(QString("Failed to parse GitHub response: %1").arg(parseErr.errorString()));
       return;
    }
 
-   const QJsonObject obj = doc.object();
-   const QString tag = obj.value("tag_name").toString().trimmed();
-   const QString url = obj.value("html_url").toString().trimmed();
+   auto strip = [](const QString& v) -> QString {
+      return v.startsWith('v', Qt::CaseInsensitive) ? v.mid(1) : v;
+   };
 
-   if (tag.isEmpty())
+   const QVersionNumber current = QVersionNumber::fromString(strip(CURRENT_VERSION));
+
+   // Walk the releases and pick the highest version (skipping drafts).
+   QVersionNumber bestVersion;
+   QString bestTag, bestUrl, bestDownloadUrl;
+
+   const QJsonArray releases = doc.array();
+   for (const auto& r : releases)
+   {
+      const QJsonObject obj = r.toObject();
+      if (obj.value("draft").toBool())
+         continue;
+
+      const QString tag = obj.value("tag_name").toString().trimmed();
+      if (tag.isEmpty())
+         continue;
+
+      const QVersionNumber ver = QVersionNumber::fromString(strip(tag));
+      if (ver <= bestVersion)
+         continue;
+
+      // Find the .exe installer asset in this release.
+      QString downloadUrl;
+      const QJsonArray assets = obj.value("assets").toArray();
+      for (const auto& a : assets)
+      {
+         const QJsonObject asset = a.toObject();
+         const QString name = asset.value("name").toString();
+         if (name.endsWith(".exe", Qt::CaseInsensitive))
+         {
+            downloadUrl = asset.value("browser_download_url").toString();
+            break;
+         }
+      }
+
+      bestVersion     = ver;
+      bestTag         = tag;
+      bestUrl         = obj.value("html_url").toString().trimmed();
+      bestDownloadUrl = downloadUrl;
+   }
+
+   if (bestTag.isEmpty())
    {
       emit checkFailed("No release tag found in GitHub response.");
       return;
    }
 
-   // Compare versions: strip leading 'v' for QVersionNumber parsing.
-   auto strip = [](const QString& v) -> QString {
-      return v.startsWith('v', Qt::CaseInsensitive) ? v.mid(1) : v;
-   };
-
-   const QVersionNumber latest  = QVersionNumber::fromString(strip(tag));
-   const QVersionNumber current = QVersionNumber::fromString(strip(CURRENT_VERSION));
-
-   // Find the .exe installer asset in the release
-   QString downloadUrl;
-   const QJsonArray assets = obj.value("assets").toArray();
-   for (const auto& a : assets)
-   {
-      const QJsonObject asset = a.toObject();
-      const QString name = asset.value("name").toString();
-      if (name.endsWith(".exe", Qt::CaseInsensitive))
-      {
-         downloadUrl = asset.value("browser_download_url").toString();
-         break;
-      }
-   }
-
-   if (latest > current)
-      emit updateAvailable(tag, url, downloadUrl);
+   if (bestVersion > current)
+      emit updateAvailable(bestTag, bestUrl, bestDownloadUrl);
    else
       emit upToDate(CURRENT_VERSION);
 }

@@ -1,164 +1,84 @@
-name: Build DG-LAN
+name: Publish DG-LAN Release
 
 # ── HOW TO RELEASE ────────────────────────────────────────────
-# 1. Update VERSION in application/Common/Version.h (e.g. "1.3.0")
-# 2. Commit & push to master
-# 3. Tag and push:  git tag v1.3.0 && git push --tags
-# 4. CI builds the installer and publishes a GitHub Release
+# The installer is built locally (much faster than CI).
 #
-# Or use the GitHub UI:  Actions → Build DG-LAN → Run workflow
+# One-step:
+#   .\build-release.ps1 -Publish
+#
+# Manual:
+#   1. .\build-release.ps1              (builds the installer)
+#   2. git add -A && git commit -m "chore: bump to vX.Y.Z"
+#   3. git tag vX.Y.Z && git push && git push --tags
+#   4. This workflow creates a GitHub Release and attaches the .exe
+#
+# The workflow is intentionally lightweight — no MSYS2, no compile.
+# It just reads the pre-built installer from the repo (uploaded via
+# build-release.ps1 -Publish) or creates a placeholder release for
+# manual asset upload.
+
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g. v1.3.0). Must already exist.'
+        required: true
 
 permissions:
   contents: write
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
-
+  publish:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # ── MSYS2 / MinGW64 tool-chain ──────────────────────────
-      - name: Setup MSYS2
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          install: >-
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-qt5-base
-            mingw-w64-x86_64-qt5-tools
-            mingw-w64-x86_64-protobuf
-            mingw-w64-x86_64-openssl
-            mingw-w64-x86_64-make
-            make
-
-      # ── Resolve version ─────────────────────────────────────
-      - name: Resolve version
+      - name: Resolve version from tag
         id: version
-        shell: pwsh
+        shell: bash
         run: |
-          $file = "application/Common/Version.h"
-          $c = Get-Content $file -Raw
-          $bt   = [DateTime]::UtcNow.ToString("yyyy-MM-dd_HH-mm")
-          $hash = git rev-parse HEAD
+          if [[ -n "${{ inputs.tag }}" ]]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          VER="${TAG#v}"
 
-          $ref = "${{ github.ref }}"
-          if ($ref -match '^refs/tags/v(.+)$') {
-            $ver = $Matches[1]
-          } elseif ($c -match '#define VERSION "([^"]+)"') {
-            $ver = $Matches[1]
-          } else {
-            Write-Error "Cannot determine version"; exit 1
-          }
+          # Read VERSION_TAG from Version.h
+          VT=$(grep '#define VERSION_TAG' application/Common/Version.h \
+               | sed 's/.*"\(.*\)".*/\1/')
 
-          $c = $c -replace '#define VERSION "[^"]*"',     "#define VERSION `"$ver`""
-          $c = $c -replace '#define BUILD_TIME "[^"]*"',   "#define BUILD_TIME `"$bt`""
-          $c = $c -replace '#define GIT_VERSION "[^"]*"',  "#define GIT_VERSION `"$hash`""
-          Set-Content $file $c -NoNewline
+          echo "TAG=$TAG"   >> "$GITHUB_OUTPUT"
+          echo "VERSION=$VER" >> "$GITHUB_OUTPUT"
+          echo "VERSION_TAG=$VT" >> "$GITHUB_OUTPUT"
+          echo "Publishing: $VER $VT (tag: $TAG)"
 
-          $tag = ""
-          if ($c -match '#define VERSION_TAG "([^"]*)"') { $tag = $Matches[1] }
-
-          "VERSION=$ver"       >> $env:GITHUB_OUTPUT
-          "VERSION_TAG=$tag"   >> $env:GITHUB_OUTPUT
-          "BUILD_TIME=$bt"     >> $env:GITHUB_OUTPUT
-          Write-Host "Building: $ver $tag ($bt)"
-
-      # ── Detect where MSYS2 actually installed Qt ────────────
-      - name: Detect MSYS2 root
-        id: msys2root
-        shell: pwsh
-        run: |
-          $candidates = @(
-            (Join-Path $env:RUNNER_TEMP "msys64\mingw64"),
-            "D:\a\_temp\msys64\mingw64",
-            "C:\msys64\mingw64"
-          )
-          foreach ($c in $candidates) {
-            $exists = Test-Path "$c\bin\Qt5Core.dll"
-            Write-Host "  $c  ->  Qt5Core.dll exists: $exists"
-          }
-          $root = $candidates | Where-Object { Test-Path "$_\bin\Qt5Core.dll" } |
-                  Select-Object -First 1
-          if (-not $root) { Write-Error "Cannot find MSYS2 MinGW64 root"; exit 1 }
-          Write-Host "Using: $root"
-          "MINGW_ROOT=$root" >> $env:GITHUB_OUTPUT
-
-      # ── Patch .iss for this runner's paths + ICU version ────
-      - name: Patch installer script for runner
-        shell: pwsh
-        run: |
-          $root = "${{ steps.msys2root.outputs.MINGW_ROOT }}" -replace '\\','/'
-          $iss  = "application/Setups/Windows/windows_setup.iss"
-          $content = Get-Content $iss -Raw
-
-          # Rewrite QtDir / MingwDir to the actual MSYS2 location
-          $content = $content -replace '(?<=#define QtDir ")[^"]*',    $root
-          $content = $content -replace '(?<=#define MingwDir ")[^"]*', $root
-
-          # Patch ICU version to whatever is installed
-          $dll = Get-ChildItem "$root/bin/libicuin*.dll" -EA SilentlyContinue |
-                 Select-Object -First 1
-          if ($dll -and $dll.Name -match 'libicuin(\d+)\.dll') {
-            $v = $Matches[1]
-            $content = $content -replace 'libicuin\d+', "libicuin$v"
-            $content = $content -replace 'libicuuc\d+', "libicuuc$v"
-            $content = $content -replace 'libicudt\d+', "libicudt$v"
-            Write-Host "ICU version: $v"
-          }
-
-          Set-Content $iss $content -NoNewline
-          Write-Host "QtDir patched to: $root"
-
-      # ── Build ───────────────────────────────────────────────
-      - name: Build Core
-        shell: msys2 {0}
-        working-directory: application
-        run: |
-          QMAKE=$(command -v qmake-qt5 || command -v qmake || echo /mingw64/bin/qmake)
-          echo "Using qmake: $QMAKE"
-          $QMAKE Core.pro -r -spec win32-g++ "CONFIG+=release"
-          mingw32-make -f Makefile-Core -j$(nproc)
-
-      - name: Build GUI
-        shell: msys2 {0}
-        working-directory: application
-        run: |
-          QMAKE=$(command -v qmake-qt5 || command -v qmake || echo /mingw64/bin/qmake)
-          $QMAKE GUI.pro -r -spec win32-g++ "CONFIG+=release"
-          mingw32-make -f Makefile-GUI -j$(nproc)
-
-      # ── Installer ──────────────────────────────────────────
-      - name: Install Inno Setup
-        shell: pwsh
-        run: choco install innosetup -y --no-progress
-
-      - name: Build Installer
-        shell: pwsh
-        working-directory: application/Setups/Windows
-        run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" windows_setup.iss
-
-      # ── Publish GitHub Release ──────────────────────────────
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: pwsh
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $v   = "${{ steps.version.outputs.VERSION }}"
-          $vt  = "${{ steps.version.outputs.VERSION_TAG }}"
-          $bt  = "${{ steps.version.outputs.BUILD_TIME }}"
-          $tag = "v$v"
-          $exe = (Get-ChildItem "application/Setups/Windows/Installations/*.exe")[0].FullName
+          TAG="${{ steps.version.outputs.TAG }}"
+          VER="${{ steps.version.outputs.VERSION }}"
+          VT="${{ steps.version.outputs.VERSION_TAG }}"
 
-          gh release create $tag $exe `
-            --title "DG-LAN $v $vt" `
-            --notes "Version: $v $vt`nBuild: $bt" `
-            --prerelease
+          # If the release already exists (created by build-release.ps1 -Publish),
+          # just make sure it's not a draft.
+          if gh release view "$TAG" &>/dev/null; then
+            echo "Release $TAG already exists — nothing to do."
+            exit 0
+          fi
+
+          # Otherwise create a release (the .exe can be uploaded manually or
+          # via: gh release upload $TAG path/to/installer.exe)
+          gh release create "$TAG" \
+            --title "DG-LAN $VER $VT" \
+            --notes "Version: $VER $VT" \
+            --draft
+          echo "Draft release created. Upload the installer with:"
+          echo "  gh release upload $TAG path/to/DG-LAN-Setup.exe"
+          echo "  gh release edit $TAG --draft=false"
