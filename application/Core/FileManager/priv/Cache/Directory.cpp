@@ -42,12 +42,12 @@ Directory::Directory(SharedEntry* root, const QString& name, Directory* parent, 
    scanned(true)
 {
    QMutexLocker locker(&this->mutex);
-   L_DEBU(QString("New Directory: %1, createPhysically = %2").arg(this->getFullPath()).arg(createPhysically));
+   L_DEBU(QString("New Directory: %1, createPhysically = %2").arg(this->getFullPath().getPath()).arg(createPhysically));
 
    if (createPhysically)
-      if (!QDir(this->getFullPath().removeLastDir()).mkdir(this->name))
+      if (!QDir(this->getFullPath().removeLastDir().getPath()).mkdir(this->name))
       {
-         L_ERRO(QString("Unable to create the directory: %1").arg(this->getFullPath()));
+         L_ERRO(QString("Unable to create the directory: %1").arg(this->getFullPath().getPath()));
          Entry::del(false);
          throw UnableToCreateNewDirException();
       }
@@ -132,7 +132,7 @@ void Directory::populateHashesDir(Protos::FileCache::Hashes::Dir& dirToFill) con
 
    {
       QMutexLocker locker(&this->mutex);
-      Common::ProtoHelper::setStr(dirToFill, &Protos::FileCache::Hashes_Dir::set_name, this->getName());
+      Common::ProtoHelper::setStr(dirToFill, &Protos::FileCache::Hashes_Dir::mutable_name, this->getName());
       subDirsCopy = this->subDirs.getList();
       filesCopy = this->files.getList();
    }
@@ -213,7 +213,7 @@ void Directory::moveInto(Directory* directory)
   */
 void Directory::fileDeleted(File* file)
 {
-   L_DEBU(QString("Directory::fileDeleted() remove %1").arg(file->getFullPath()));
+   L_DEBU(QString("Directory::fileDeleted() remove %1").arg(file->getFullPath().getPath()));
 
    (*this) -= file->getSize();
    this->files.removeOne(file);
@@ -243,7 +243,7 @@ Common::Path Directory::getPath() const
   */
 Common::Path Directory::getFullPath() const
 {
-   this->getRoot()->getPath().append(this->getPath().appendDir(this->name));
+   return this->getRoot()->getPath().append(this->getPath().appendDir(this->name));
 }
 
 void Directory::rename(const QString& newName)
@@ -317,7 +317,7 @@ Directory* Directory::createSubDir(const QString& name, bool physically)
    QMutexLocker locker(&this->mutex);
    if (Directory* subDir = this->getSubDir(name))
       return subDir;
-   return new Directory(this, name, physically);
+   return new Directory(this->getRoot(), name, this, physically);
 }
 
 /**
@@ -416,7 +416,7 @@ void Directory::setScanned(bool value)
 
    this->scanned = value;
    if (this->scanned)
-      this->cache->onScanned(this);
+      this->getCache()->onScanned(this);
 }
 
 /**

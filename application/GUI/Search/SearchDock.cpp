@@ -150,7 +150,7 @@ void SearchDock::search()
       return;
 
    Protos::Common::FindPattern pattern;
-   Common::ProtoHelper::setStr(pattern, &Protos::Common::FindPattern::set_pattern, this->ui->txtSearch->text());
+   Common::ProtoHelper::setStr(pattern, &Protos::Common::FindPattern::mutable_pattern, this->ui->txtSearch->text());
 
    bool local = false;
 

@@ -202,3 +202,32 @@ message GetChunksResult {
 }
 
 // b -> a : stream of data of each chunk in the same order as requested. Only if 'GetChunkResult.status == OK' and only for the chunks with 'ChunkResult.status == OK').
+
+
+/***** DG-LAN: Gossip / Peer Exchange (PEX) — Unicast TCP Messages *****/
+
+// Request a list of known-alive peers from a connected peer.
+// Used during the gossip/PEX handshake on first TCP connection.
+// a -> b
+// id : 0x61
+message GetPeerList {
+   uint32 max_peers = 1; // Maximum number of peers requested. 0 = use remote default.
+}
+
+// A single entry in a peer list.
+message PeerInfo {
+   string address = 1;    // IP address string (IPv4 or IPv6)
+   uint32 port = 2;       // Unicast port
+   string nick = 3;       // Display name
+   bytes id = 4;          // Peer ID hash (20 bytes). May be empty if not known.
+   uint64 last_seen = 5;  // Unix timestamp (seconds) when sender last received a live IMAlive from this peer.
+   bool is_core_seeder = 6; // True if the peer has advertised core_seeder_mode.
+}
+
+// Response to GetPeerList.
+// Only includes peers from which the responder has personally received a live IMAlive.
+// b -> a
+// id : 0x62
+message GetPeerListResult {
+   repeated PeerInfo peers = 1;
+}

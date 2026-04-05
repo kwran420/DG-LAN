@@ -57,12 +57,12 @@ QDateTime ChatMessage::getTime() const
 void ChatMessage::fillProtoChatMessage(Protos::Common::ChatMessage& protoChatMessage) const
 {
    protoChatMessage.set_id(this->ID);
-   Common::ProtoHelper::setStr(protoChatMessage, &Protos::Common::ChatMessage::set_message, this->message);
+   Common::ProtoHelper::setStr(protoChatMessage, &Protos::Common::ChatMessage::mutable_message, this->message);
    protoChatMessage.set_time(this->time.toMSecsSinceEpoch());
    protoChatMessage.mutable_peer_id()->set_hash(this->ownerID.getData(), Common::Hash::HASH_SIZE);
-   Common::ProtoHelper::setStr(protoChatMessage, &Protos::Common::ChatMessage::set_peer_nick, this->ownerNick);
+   Common::ProtoHelper::setStr(protoChatMessage, &Protos::Common::ChatMessage::mutable_peer_nick, this->ownerNick);
    if (!this->room.isEmpty())
-      Common::ProtoHelper::setStr(protoChatMessage, &Protos::Common::ChatMessage::set_chat_room, this->room);
+      Common::ProtoHelper::setStr(protoChatMessage, &Protos::Common::ChatMessage::mutable_chat_room, this->room);
    for (QListIterator<Common::Hash> i(this->peerIDsAnswer); i.hasNext();)
       protoChatMessage.add_peer_ids_answer()->set_hash(i.next().getData(), Common::Hash::HASH_SIZE);
 }

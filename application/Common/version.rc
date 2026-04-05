@@ -11,15 +11,15 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "CompanyName",      "Ek Dev"
-            VALUE "FileDescription",  "D-LAN - A distributed LAN file sharing software"
+            VALUE "CompanyName",      "DG-LAN"
+            VALUE "FileDescription",  "DG-LAN - LAN file sharing for gamers"
             VALUE "FileVersion",      VERSION
-            VALUE "InternalName",     "D-LAN"
-            VALUE "LegalCopyright",   "2010-2011"
+            VALUE "InternalName",     "DG-LAN"
+            VALUE "LegalCopyright",   "2026 Kieran Hollis & Matthew Dix"
             VALUE "LegalTrademarks1", ""
             VALUE "LegalTrademarks2", ""
             VALUE "OriginalFilename", ""
-            VALUE "ProductName",      "D-LAN"
+            VALUE "ProductName",      "DG-LAN"
             VALUE "ProductVersion",   VERSION
             VALUE "VersionTag",       VERSION_TAG
             VALUE "BuildTime",        BUILD_TIME

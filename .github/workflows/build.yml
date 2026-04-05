@@ -1,0 +1,38 @@
+name: Build DG-LAN
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            qt5-qmake \
+            qtbase5-dev \
+            qttools5-dev \
+            protobuf-compiler \
+            libprotobuf-dev \
+            libssl-dev \
+            build-essential
+
+      - name: Build Core (release)
+        working-directory: application
+        run: |
+          qmake Core.pro CONFIG+=release
+          make -j$(nproc)
+
+      - name: Build GUI (release)
+        working-directory: application
+        run: |
+          qmake GUI.pro CONFIG+=release
+          make -j$(nproc)

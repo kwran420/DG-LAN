@@ -32,6 +32,16 @@ using namespace NL;
 
 QNetworkInterface Utils::getCurrentInterfaceToListenTo()
 {
+   // DG-LAN: check for explicit interface name first (ZeroTier support)
+   const QString interfaceName = SETTINGS.get<QString>("network_interface_name");
+   if (!interfaceName.isEmpty())
+   {
+      foreach (const QNetworkInterface& iface, QNetworkInterface::allInterfaces())
+         if (iface.name() == interfaceName)
+            return iface;
+      L_WARN(QString("DG-LAN: network_interface_name '%1' not found, falling back to address-based selection").arg(interfaceName));
+   }
+
    const QString addressToListen = SETTINGS.get<QString>("listen_address");
    auto interfaces = QNetworkInterface::allInterfaces();
 
@@ -56,6 +66,29 @@ QNetworkInterface Utils::getCurrentInterfaceToListenTo()
 
 QHostAddress Utils::getCurrentAddressToListenTo()
 {
+   // DG-LAN: if an interface name is configured, derive the bind address from it
+   const QString interfaceName = SETTINGS.get<QString>("network_interface_name");
+   if (!interfaceName.isEmpty())
+   {
+      foreach (const QNetworkInterface& iface, QNetworkInterface::allInterfaces())
+      {
+         if (iface.name() != interfaceName)
+            continue;
+         foreach (const QNetworkAddressEntry& entry, iface.addressEntries())
+         {
+            // DG-LAN: prefer IPv4 if force_ipv4 is set, otherwise use first address
+            if (SETTINGS.get<bool>("force_ipv4"))
+            {
+               if (entry.ip().protocol() == QAbstractSocket::IPv4Protocol)
+                  return entry.ip();
+            }
+            else if (entry.ip().protocol() == QAbstractSocket::IPv6Protocol ||
+                     entry.ip().protocol() == QAbstractSocket::IPv4Protocol)
+               return entry.ip();
+         }
+      }
+   }
+
    const QString addressToListen = SETTINGS.get<QString>("listen_address");
 
    if (!addressToListen.isEmpty())
@@ -111,4 +144,34 @@ QHostAddress Utils::getMulticastGroup()
       groupIPv6[15] = group & 0x000000FF;
       return QHostAddress(groupIPv6);
    }
+}
+
+/**
+  * DG-LAN: Return the subnet broadcast address for the currently bound interface.
+  * Used as a fallback when multicast is unavailable (e.g. ZeroTier without multicast enabled).
+  * Returns QHostAddress() if no suitable address is found.
+  */
+QHostAddress Utils::getBroadcastAddress()
+{
+   QNetworkInterface iface = Utils::getCurrentInterfaceToListenTo();
+   if (!iface.isValid())
+      return QHostAddress();
+
+   foreach (const QNetworkAddressEntry& entry, iface.addressEntries())
+   {
+      if (entry.ip().protocol() == QAbstractSocket::IPv4Protocol &&
+          !entry.broadcast().isNull())
+         return entry.broadcast();
+   }
+
+   // Fallback: derive from current address if no broadcast found
+   const QHostAddress addr = Utils::getCurrentAddressToListenTo();
+   if (addr.protocol() == QAbstractSocket::IPv4Protocol &&
+       addr != QHostAddress::AnyIPv4 && addr != QHostAddress::Any)
+   {
+      // Return limited broadcast as last resort
+      return QHostAddress(QHostAddress::Broadcast);
+   }
+
+   return QHostAddress();
 }

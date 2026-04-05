@@ -56,7 +56,7 @@ namespace FM
    {
       Q_OBJECT
    public:
-      FileManager(QSharedPointer<HC::IHashCache> hashCache);
+      FileManager(QSharedPointer<HC::IHashCache> hashCache = nullptr);
       ~FileManager();
 
       void setSharedPaths(const QStringList& paths);

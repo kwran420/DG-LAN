@@ -21,6 +21,8 @@
 #include <QString>
 #include <QtNetwork>
 #include <QSharedPointer>
+#include <QPair>      // DG-LAN
+#include <QHostAddress> // DG-LAN
 
 #include <Core/FileManager/IChunk.h>
 
@@ -102,6 +104,13 @@ namespace PM
         * @param tcpSocket PeerManager will care about deleting the socket.
         */
       virtual void newConnection(QTcpSocket* tcpSocket) = 0;
+
+      // DG-LAN: Gossip / PEX
+      virtual void addGossipCandidate(const QHostAddress& address, quint16 port) = 0;
+      virtual QList<QPair<QHostAddress, quint16>> takeGossipCandidates() = 0;
+
+      // DG-LAN: probe known hosts (core seeders) at startup
+      virtual void initKnownPeers() = 0;
 
    signals:
       /**

@@ -20,6 +20,7 @@
 using namespace FM;
 
 #include <QDir>
+#include <QFile>
 
 #include <Common/ProtoHelper.h>
 #include <Common/Global.h>
@@ -48,7 +49,7 @@ SharedEntry::SharedEntry(Cache* cache, const Common::Path& path, const Common::H
    if (this->cache->isShared(pathStr))
       throw SharedEntryAlreadySharedException();
 
-   // First of all check is the directory physically exists.
+   // First of all check if the entry physically exists.
    if (path.isFile() && !QFile(pathStr).exists())
       throw FileNotFoundException(pathStr);
 
@@ -56,13 +57,13 @@ SharedEntry::SharedEntry(Cache* cache, const Common::Path& path, const Common::H
       throw DirNotFoundException(pathStr);
 
    if (SharedDirectory* dir = this->cache->getSuperSharedEntry(pathStr))
-      throw SuperDirectoryExistsException(dir->getFullPath(), pathStr);
+      throw SuperDirectoryExistsException(dir->getFullPath().getPath(), pathStr);
 }
 
 /**
-  * A factory to create a shared entry (file or directory) depending of the given path.
+  * A factory to create a shared entry (file or directory) depending on the given path.
   */
-SharedEntry* SharedEntry::create(Cache* cache, const QString& pathStr, const Common::Hash& id = Common::Hash())
+SharedEntry* SharedEntry::create(Cache* cache, const QString& pathStr, const Common::Hash& id)
 {
    Common::Path path(pathStr);
    if (path.isFile())
@@ -79,32 +80,28 @@ SharedEntry::~SharedEntry()
 void SharedEntry::populateEntry(Protos::Common::Entry* entry) const
 {
    this->getRootEntry()->populateEntry(entry, true);
-   entry->set_path(""); // The path of a shared directory is private (we don't want the other peers to see absolute paths).
+   entry->set_path(""); // Don't expose abs path to peers.
 }
 
 void SharedEntry::del(bool invokeDelete)
 {
-   // The question is: why we don't let 'Directory::del()' destroys its sub directories?
-   // This is because a concurrent access to 'Directory::getRoot()' during a delete of a shared directory must be
-   // able to access the shared director.
-   // this->deleteSubDirs();
-
    this->getRootEntry()->del(invokeDelete);
 }
 
 void SharedEntry::moveInto(Directory* directory)
 {
-   // A directory can't be move in its own tree.
+   // A directory can't be moved into its own tree.
    if (this->getRootEntry()->getRoot() == this)
       return;
 
-   this->getCache()->removeSharedEntry(this, directory->createSubDir(this->getRootEntry()->getName()));
+   this->getCache()->removeSharedEntry(dynamic_cast<SharedDirectory*>(this), directory->createSubDir(this->getRootEntry()->getName()));
 }
 
 void SharedEntry::moveInto(const QString& path)
 {
    this->path = Common::Path(path);
 }
+
 Cache* SharedEntry::getCache() const
 {
    return this->cache;
@@ -125,9 +122,8 @@ QString SharedEntry::getUserName() const
    return this->userName;
 }
 
-
 /**
-  * Extract the entry name. The entry name is a user name and will not be used in a real path.
+  * Extract the entry name from the full path.
   * 'C:/User/Paul/Movies/' -> 'Movies'
   * 'C:/User/Paul/Movies/movie.avi' -> 'movie.avi'
   * '/' -> '/'
@@ -154,25 +150,23 @@ Common::Path SharedEntry::pathWithoutEntryName(const Common::Path& path)
 
 /////
 
-SharedDirectory::SharedDirectory(Cache* cache, const QString& path, const Common::Hash& id) :
-   SharedEntry(cache, path, id)
+SharedDirectory::SharedDirectory(Cache* cache, const Common::Path& path, const Common::Hash& id) :
+   SharedEntry(cache, path, id),
+   directory(new Directory(this, entryName(path), nullptr, false))
 {
-
 }
 
 void SharedDirectory::mergeSubSharedEntries()
 {
-   // Merges the sub-directories of each directory found.
-   foreach (SharedEntry* subEntry, this->cache->getSubSharedEntrys(this->getFullPath()))
+   foreach (SharedEntry* subEntry, this->getCache()->getSubSharedEntries(this->getFullPath().getPath()))
    {
-      // Create the missing directories.
       const QStringList& parentFolders = this->getFullPath().getDirs();
       const QStringList& childFolders = subEntry->getFullPath().getDirs();
-      Directory* current = this;
+      Directory* current = this->directory;
       for (int i = parentFolders.size(); i < childFolders.size(); i++)
          current = current->createSubDir(childFolders[i]);
 
-      this->getCache()->removeSharedDir(subDir, current);
+      this->getCache()->removeSharedEntry(dynamic_cast<SharedDirectory*>(subEntry), current);
    }
 }
 
@@ -188,10 +182,10 @@ Common::Path SharedDirectory::getFullPath() const
 
 /////
 
-SharedFile::SharedFile(Cache* cache, const QString& path, const Common::Hash& id) :
-   SharedEntry(cache, path, id)
+SharedFile::SharedFile(Cache* cache, const Common::Path& path, const Common::Hash& id) :
+   SharedEntry(cache, path, id),
+   file(new File(this, entryName(path), 0, QDateTime(), nullptr, Common::Hashes(), false))
 {
-
 }
 
 void SharedFile::mergeSubSharedEntries()

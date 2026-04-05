@@ -27,6 +27,7 @@
 
 #include <priv/FileUpdater/DirWatcher.h>
 #include <priv/Cache/FileHasher.h>
+#include <Protos/file_cache.pb.h>
 
 namespace FM
 {
@@ -86,7 +87,7 @@ namespace FM
       FileManager* fileManager;
       DirWatcher* dirWatcher;
 
-      /*class FileCacheInformation
+      class FileCacheInformation
       {
       public:
          FileCacheInformation(const Protos::FileCache::Hashes* fileCache);
@@ -103,7 +104,7 @@ namespace FM
          int fileCacheNbFiles;
          int fileCacheNbFilesLoaded;
       };
-      FileCacheInformation* fileCacheInformation; // Only used during the loading of 'fileCache'.*/
+      FileCacheInformation* fileCacheInformation; // Only used during the loading of 'fileCache'.
 
       bool toStop; ///< Set to true when the service must be stopped.
 

@@ -41,6 +41,8 @@ MdiArea::MdiArea(QSharedPointer<RCC::ICoreConnection> coreConnection, PeerListMo
    chatWidget(nullptr),
    downloadsWidget(nullptr),
    uploadsWidget(nullptr),
+   activityWidget(nullptr),
+   hashingWidget(nullptr),
    downloadsBusyIndicator(nullptr)
 {
    this->setObjectName("mdiArea");
@@ -203,6 +205,9 @@ void MdiArea::coreConnected()
       }
    }
 
+   this->addActivityWindow();
+   this->addHashingWindow();
+
    this->setActiveSubWindow(dynamic_cast<QMdiSubWindow*>(this->chatWidget->parent()));
 }
 
@@ -210,6 +215,8 @@ void MdiArea::coreDisconnected(bool)
 {
    this->taskbar.setStatus(TaskbarButtonStatus::BUTTON_STATUS_NOPROGRESS);
 
+   this->removeHashingWindow();
+   this->removeActivityWindow();
    this->removeUploadsWindow();
    this->removeDownloadsWindow();
    this->removeChatWindow();
@@ -389,6 +396,44 @@ void MdiArea::removeUploadsWindow()
    {
       this->removeWidget(this->uploadsWidget);
       this->uploadsWidget = 0;
+   }
+}
+
+void MdiArea::addActivityWindow()
+{
+   if (this->activityWidget)
+      return;
+
+   this->activityWidget = new ActivityWidget(this->coreConnection);
+   this->addSubWindow(this->activityWidget, Qt::CustomizeWindowHint);
+   this->activityWidget->setWindowState(Qt::WindowMaximized);
+}
+
+void MdiArea::removeActivityWindow()
+{
+   if (this->activityWidget)
+   {
+      this->removeWidget(this->activityWidget);
+      this->activityWidget = nullptr;
+   }
+}
+
+void MdiArea::addHashingWindow()
+{
+   if (this->hashingWidget)
+      return;
+
+   this->hashingWidget = new HashingProgressWidget(this->coreConnection);
+   this->addSubWindow(this->hashingWidget, Qt::CustomizeWindowHint);
+   this->hashingWidget->setWindowState(Qt::WindowMaximized);
+}
+
+void MdiArea::removeHashingWindow()
+{
+   if (this->hashingWidget)
+   {
+      this->removeWidget(this->hashingWidget);
+      this->hashingWidget = nullptr;
    }
 }
 

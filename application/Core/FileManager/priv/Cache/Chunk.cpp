@@ -24,7 +24,7 @@ using namespace FM;
 #include <IDataReader.h>
 #include <IDataWriter.h>
 #include <priv/Global.h>
-#include <priv/Cache/SharedDirectory.h>
+#include <priv/Cache/SharedEntry.h>
 #include <priv/Cache/DataReader.h>
 #include <priv/Cache/DataWriter.h>
 
@@ -71,6 +71,21 @@ void Chunk::removeItsIncompleteFile()
       this->file->deleteIfIncomplete();
 }
 
+Chunk* Chunk::restoreFromFileCache(const Protos::FileCache::Hashes_Chunk& chunk)
+{
+   this->knownBytes = chunk.known_bytes();
+   if (chunk.has_hash())
+      this->hash = chunk.hash().hash();
+   return this;
+}
+
+void Chunk::populateHashesChunk(Protos::FileCache::Hashes_Chunk& chunk) const
+{
+   chunk.set_known_bytes(this->knownBytes);
+   if (!this->hash.isNull())
+      chunk.mutable_hash()->set_hash(this->hash.getData(), Common::Hash::HASH_SIZE);
+}
+
 bool Chunk::populateEntry(Protos::Common::Entry* entry) const
 {
    if (this->file)
@@ -84,7 +99,7 @@ bool Chunk::populateEntry(Protos::Common::Entry* entry) const
 QString Chunk::getFilePath() const
 {
    if (this->file)
-      return this->file->getFullPath();
+      return this->file->getFullPath().getPath();
    return QString();
 }
 

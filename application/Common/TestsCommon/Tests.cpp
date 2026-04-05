@@ -817,8 +817,8 @@ void Tests::protoHelper()
    Protos::Common::Entry entry;
    entry.set_type(Protos::Common::Entry::FILE);
    entry.set_size(0);
-   ProtoHelper::setStr(entry, &Protos::Common::Entry::set_path, path);
-   ProtoHelper::setStr(entry, &Protos::Common::Entry::set_name, name);
+   ProtoHelper::setStr(entry, &Protos::Common::Entry::mutable_path, path);
+   ProtoHelper::setStr(entry, &Protos::Common::Entry::mutable_name, name);
 
    QCOMPARE(ProtoHelper::getStr(entry, &Protos::Common::Entry::path), path);
    QCOMPARE(ProtoHelper::getStr(entry, &Protos::Common::Entry::name), name);

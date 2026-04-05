@@ -19,7 +19,36 @@
 #include <Taskbar/TaskbarImplWin.h>
 using namespace GUI;
 
-#include <QtWinExtras>
+static HICON qIconToHICON(const QIcon& icon)
+{
+   QPixmap pm = icon.pixmap(48);
+   QImage img = pm.toImage().convertToFormat(QImage::Format_ARGB32);
+   BITMAPV5HEADER bi = {};
+   bi.bV5Size        = sizeof(BITMAPV5HEADER);
+   bi.bV5Width       = img.width();
+   bi.bV5Height      = -img.height();
+   bi.bV5Planes      = 1;
+   bi.bV5BitCount    = 32;
+   bi.bV5Compression = BI_BITFIELDS;
+   bi.bV5RedMask     = 0x00FF0000;
+   bi.bV5GreenMask   = 0x0000FF00;
+   bi.bV5BlueMask    = 0x000000FF;
+   bi.bV5AlphaMask   = 0xFF000000;
+   HDC hdc = GetDC(NULL);
+   void* bits = nullptr;
+   HBITMAP hColor = CreateDIBSection(hdc, (BITMAPINFO*)&bi, DIB_RGB_COLORS, &bits, NULL, 0);
+   ReleaseDC(NULL, hdc);
+   memcpy(bits, img.bits(), (size_t)img.sizeInBytes());
+   HBITMAP hMask = CreateBitmap(img.width(), img.height(), 1, 1, NULL);
+   ICONINFO ii = {};
+   ii.fIcon    = TRUE;
+   ii.hbmColor = hColor;
+   ii.hbmMask  = hMask;
+   HICON hIcon = CreateIconIndirect(&ii);
+   DeleteObject(hColor);
+   DeleteObject(hMask);
+   return hIcon;
+}
 
 TaskbarImplWin::TaskbarImplWin() :
    winHandle(nullptr),
@@ -78,7 +107,7 @@ void TaskbarImplWin::setOverlayIcon(const QIcon& icon, const QString& descriptio
    if (!this->winHandle || !this->taskbarInterface)
       return;
 
-   HICON overlayIcon = icon.isNull() ? NULL : QtWin::toHICON(icon.pixmap(48));
+   HICON overlayIcon = icon.isNull() ? NULL : qIconToHICON(icon);
    this->taskbarInterface->SetOverlayIcon(this->winHandle, overlayIcon, description.toStdWString().c_str());
 
    if (overlayIcon)

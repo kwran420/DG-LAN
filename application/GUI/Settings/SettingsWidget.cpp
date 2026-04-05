@@ -29,6 +29,7 @@ using namespace GUI;
 #include <QDesktopServices>
 #include <QUrl>
 #include <QStringBuilder>
+#include <QTableWidgetItem>
 
 #include <Common/Languages.h>
 #include <Common/Constants.h>
@@ -36,6 +37,9 @@ using namespace GUI;
 #include <Common/Settings.h>
 
 #include <Protos/gui_settings.pb.h>
+#include <Protos/gui_protocol.pb.h>
+
+#include <google/protobuf/message.h>
 
 #include <Log.h>
 #include <Utils.h>
@@ -125,6 +129,41 @@ SettingsWidget::SettingsWidget(QSharedPointer<RCC::ICoreConnection> coreConnecti
 
    connect(this->ui->butChangePassword, SIGNAL(clicked()), this, SLOT(changePassword()));
    connect(this->ui->butResetPassword, SIGNAL(clicked()), this, SLOT(resetPassword()));
+
+   // DG-LAN: Network settings.
+   connect(this->ui->txtInterfaceName, SIGNAL(editingFinished()), this, SLOT(saveCoreSettings()));
+   connect(this->ui->spnMulticastTTL, SIGNAL(valueChanged(int)), this, SLOT(saveCoreSettings()));
+   connect(this->ui->chkForceIPv4, SIGNAL(clicked()), this, SLOT(saveCoreSettings()));
+
+   // DG-LAN: Core Seeders tab.
+   connect(this->ui->chkCoreSeederMode, SIGNAL(clicked()), this, SLOT(saveCoreSettings()));
+   connect(this->ui->butAddKnownHost, SIGNAL(clicked()), this, SLOT(addKnownHost()));
+   connect(this->ui->butRemoveKnownHost, SIGNAL(clicked()), this, SLOT(removeKnownHost()));
+   this->ui->tblKnownHosts->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+   this->ui->tblKnownHosts->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+   this->ui->tblKnownHosts->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+
+   // Populate DG-LAN fields from saved GUI settings.
+   this->ui->txtInterfaceName->setText(SETTINGS.get<QString>("network_interface_name"));
+   this->ui->spnMulticastTTL->setValue(static_cast<int>(SETTINGS.get<quint32>("multicast_ttl_override")));
+   this->ui->chkForceIPv4->setChecked(SETTINGS.get<bool>("force_ipv4"));
+   this->ui->chkCoreSeederMode->setChecked(SETTINGS.get<bool>("core_seeder_mode"));
+
+   {
+      const Protos::GUI::Settings* guiSettings =
+         dynamic_cast<const Protos::GUI::Settings*>(SETTINGS.getSettingsMessage());
+      if (guiSettings)
+      {
+         this->ui->tblKnownHosts->setRowCount(guiSettings->known_host_size());
+         for (int i = 0; i < guiSettings->known_host_size(); ++i)
+         {
+            const auto& kh = guiSettings->known_host(i);
+            this->ui->tblKnownHosts->setItem(i, 0, new QTableWidgetItem(QString::fromStdString(kh.address())));
+            this->ui->tblKnownHosts->setItem(i, 1, new QTableWidgetItem(QString::number(kh.port())));
+            this->ui->tblKnownHosts->setItem(i, 2, new QTableWidgetItem(QString::fromStdString(kh.nick())));
+         }
+      }
+   }
 
    this->refreshButtonsAvailability();
    this->coreDisconnected(); // To set the initial state.
@@ -414,6 +453,7 @@ void SettingsWidget::coreConnected()
    this->ui->txtPassword->clear();
    this->ui->tabWidget->setTabEnabled(0, true);
    this->ui->tabWidget->setTabEnabled(1, true);
+   this->ui->tabWidget->setTabEnabled(3, true); // DG-LAN Core Seeders tab.
    this->ui->chkEnableIntegrityCheck->setEnabled(true);
 
    this->ui->butConnect->setDisabled(false);
@@ -432,6 +472,7 @@ void SettingsWidget::coreDisconnected()
 
    this->ui->tabWidget->setTabEnabled(0, false);
    this->ui->tabWidget->setTabEnabled(1, false);
+   this->ui->tabWidget->setTabEnabled(3, false); // DG-LAN Core Seeders tab.
    this->ui->chkEnableIntegrityCheck->setEnabled(false);
 
    this->ui->butConnect->setDisabled(false);
@@ -456,7 +497,7 @@ void SettingsWidget::saveCoreSettings()
       return;
 
    Protos::GUI::CoreSettings settings;
-   Common::ProtoHelper::setStr(settings, &Protos::GUI::CoreSettings::set_nick, this->ui->txtNick->text());
+   Common::ProtoHelper::setStr(settings, &Protos::GUI::CoreSettings::mutable_nick, this->ui->txtNick->text());
    settings.set_enable_integrity_check(this->ui->chkEnableIntegrityCheck->isChecked() ? Protos::Common::TS_TRUE : Protos::Common::TS_FALSE);
 
    for (QListIterator<Common::SharedEntry> i(this->sharedEntryListModel.getSharedEntries()); i.hasNext();)
@@ -473,13 +514,63 @@ void SettingsWidget::saveCoreSettings()
          QRadioButton* button = i.next();
          if (button->isChecked())
          {
-            Common::ProtoHelper::setStr(settings, &Protos::GUI::CoreSettings::set_listen_address, button->text());
+            Common::ProtoHelper::setStr(settings, &Protos::GUI::CoreSettings::mutable_listen_address, button->text());
             break;
          }
       }
    }
 
+   // DG-LAN: pack network and core-seeder settings.
+   Common::ProtoHelper::setStr(settings, &Protos::GUI::CoreSettings::mutable_network_interface_name,
+      this->ui->txtInterfaceName->text().trimmed());
+   settings.set_force_ipv4(this->ui->chkForceIPv4->isChecked());
+   settings.set_multicast_ttl_override(static_cast<quint32>(this->ui->spnMulticastTTL->value()));
+   settings.set_core_seeder_mode(this->ui->chkCoreSeederMode->isChecked());
+   for (int r = 0; r < this->ui->tblKnownHosts->rowCount(); ++r)
+   {
+      const QTableWidgetItem* addrItem = this->ui->tblKnownHosts->item(r, 0);
+      const QTableWidgetItem* portItem = this->ui->tblKnownHosts->item(r, 1);
+      const QTableWidgetItem* nickItem = this->ui->tblKnownHosts->item(r, 2);
+      if (!addrItem || addrItem->text().trimmed().isEmpty())
+         continue;
+      auto* kh = settings.add_known_host();
+      kh->set_address(addrItem->text().trimmed().toStdString());
+      kh->set_port(portItem ? static_cast<quint32>(portItem->text().toUInt()) : 0);
+      if (nickItem)
+         kh->set_nick(nickItem->text().trimmed().toStdString());
+   }
+
    this->coreConnection->setCoreSettings(settings);
+
+   // DG-LAN: persist the DG-LAN settings locally so they survive a restart.
+   SETTINGS.set("network_interface_name", this->ui->txtInterfaceName->text().trimmed());
+   SETTINGS.set("multicast_ttl_override", static_cast<quint32>(this->ui->spnMulticastTTL->value()));
+   SETTINGS.set("force_ipv4", this->ui->chkForceIPv4->isChecked());
+   SETTINGS.set("core_seeder_mode", this->ui->chkCoreSeederMode->isChecked());
+   // Persist known_host list into the GUI proto settings via direct mutation.
+   {
+      Protos::GUI::Settings* guiSettings =
+         dynamic_cast<Protos::GUI::Settings*>(
+            const_cast<google::protobuf::Message*>(SETTINGS.getSettingsMessage()));
+      if (guiSettings)
+      {
+         guiSettings->clear_known_host();
+         for (int r = 0; r < this->ui->tblKnownHosts->rowCount(); ++r)
+         {
+            const QTableWidgetItem* addrItem = this->ui->tblKnownHosts->item(r, 0);
+            if (!addrItem || addrItem->text().trimmed().isEmpty())
+               continue;
+            auto* kh = guiSettings->add_known_host();
+            kh->set_address(addrItem->text().trimmed().toStdString());
+            const QTableWidgetItem* portItem = this->ui->tblKnownHosts->item(r, 1);
+            kh->set_port(portItem ? static_cast<quint32>(portItem->text().toUInt()) : 0);
+            const QTableWidgetItem* nickItem = this->ui->tblKnownHosts->item(r, 2);
+            if (nickItem)
+               kh->set_nick(nickItem->text().trimmed().toStdString());
+         }
+      }
+   }
+   SETTINGS.save();
 }
 
 void SettingsWidget::cmbLanguageChanged(int cmbIndex)
@@ -651,5 +742,28 @@ void SettingsWidget::onActivate()
 {
    if (this->ui->tabWidget->isTabEnabled(0))
       this->ui->tabWidget->setCurrentIndex(0);
+}
+
+// DG-LAN: add a new row to the Known Hosts table.
+void SettingsWidget::addKnownHost()
+{
+   const int row = this->ui->tblKnownHosts->rowCount();
+   this->ui->tblKnownHosts->insertRow(row);
+   this->ui->tblKnownHosts->setItem(row, 0, new QTableWidgetItem(""));
+   this->ui->tblKnownHosts->setItem(row, 1, new QTableWidgetItem("59487"));
+   this->ui->tblKnownHosts->setItem(row, 2, new QTableWidgetItem(""));
+   this->ui->tblKnownHosts->editItem(this->ui->tblKnownHosts->item(row, 0));
+   connect(this->ui->tblKnownHosts, SIGNAL(itemChanged(QTableWidgetItem*)), this, SLOT(saveCoreSettings()));
+}
+
+// DG-LAN: remove the selected row from the Known Hosts table.
+void SettingsWidget::removeKnownHost()
+{
+   const int row = this->ui->tblKnownHosts->currentRow();
+   if (row >= 0)
+   {
+      this->ui->tblKnownHosts->removeRow(row);
+      this->saveCoreSettings();
+   }
 }
 

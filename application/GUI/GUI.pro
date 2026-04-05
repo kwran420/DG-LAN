@@ -9,9 +9,7 @@
 
 QT += core gui widgets network xml
 
-win32 {
-   QT += winextras
-}
+# winextras removed: not available in MSYS2 Qt 5.15; replaced with direct Win32 APIs
 
 TARGET = "D-LAN.GUI"
 TEMPLATE = app
@@ -44,7 +42,7 @@ CONFIG(debug, debug|release) {
 }
 
 win32 {
-   LIBS += libole32
+   LIBS += libole32 -lgdi32 -luser32
    SOURCES += Taskbar/TaskbarImplWin.cpp
    HEADERS += Taskbar/TaskbarImplWin.h
 }
@@ -87,6 +85,11 @@ SOURCES += main.cpp\
     MDI/TabButtons.cpp \
     MDI/MdiArea.cpp \
     Browse/BrowseWidget.cpp \
+    Activity/ActivityWidget.cpp \
+    Hashing/HashingProgressWidget.cpp \
+    WelcomeDialog.cpp \
+    UpdateChecker.cpp \
+    UpdateDialog.cpp \
     Chat/ChatWidget.cpp \
     Downloads/DownloadsWidget.cpp \
     Search/SearchWidget.cpp \
@@ -147,6 +150,11 @@ HEADERS  += MainWindow.h \
     MDI/MdiArea.h \
     MDI/MdiWidget.h \
     Browse/BrowseWidget.h \
+    Activity/ActivityWidget.h \
+    Hashing/HashingProgressWidget.h \
+    WelcomeDialog.h \
+    UpdateChecker.h \
+    UpdateDialog.h \
     Chat/ChatWidget.h \
     Downloads/DownloadsWidget.h \
     Search/SearchWidget.h \

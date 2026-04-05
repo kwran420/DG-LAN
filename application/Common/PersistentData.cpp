@@ -116,7 +116,7 @@ try
 
          google::protobuf::util::JsonPrintOptions jsonOptions;
          jsonOptions.add_whitespace = true;
-         jsonOptions.always_print_primitive_fields = true;
+         jsonOptions.always_print_fields_with_no_presence = true;
          jsonOptions.always_print_enums_as_ints = false;
          jsonOptions.preserve_proto_field_names = true;
 

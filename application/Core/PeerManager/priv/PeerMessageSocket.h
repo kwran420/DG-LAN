@@ -111,6 +111,7 @@ namespace PM
       Protos::Core::GetEntriesResult entriesResultMessage;
 
       QSharedPointer<FM::IFileManager> fileManager;
+      PeerManager* peerManager;
 
       bool active;
       QTimer inactiveTimer;

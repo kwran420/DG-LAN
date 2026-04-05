@@ -55,6 +55,8 @@ namespace Common
 
       bool isSet(const QString& name) const;
 
+      const google::protobuf::Message* getSettingsMessage() const { return this->settings; }
+
       void set(const QString& name, quint32 value);
       void set(const QString& name, quint64 value);
       void set(const QString& name, bool value);

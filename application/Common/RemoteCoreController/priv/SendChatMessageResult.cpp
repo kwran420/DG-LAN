@@ -33,10 +33,10 @@ SendChatMessageResult::SendChatMessageResult(InternalCoreConnection* coreConnect
 void SendChatMessageResult::start()
 {
    Protos::GUI::ChatMessage chatMessage;
-   Common::ProtoHelper::setStr(chatMessage, &Protos::GUI::ChatMessage::set_message, this->message);
+   Common::ProtoHelper::setStr(chatMessage, &Protos::GUI::ChatMessage::mutable_message, this->message);
 
    if (!this->roomName.isEmpty())
-      Common::ProtoHelper::setStr(chatMessage, &Protos::GUI::ChatMessage::set_room, this->roomName);
+      Common::ProtoHelper::setStr(chatMessage, &Protos::GUI::ChatMessage::mutable_room, this->roomName);
 
    for (QListIterator<Common::Hash> i(this->peerIDsAnswered); i.hasNext();)
       chatMessage.add_peer_ids_answer()->set_hash(i.next().getData(), Common::Hash::HASH_SIZE);

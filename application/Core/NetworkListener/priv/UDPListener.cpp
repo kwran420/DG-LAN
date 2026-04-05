@@ -31,6 +31,8 @@ using namespace NL;
 #endif
 
 #include <QRandomGenerator64>
+#include <QNetworkInterface>  // DG-LAN
+#include <QNetworkAddressEntry> // DG-LAN
 
 #include <google/protobuf/message.h>
 
@@ -74,13 +76,24 @@ UDPListener::UDPListener(
    downloadManager(downloadManager),
    currentIMAliveTag(0),
    nextHashRequestType(FIRST_HASHES),
-   loggerIMAlive(LM::Builder::newLogger("NetworkListener (IMAlive)"))
+   loggerIMAlive(LM::Builder::newLogger("NetworkListener (IMAlive)")),
+   // DG-LAN: fallback state initialisation
+   multicastFailureCount(0),
+   broadcastFallbackActive(false),
+   subnetScanActive(false),
+   subnetScanIndex(0)
 {
    this->initMulticastUDPSocket();
    this->initUnicastUDPSocket();
 
    connect(&this->timerIMAlive, &QTimer::timeout, this, &UDPListener::sendIMAliveMessage);
    this->timerIMAlive.start(static_cast<int>(SETTINGS.get<quint32>("peer_imalive_period")));
+
+   // DG-LAN: subnet scan timer — fires once per probe slot, stopped when not scanning
+   connect(&this->timerSubnetScan, &QTimer::timeout, this, &UDPListener::sendNextSubnetScanProbe);
+
+   // DG-LAN: probe known hosts immediately at startup (fast-path before subnet scan)
+   this->peerManager->initKnownPeers();
 
    this->sendIMAliveMessage();
 }
@@ -139,9 +152,24 @@ INetworkListener::SendStatus UDPListener::send(Common::MessageHeader::MessageTyp
    if (this->multicastSocket.writeDatagram(this->buffer, messageSize, this->multicastGroup, MULTICAST_PORT) == -1)
    {
       L_WARN(QString("Unable to send datagram (multicast): error: %1").arg(this->unicastSocket.errorString()));
+
+      // DG-LAN: track multicast failures and escalate to broadcast fallback
+      const quint32 threshold = SETTINGS.get<quint32>("multicast_failure_threshold");
+      if (threshold > 0)
+      {
+         ++this->multicastFailureCount;
+         if (this->multicastFailureCount >= static_cast<int>(threshold) && !this->broadcastFallbackActive)
+         {
+            L_WARN("DG-LAN: multicast failures exceeded threshold — activating broadcast fallback");
+            this->broadcastFallbackActive = true;
+         }
+      }
+
       return INetworkListener::SendStatus::UNABLE_TO_SEND;
    }
 
+   // Reset failure counter on success
+   this->multicastFailureCount = 0;
    return INetworkListener::SendStatus::OK;
 }
 
@@ -149,11 +177,11 @@ void UDPListener::sendIMAliveMessage()
 {
    Protos::Core::IMAlive IMAliveMessage;
    IMAliveMessage.set_version(Common::Constants::PROTOCOL_VERSION);
-   Common::ProtoHelper::setStr(IMAliveMessage, &Protos::Core::IMAlive::set_core_version, Common::Global::getVersionFull());
+   Common::ProtoHelper::setStr(IMAliveMessage, &Protos::Core::IMAlive::mutable_core_version, Common::Global::getVersionFull());
    IMAliveMessage.set_port(this->UNICAST_PORT);
 
    const QString& nick = this->peerManager->getSelf()->getNick();
-   Common::ProtoHelper::setStr(IMAliveMessage, &Protos::Core::IMAlive::set_nick, nick.length() > MAX_NICK_LENGTH ? nick.left(MAX_NICK_LENGTH) : nick);
+   Common::ProtoHelper::setStr(IMAliveMessage, &Protos::Core::IMAlive::mutable_nick, nick.length() > MAX_NICK_LENGTH ? nick.left(MAX_NICK_LENGTH) : nick);
 
    IMAliveMessage.set_amount(this->fileManager->getAmount());
    IMAliveMessage.set_download_rate(this->downloadManager->getDownloadRate());
@@ -208,12 +236,183 @@ void UDPListener::sendIMAliveMessage()
    emit IMAliveMessageToBeSend(IMAliveMessage);
 
    this->send(Common::MessageHeader::CORE_IM_ALIVE, IMAliveMessage);
+
+   // DG-LAN: if broadcast fallback is active, also send via broadcast
+   if (this->broadcastFallbackActive)
+      this->sendBroadcastIMAlive();
+
+   // DG-LAN: drain gossip candidates from PeerManager and probe each one
+   const auto gossipCandidates = this->peerManager->takeGossipCandidates();
+   for (const auto& candidate : gossipCandidates)
+      this->sendUnicastIMAlive(candidate.first, candidate.second);
+
+   // DG-LAN: if no peers known and not already scanning, start subnet scan
+   if (this->peerManager->getNbOfPeers() == 0 && !this->subnetScanActive)
+      this->runSubnetScan();
+
+   // DG-LAN: if peers were discovered (scan succeeded), stop scan
+   if (this->subnetScanActive && this->peerManager->getNbOfPeers() > 0)
+   {
+      L_DEBU("DG-LAN: peers discovered, stopping subnet scan");
+      this->timerSubnetScan.stop();
+      this->subnetScanActive = false;
+      this->subnetScanTargets.clear();
+      // Also deactivate broadcast fallback if multicast seems to be working
+      this->broadcastFallbackActive = false;
+      this->multicastFailureCount = 0;
+   }
 }
 
 void UDPListener::rebindSockets()
 {
+   // DG-LAN: reset fallback state on rebind (network interface changed)
+   this->multicastFailureCount = 0;
+   this->broadcastFallbackActive = false;
+   this->subnetScanActive = false;
+   this->timerSubnetScan.stop();
+   this->subnetScanTargets.clear();
+   this->subnetScanIndex = 0;
+
    this->initMulticastUDPSocket();
    this->initUnicastUDPSocket();
+}
+
+// DG-LAN: Fallback level 2 — send IMAlive to subnet broadcast address.
+void UDPListener::sendBroadcastIMAlive()
+{
+   QHostAddress broadcast = Utils::getBroadcastAddress();
+   if (broadcast.isNull())
+   {
+      L_WARN("DG-LAN: sendBroadcastIMAlive: no broadcast address available");
+      return;
+   }
+
+   // Reuse the existing buffer — it was just filled by sendIMAliveMessage()
+   const int messageSize = static_cast<int>(
+      Common::MessageHeader::HEADER_SIZE +
+      Common::MessageHeader::readHeader(this->buffer).getSize()
+   );
+
+   L_DEBU(QString("DG-LAN: Sending broadcast IMAlive to %1:%2").arg(broadcast.toString()).arg(MULTICAST_PORT));
+
+   if (this->unicastSocket.writeDatagram(this->buffer, messageSize, broadcast, MULTICAST_PORT) == -1)
+   {
+      L_WARN(QString("DG-LAN: broadcast IMAlive failed: %1").arg(this->unicastSocket.errorString()));
+   }
+}
+
+// DG-LAN: Fallback level 3 — enumerate all host addresses in the current subnet
+// and prepare a rate-limited probe list. No size cap — works on /16, /20, etc.
+void UDPListener::runSubnetScan()
+{
+   if (this->subnetScanActive)
+      return;
+
+   QNetworkInterface iface = Utils::getCurrentInterfaceToListenTo();
+   if (!iface.isValid())
+      return;
+
+   this->subnetScanTargets.clear();
+
+   foreach (const QNetworkAddressEntry& entry, iface.addressEntries())
+   {
+      if (entry.ip().protocol() != QAbstractSocket::IPv4Protocol)
+         continue;
+
+      const quint32 ip = entry.ip().toIPv4Address();
+      const quint32 mask = entry.netmask().toIPv4Address();
+      if (mask == 0)
+         continue;
+
+      const quint32 network = ip & mask;
+      const quint32 broadcast = network | (~mask);
+      const quint32 numHosts = broadcast - network - 1;
+
+      if (numHosts == 0)
+         continue;
+
+      L_DEBU(QString("DG-LAN: Starting subnet scan — %1 hosts in %2/%3")
+         .arg(numHosts)
+         .arg(QHostAddress(network).toString())
+         .arg(QHostAddress(mask).toString()));
+
+      for (quint32 h = 1; h <= numHosts; ++h)
+      {
+         QHostAddress target(network + h);
+         if (target == entry.ip()) // skip our own address
+            continue;
+         this->subnetScanTargets.append(target);
+      }
+      break; // use first IPv4 entry
+   }
+
+   if (this->subnetScanTargets.isEmpty())
+   {
+      L_WARN("DG-LAN: runSubnetScan: no hosts to probe");
+      return;
+   }
+
+   this->subnetScanIndex = 0;
+   this->subnetScanActive = true;
+
+   // Rate-limit: spread all probes evenly across one peer_imalive_period window
+   const int period = static_cast<int>(SETTINGS.get<quint32>("peer_imalive_period"));
+   const int intervalMs = qMax(1, period / this->subnetScanTargets.size());
+   L_DEBU(QString("DG-LAN: Subnet scan: %1 probes, interval %2 ms")
+      .arg(this->subnetScanTargets.size()).arg(intervalMs));
+
+   this->timerSubnetScan.start(intervalMs);
+}
+
+// DG-LAN: Send one probe to the next address in the scan list.
+void UDPListener::sendNextSubnetScanProbe()
+{
+   if (this->subnetScanIndex >= this->subnetScanTargets.size())
+   {
+      // Scan complete — stop timer, reset for next trigger
+      this->timerSubnetScan.stop();
+      this->subnetScanActive = false;
+      this->subnetScanTargets.clear();
+      this->subnetScanIndex = 0;
+      L_DEBU("DG-LAN: Subnet scan complete");
+      return;
+   }
+
+   // Stop early if we found peers
+   if (this->peerManager->getNbOfPeers() > 0)
+   {
+      this->timerSubnetScan.stop();
+      this->subnetScanActive = false;
+      this->subnetScanTargets.clear();
+      this->subnetScanIndex = 0;
+      L_DEBU("DG-LAN: Subnet scan stopped — peers discovered");
+      return;
+   }
+
+   const QHostAddress& target = this->subnetScanTargets[this->subnetScanIndex++];
+   this->sendUnicastIMAlive(target, this->UNICAST_PORT);
+}
+
+// DG-LAN: Send a unicast IMAlive directly to a specific peer address.
+// Used by subnet scan and for targeting known hosts / stable peers.
+void UDPListener::sendUnicastIMAlive(const QHostAddress& addr, quint16 port)
+{
+   // Build a minimal IMAlive (no chunk hashes — just enough to be discovered)
+   Protos::Core::IMAlive msg;
+   msg.set_version(Common::Constants::PROTOCOL_VERSION);
+   Common::ProtoHelper::setStr(msg, &Protos::Core::IMAlive::mutable_core_version, Common::Global::getVersionFull());
+   msg.set_port(this->UNICAST_PORT);
+   const QString& nick = this->peerManager->getSelf()->getNick();
+   Common::ProtoHelper::setStr(msg, &Protos::Core::IMAlive::mutable_nick,
+      nick.length() > MAX_NICK_LENGTH ? nick.left(MAX_NICK_LENGTH) : nick);
+   msg.set_amount(this->fileManager->getAmount());
+   msg.set_tag(this->currentIMAliveTag);
+
+   const int messageSize = this->writeMessageToBuffer(Common::MessageHeader::CORE_IM_ALIVE, msg);
+   if (!messageSize)
+      return;
+
+   this->unicastSocket.writeDatagram(this->buffer, messageSize, addr, port);
 }
 
 void UDPListener::processPendingMulticastDatagrams()
@@ -404,7 +603,10 @@ void UDPListener::initMulticastUDPSocket()
 #endif
    this->multicastSocket.setSocketOption(QAbstractSocket::MulticastLoopbackOption, loop);
 
-   this->multicastSocket.setSocketOption(QAbstractSocket::MulticastTtlOption, SETTINGS.get<quint32>("multicast_ttl"));
+   // DG-LAN: apply multicast TTL override if configured, otherwise use the standard setting
+   const quint32 ttlOverride = SETTINGS.get<quint32>("multicast_ttl_override");
+   const quint32 ttl = (ttlOverride > 0) ? ttlOverride : SETTINGS.get<quint32>("multicast_ttl");
+   this->multicastSocket.setSocketOption(QAbstractSocket::MulticastTtlOption, ttl);
 
    QNetworkInterface networkInterface = Utils::getCurrentInterfaceToListenTo();
    if (networkInterface.isValid() ? !this->multicastSocket.joinMulticastGroup(this->multicastGroup, networkInterface) : !this->multicastSocket.joinMulticastGroup(this->multicastGroup))

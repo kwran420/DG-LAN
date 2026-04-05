@@ -26,6 +26,7 @@
 #include <Common/Hash.h>
 #include <Common/Uncopyable.h>
 
+#include <Protos/file_cache.pb.h>
 #include <IChunk.h>
 #include <Exceptions.h>
 #include <priv/Log.h>
@@ -55,6 +56,9 @@ namespace FM
 
       void removeItsIncompleteFile();
       bool populateEntry(Protos::Common::Entry* entry) const;
+
+      Chunk* restoreFromFileCache(const Protos::FileCache::Hashes_Chunk& chunk);
+      void populateHashesChunk(Protos::FileCache::Hashes_Chunk& chunk) const;
 
       QString getFilePath() const;
 

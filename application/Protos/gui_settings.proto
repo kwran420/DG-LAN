@@ -87,4 +87,17 @@ message Settings {
      BY_NB_PEERS = 1;
    }
    RoomSortType room_sort_type = 36; // [default = BY_NAME].
+
+   // DG-LAN network settings (stored locally, pushed to core on connect).
+   string network_interface_name = 40; // e.g. "zt0" for ZeroTier. Empty = auto.
+   bool force_ipv4 = 41;              // Force IPv4 (useful for ZeroTier).
+   uint32 multicast_ttl_override = 42;// 0 = use core default; 1 recommended for ZeroTier.
+   bool core_seeder_mode = 43;        // This machine acts as always-on seeder.
+
+   message KnownHost {
+      string address = 1;
+      uint32 port    = 2;
+      string nick    = 3;
+   }
+   repeated KnownHost known_host = 44; // Pre-configured reliable peers probed at startup.
 }

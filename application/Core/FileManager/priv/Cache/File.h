@@ -31,6 +31,7 @@
 #include <QDateTime>
 
 #include <Protos/common.pb.h>
+#include <Protos/file_cache.pb.h>
 #include <Common/Hashes.h>
 
 #include <priv/Cache/Entry.h>

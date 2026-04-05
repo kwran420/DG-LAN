@@ -48,8 +48,8 @@ void Entry::del(bool invokeDelete)
 
 void Entry::populateEntry(Protos::Common::Entry* entry, bool setSharedEntry) const
 {
-   Common::ProtoHelper::setStr(*entry, &Protos::Common::Entry::set_path, this->getPath());
-   Common::ProtoHelper::setStr(*entry, &Protos::Common::Entry::set_name, this->getName());
+   Common::ProtoHelper::setStr(*entry, &Protos::Common::Entry::mutable_path, this->getPath().getPath());
+   Common::ProtoHelper::setStr(*entry, &Protos::Common::Entry::mutable_name, this->getName());
    entry->set_size(this->getSize());
 
    if (setSharedEntry)
@@ -116,6 +116,6 @@ void Entry::populateSharedEntry(Protos::Common::Entry* entry) const
    if (root)
    {
       entry->mutable_shared_entry()->mutable_id()->set_hash(root->getId().getData(), Common::Hash::HASH_SIZE);
-      Common::ProtoHelper::setStr(*entry->mutable_shared_entry(), &Protos::Common::SharedEntry::set_shared_name, root->getName());
+      Common::ProtoHelper::setStr(*entry->mutable_shared_entry(), &Protos::Common::SharedEntry::mutable_shared_name, root->getUserName());
    }
 }

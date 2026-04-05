@@ -20,6 +20,7 @@
 using namespace GUI;
 
 #include <QListView>
+#include <QTreeView>
 #include <QStringBuilder>
 #include <QCoreApplication>
 #include <QFileDialog>
@@ -41,21 +42,17 @@ QStringList Utils::askForDirectoriesOrFiles(QSharedPointer<RCC::ICoreConnection>
 {
    if (coreConnection->isLocal())
    {
-      QFileDialog fileDialog(0, "Choose a directory");
+      QFileDialog fileDialog(0, "Choose one or more directories");
       fileDialog.setOption(QFileDialog::DontUseNativeDialog, true);
+      fileDialog.setFileMode(QFileDialog::Directory);
 
-      // TODO: test to select files and dirs.
-      //fileDialog.setFileMode(QFileDialog::Directory);
-
+      // Allow selecting multiple directories at once.
       QListView* l = fileDialog.findChild<QListView*>("listView");
       if (l)
          l->setSelectionMode(QAbstractItemView::ExtendedSelection);
-
-      /* needed?
-      QTreeView *t = w.findChild<QTreeView*>();
-       if (t) {
-         t->setSelectionMode(QAbstractItemView::MultiSelection);
-         */
+      QTreeView* t = fileDialog.findChild<QTreeView*>();
+      if (t)
+         t->setSelectionMode(QAbstractItemView::ExtendedSelection);
 
       if (fileDialog.exec())
       {

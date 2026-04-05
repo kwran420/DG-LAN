@@ -26,6 +26,7 @@
 #include <QMap>
 
 #include <Protos/common.pb.h>
+#include <Protos/file_cache.pb.h>
 
 #include <Common/Containers/SortedList.h>
 
@@ -40,6 +41,7 @@ namespace FM
    class Directory : public Entry
    {
       friend class DirIterator;
+      friend class SharedDirectory;
 
    protected:
       Directory(SharedEntry* root, const QString& name, Directory* parent = nullptr, bool createPhysically = false);
@@ -49,6 +51,9 @@ namespace FM
       void del(bool invokeDelete = true);
 
       void populateEntry(Protos::Common::Entry* dir, bool setSharedDir = false) const;
+
+      QList<File*> restoreFromFileCache(const Protos::FileCache::Hashes::Dir& dir);
+      void populateHashesDir(Protos::FileCache::Hashes::Dir& dirToFill) const;
 
       void removeUnfinishedFiles();
 

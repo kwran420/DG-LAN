@@ -78,12 +78,13 @@ namespace FM
       QString getUserName() const;
 
    private:
+      Cache* cache; // To announce when an entry, chunk is created or deleted.
+      Common::Hash id;
+
+   protected:
       static QString entryName(const Common::Path& path);
       static Common::Path pathWithoutEntryName(const Common::Path& path);
-
-      Cache* cache; // To announce when an entry, chunk is created or deleted.
       Common::Path path; // Always a directory.
-      Common::Hash id;
       QString userName; // The name of the shared entry. Default is the directory or file name. It may be changed by the user.
    };
 

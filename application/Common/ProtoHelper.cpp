@@ -31,13 +31,13 @@ void ProtoHelper::setLang(Protos::Common::Language& langMess, const QLocale& loc
    const QStringList& langCountry = locale.name().split('_');
    if (langCountry.length() == 2)
    {
-      ProtoHelper::setStr(langMess, &Protos::Common::Language::set_lang, langCountry[0]);
-      ProtoHelper::setStr(langMess, &Protos::Common::Language::set_country, langCountry[1]);
+      ProtoHelper::setStr(langMess, &Protos::Common::Language::mutable_lang, langCountry[0]);
+      ProtoHelper::setStr(langMess, &Protos::Common::Language::mutable_country, langCountry[1]);
    }
    else
    {
-      ProtoHelper::setStr(langMess, &Protos::Common::Language::set_lang, "en");
-      ProtoHelper::setStr(langMess, &Protos::Common::Language::set_country, "US");
+      ProtoHelper::setStr(langMess, &Protos::Common::Language::mutable_lang, "en");
+      ProtoHelper::setStr(langMess, &Protos::Common::Language::mutable_country, "US");
    }
 }
 

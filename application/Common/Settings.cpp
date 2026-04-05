@@ -439,7 +439,7 @@ void Settings::set(const QString& name, const google::protobuf::Message& message
    if (fieldDescriptor->type() != google::protobuf::FieldDescriptor::TYPE_MESSAGE ||
        fieldDescriptor->type() == google::protobuf::FieldDescriptor::TYPE_MESSAGE && fieldDescriptor->message_type()->full_name() != message.GetTypeName())
    {
-      printErrorBadType(fieldDescriptor, QString::fromStdString(message.GetTypeName()));
+      printErrorBadType(fieldDescriptor, QString::fromUtf8(message.GetTypeName().data(), (int)message.GetTypeName().size()));
       return;
    }
 
@@ -687,5 +687,5 @@ void Settings::printErrorNameNotFound(const QString& name)
 
 void Settings::printErrorBadType(const google::protobuf::FieldDescriptor* field, const QString& excepted)
 {
-   QTextStream(stderr) << QString("Settings: bad type, field name = \"%1\", expected type: \"%2\"").arg(ProtoHelper::getStr(*field, &google::protobuf::FieldDescriptor::name)).arg(excepted) << endl;
+   QTextStream(stderr) << QString("Settings: bad type, field name = \"%1\", expected type: \"%2\"").arg(QString::fromUtf8(field->name().data(), (int)field->name().size())).arg(excepted) << endl;
 }

@@ -20,6 +20,7 @@
 
 #include <QDialog>
 #include <QPaintEvent>
+#include <QPixmap>
 
 namespace Ui {
    class DialogAbout;
@@ -39,6 +40,8 @@ namespace GUI
       void changeEvent(QEvent* event);
 
    private:
+      static QPixmap drawLogoPixmap(int w, int h);
+
       Ui::DialogAbout *ui;
    };
 }

@@ -24,6 +24,7 @@
 #include <QSharedPointer>
 #include <QNetworkInterface>
 #include <QUdpSocket>
+#include <QHostAddress>  // DG-LAN
 
 #include <google/protobuf/message.h>
 
@@ -82,6 +83,12 @@ namespace NL
       void initMulticastUDPSocket();
       void initUnicastUDPSocket();
 
+      // DG-LAN: discovery fallback slots
+      void sendBroadcastIMAlive();         // Fallback level 2: subnet broadcast
+      void runSubnetScan();                // Fallback level 3: scan all hosts
+      void sendNextSubnetScanProbe();      // Rate-limited per-probe step
+      void sendUnicastIMAlive(const QHostAddress& addr, quint16 port); // Targeted unicast
+
    private:
       int writeMessageToBuffer(Common::MessageHeader::MessageType type, const google::protobuf::Message& message);
       Common::MessageHeader readDatagramToBuffer(QUdpSocket& socket, QHostAddress& peerAddress);
@@ -116,5 +123,14 @@ namespace NL
 
       QTimer timerIMAlive;
       QSharedPointer<LM::ILogger> loggerIMAlive; // A logger especially for the IMAlive message.
+
+      // DG-LAN: discovery fallback state
+      int multicastFailureCount;        // consecutive multicast send failures
+      bool broadcastFallbackActive;     // true when escalated to broadcast
+      bool subnetScanActive;            // true when running subnet scan
+
+      QList<QHostAddress> subnetScanTargets;   // addresses remaining to probe
+      int subnetScanIndex;                     // current probe position
+      QTimer timerSubnetScan;                  // fires once per probe slot
    };
 }

@@ -26,13 +26,43 @@ using namespace GUI;
 #include <Log.h>
 
 #if defined(Q_OS_WIN32)
-   #include <QtWinExtras>
-   #include <shlobj.h>
-   #include <shellapi.h>
-#elif defined(Q_OS_LINUX)
-   // Nothing.
-#else
-   // Nothing.
+#include <windows.h>
+#include <shlobj.h>
+static QPixmap hIconToQPixmap(HICON hIcon)
+{
+   ICONINFO ii = {};
+   if (!GetIconInfo(hIcon, &ii))
+      return QPixmap();
+   BITMAP bm = {};
+   GetObject(ii.hbmColor ? ii.hbmColor : ii.hbmMask, sizeof(BITMAP), &bm);
+   const int w = bm.bmWidth, h = bm.bmHeight;
+   BITMAPV5HEADER bi = {};
+   bi.bV5Size        = sizeof(BITMAPV5HEADER);
+   bi.bV5Width       = w;
+   bi.bV5Height      = -h;
+   bi.bV5Planes      = 1;
+   bi.bV5BitCount    = 32;
+   bi.bV5Compression = BI_BITFIELDS;
+   bi.bV5RedMask     = 0x00FF0000;
+   bi.bV5GreenMask   = 0x0000FF00;
+   bi.bV5BlueMask    = 0x000000FF;
+   bi.bV5AlphaMask   = 0xFF000000;
+   HDC hdc = GetDC(NULL);
+   void* bits = nullptr;
+   HBITMAP hbm = CreateDIBSection(hdc, (BITMAPINFO*)&bi, DIB_RGB_COLORS, &bits, NULL, 0);
+   HDC memDC = CreateCompatibleDC(hdc);
+   ReleaseDC(NULL, hdc);
+   HGDIOBJ old = SelectObject(memDC, hbm);
+   DrawIconEx(memDC, 0, 0, hIcon, w, h, 0, NULL, DI_NORMAL);
+   SelectObject(memDC, old);
+   DeleteDC(memDC);
+   QImage img(reinterpret_cast<const uchar*>(bits), w, h, QImage::Format_ARGB32_Premultiplied);
+   QPixmap pm = QPixmap::fromImage(img.copy());
+   DeleteObject(hbm);
+   if (ii.hbmColor) DeleteObject(ii.hbmColor);
+   if (ii.hbmMask)  DeleteObject(ii.hbmMask);
+   return pm;
+}
 #endif
 
 /**
@@ -120,7 +150,10 @@ QIcon IconProvider::getIconNative(const QString& extension)
    SHFILEINFO psfi;
    SHGetFileInfo(extension.toStdWString().c_str(), FILE_ATTRIBUTE_NORMAL, &psfi, sizeof(psfi), SHGFI_ICON | SHGFI_SMALLICON | SHGFI_USEFILEATTRIBUTES);
    if (psfi.hIcon != NULL)
-      icon = QIcon(QtWin::fromHICON(psfi.hIcon));
+   {
+      icon = QIcon(hIconToQPixmap(psfi.hIcon));
+      DestroyIcon(psfi.hIcon);
+   }
 #else
    icon = IconProvider::iconProvider.icon(QFileIconProvider::File);
 #endif

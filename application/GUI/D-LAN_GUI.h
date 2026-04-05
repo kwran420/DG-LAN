@@ -23,8 +23,12 @@
 #include <QMenu>
 #include <QSystemTrayIcon>
 #include <QSharedMemory>
+#include <QLocalServer>
+#include <QStringList>
+#include <QUrl>
 
 #include <MainWindow.h>
+#include <UpdateChecker.h>
 
 #include <Common/RemoteCoreController/Types.h>
 
@@ -52,6 +56,18 @@ namespace GUI
       void exitGUI();
       void exit(bool stopTheCore = true);
 
+      void checkForUpdates();   // manual tray menu action
+
+      // UpdateChecker result slots
+      void onUpdateAvailable(QString latestVersion, QString releaseUrl);
+      void onUpToDate(QString currentVersion);
+      void onUpdateCheckFailed(QString error);
+
+      // DG-LAN URL scheme (dglan://).
+      void handleUrl(const QUrl& url);
+      void ipcNewConnection();  // QLocalServer slot — forwards URL from second instance
+      void coreReadyForDownloads(); // Drain pending URL queue once connected
+
    private:
       QSharedMemory sharedMemory;
 
@@ -63,5 +79,17 @@ namespace GUI
       QSharedPointer<RCC::ICoreConnection> coreConnection;
 
       QTranslator translator;
+
+      // DG-LAN single-instance IPC server.
+      QLocalServer ipcServer;
+
+      // URLs received before the core is connected — drained in coreReadyForDownloads().
+      QStringList pendingUrls;
+
+      // Update checker (lives for the lifetime of the app).
+      UpdateChecker* updateChecker;
+
+      // True when a manual "Check for Updates" is in flight (show "up to date" dialog).
+      bool manualUpdateCheck = false;
    };
 }

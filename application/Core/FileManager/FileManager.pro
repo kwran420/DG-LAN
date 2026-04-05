@@ -45,6 +45,7 @@ SOURCES += priv/Builder.cpp \
     priv/ChunkIndex/Chunks.cpp \
     ../../Protos/core_protocol.pb.cc \
     ../../Protos/common.pb.cc \
+    ../../Protos/file_cache.pb.cc \
     priv/Cache/Chunk.cpp \
     priv/Cache/DataReader.cpp \
     priv/Cache/DataWriter.cpp \
@@ -74,6 +75,7 @@ HEADERS += IGetHashesResult.h \
     priv/WordIndex/Node.h \
     ../../Protos/core_protocol.pb.h \
     ../../Protos/common.pb.h \
+    ../../Protos/file_cache.pb.h \
     IDataReader.h \
     IDataWriter.h \
     priv/Cache/Chunk.h \

@@ -19,6 +19,7 @@
 #pragma once
 
 #include <QString>
+#include <QStringList>
 
 namespace FM
 {
@@ -54,5 +55,20 @@ namespace FM
       virtual ~SuperDirectoryExistsException() throw() {}
       const QString superDirectory;
       const QString subDirectory;
+   };
+
+   class DirAlreadySharedException
+   {
+   public:
+      DirAlreadySharedException() {}
+      virtual ~DirAlreadySharedException() throw() {}
+   };
+
+   class DirsNotFoundException
+   {
+   public:
+      DirsNotFoundException(const QStringList& paths) : paths(paths) {}
+      virtual ~DirsNotFoundException() throw() {}
+      QStringList paths;
    };
 }

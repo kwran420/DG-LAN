@@ -20,6 +20,7 @@
 using namespace PM;
 
 #include <QCoreApplication>
+#include <QDateTime>  // DG-LAN: gossip peer list timestamps
 
 #include <Protos/core_protocol.pb.h>
 #include <Protos/common.pb.h>
@@ -42,13 +43,13 @@ void PeerMessageSocket::Logger::logError(const QString& message)
 }
 
 PeerMessageSocket::PeerMessageSocket(PeerManager* peerManager, QSharedPointer<FM::IFileManager> fileManager, const Common::Hash& remotePeerID, QTcpSocket* socket) :
-   MessageSocket(new PeerMessageSocket::Logger(), socket, peerManager->getSelf()->getID(), remotePeerID), fileManager(fileManager), active(true), nbError(0)
+   MessageSocket(new PeerMessageSocket::Logger(), socket, peerManager->getSelf()->getID(), remotePeerID), fileManager(fileManager), peerManager(peerManager), active(true), nbError(0)
 {
    this->initUnactiveTimer();
 }
 
 PeerMessageSocket::PeerMessageSocket(PeerManager* peerManager, QSharedPointer<FM::IFileManager> fileManager, const Common::Hash& remotePeerID, const QHostAddress& address, quint16 port) :
-   MessageSocket(new PeerMessageSocket::Logger(), address, port, peerManager->getSelf()->getID(), remotePeerID), fileManager(fileManager), active(true), nbError(0)
+   MessageSocket(new PeerMessageSocket::Logger(), address, port, peerManager->getSelf()->getID(), remotePeerID), fileManager(fileManager), peerManager(peerManager), active(true), nbError(0)
 {
    this->initUnactiveTimer();
 }
@@ -320,40 +321,111 @@ void PeerMessageSocket::onNewMessage(const Common::Message& message)
       }
       break;
 
-   case Common::MessageHeader::CORE_GET_CHUNK:
+   case Common::MessageHeader::CORE_GET_CHUNKS:
       {
-         const Protos::Core::GetChunk& getChunkMessage = message.getMessage<Protos::Core::GetChunk>();
+         const Protos::Core::GetChunks& getChunksMessage = message.getMessage<Protos::Core::GetChunks>();
 
-         const Common::Hash hash(getChunkMessage.chunk().hash());
-         if (hash.isNull())
+         if (getChunksMessage.chunks_size() == 0)
          {
-            L_WARN("GET_CHUNK: Chunk null");
+            L_WARN("GET_CHUNKS: No chunks requested");
             this->finished(true);
             break;
          }
 
-         // TODO: implements 'GetChunkResult.ALREADY_DOWNLOADING', 'GetChunkResult.TOO_MANY_CONNECTIONS' and 'GetChunkResult.DONT_HAVE_DATA_FROM_OFFSET'
+         // For now we handle only the first chunk (single-chunk transfer compat)
+         const Protos::Core::GetChunks_Chunk& chunkReq = getChunksMessage.chunks(0);
+         const Common::Hash hash(chunkReq.hash().hash());
+         if (hash.isNull())
+         {
+            L_WARN("GET_CHUNKS: Chunk null");
+            this->finished(true);
+            break;
+         }
+
+         // TODO: implements ALREADY_DOWNLOADING, TOO_MANY_CONNECTIONS
          QSharedPointer<FM::IChunk> chunk = this->fileManager->getChunk(hash);
+         Protos::Core::GetChunksResult result;
+         Protos::Core::GetChunksResult_ChunkResult* chunkResult = result.add_results();
          if (chunk.isNull())
          {
-            Protos::Core::GetChunkResult result;
-            result.set_status(Protos::Core::GetChunkResult::DONT_HAVE);
-            this->send(Common::MessageHeader::CORE_GET_CHUNK_RESULT, result);
+            result.set_status(Protos::Core::GetChunksResult::OK);
+            chunkResult->set_status(Protos::Core::GetChunksResult_ChunkResult::DONT_HAVE);
+            this->send(Common::MessageHeader::CORE_GET_CHUNKS_RESULT, result);
             this->finished();
 
-            L_WARN(QString("GET_CHUNK: Chunk unknown: %1").arg(hash.toStr()));
+            L_WARN(QString("GET_CHUNKS: Chunk unknown: %1").arg(hash.toStr()));
          }
          else
          {
-            Protos::Core::GetChunkResult result;
-            result.set_status(Protos::Core::GetChunkResult::OK);
-            result.set_chunk_size(chunk->getKnownBytes());
-            this->send(Common::MessageHeader::CORE_GET_CHUNK_RESULT, result);
+            result.set_status(Protos::Core::GetChunksResult::OK);
+            chunkResult->set_status(Protos::Core::GetChunksResult_ChunkResult::OK);
+            chunkResult->set_chunk_size(chunk->getKnownBytes());
+            this->send(Common::MessageHeader::CORE_GET_CHUNKS_RESULT, result);
 
             this->stopListening();
 
-            emit getChunk(chunk, getChunkMessage.offset(), this);
+            emit getChunk(chunk, chunkReq.offset(), this);
          }
+      }
+      break;
+
+   // DG-LAN: Gossip / Peer Exchange — respond with list of alive peers we've personally seen
+   case Common::MessageHeader::CORE_GET_PEER_LIST:
+      {
+         const Protos::Core::GetPeerList& req = message.getMessage<Protos::Core::GetPeerList>();
+         const quint32 maxPeers = req.max_peers() > 0
+            ? req.max_peers()
+            : SETTINGS.get<quint32>("gossip_max_peers");
+
+         Protos::Core::GetPeerListResult result;
+
+         const QList<IPeer*> livePeers = this->peerManager->getPeers();
+         int count = 0;
+         for (auto* p : livePeers)
+         {
+            if (!p->isAlive() || p->getIP().isNull())
+               continue;
+            if (count++ >= static_cast<int>(maxPeers))
+               break;
+
+            Protos::Core::PeerInfo* info = result.add_peers();
+            info->set_address(p->getIP().toString().toStdString());
+            info->set_port(p->getPort());
+            Common::ProtoHelper::setStr(*info, &Protos::Core::PeerInfo::mutable_nick, p->getNick());
+            info->set_id(p->getID().getData(), Common::Hash::HASH_SIZE);
+            info->set_last_seen(static_cast<quint64>(QDateTime::currentSecsSinceEpoch()));
+         }
+
+         this->send(Common::MessageHeader::CORE_GET_PEER_LIST_RESULT, result);
+         this->finished();
+      }
+      break;
+
+   // DG-LAN: we initiated the PEX — process the response by merging gossip candidates
+   case Common::MessageHeader::CORE_GET_PEER_LIST_RESULT:
+      {
+         const Protos::Core::GetPeerListResult& res = message.getMessage<Protos::Core::GetPeerListResult>();
+         const quint64 ttlCutoff = static_cast<quint64>(QDateTime::currentSecsSinceEpoch())
+            - SETTINGS.get<quint32>("gossip_peer_ttl_minutes") * 60ULL;
+
+         for (int i = 0; i < res.peers_size(); i++)
+         {
+            const Protos::Core::PeerInfo& info = res.peers(i);
+            if (info.last_seen() < ttlCutoff)
+               continue;
+
+            const QHostAddress addr(QString::fromStdString(info.address()));
+            if (addr.isNull())
+               continue;
+
+            if (!info.id().empty())
+            {
+               Common::Hash id(reinterpret_cast<const char*>(info.id().data()));
+               if (!id.isNull() && id != this->peerManager->getSelf()->getID())
+                  this->peerManager->addGossipCandidate(addr, static_cast<quint16>(info.port()));
+            }
+         }
+         this->finished();
       }
       break;
 

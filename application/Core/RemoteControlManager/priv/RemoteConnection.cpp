@@ -34,6 +34,8 @@ using namespace RCM;
 #include <Common/SharedEntry.h>
 #include <Common/Global.h>
 #include <Common/StringUtils.h>
+
+#include <Protos/core_settings.pb.h>   // DG-LAN: for KnownHost settings
 #include <Core/FileManager/IChunk.h>
 #include <Core/FileManager/Exceptions.h>
 #include <Core/PeerManager/IPeer.h>
@@ -144,8 +146,8 @@ void RemoteConnection::refresh()
    self->set_sharing_amount(this->fileManager->getAmount());
    self->set_download_rate(downloadRate);
    self->set_upload_rate(uploadRate);
-   Common::ProtoHelper::setStr(*self, &Protos::GUI::State::Peer::set_nick, this->peerManager->getSelf()->getNick());
-   Common::ProtoHelper::setStr(*self, &Protos::GUI::State::Peer::set_core_version, Common::Global::getVersionFull());
+   Common::ProtoHelper::setStr(*self, &Protos::GUI::State::Peer::mutable_nick, this->peerManager->getSelf()->getNick());
+   Common::ProtoHelper::setStr(*self, &Protos::GUI::State::Peer::mutable_core_version, Common::Global::getVersionFull());
 
    // Peers.
    const QList<PM::IPeer*>& peers = this->peerManager->getPeers();
@@ -154,11 +156,11 @@ void RemoteConnection::refresh()
       PM::IPeer* peer = i.next();
       Protos::GUI::State::Peer* protoPeer = state.add_peer();
       protoPeer->mutable_peer_id()->set_hash(peer->getID().getData(), Common::Hash::HASH_SIZE);
-      Common::ProtoHelper::setStr(*protoPeer, &Protos::GUI::State::Peer::set_nick, peer->getNick());
+      Common::ProtoHelper::setStr(*protoPeer, &Protos::GUI::State::Peer::mutable_nick, peer->getNick());
 
       const QString coreVersion = peer->getCoreVersion();
       if (!coreVersion.isNull())
-         Common::ProtoHelper::setStr(*protoPeer, &Protos::GUI::State::Peer::set_core_version, coreVersion);
+         Common::ProtoHelper::setStr(*protoPeer, &Protos::GUI::State::Peer::mutable_core_version, coreVersion);
 
       protoPeer->set_sharing_amount(peer->getSharingAmount());
       protoPeer->set_download_rate(peer->getDownloadRate());
@@ -194,7 +196,7 @@ void RemoteConnection::refresh()
          protoDownload->add_peer_id()->set_hash(j.next()->getID().getData(), Common::Hash::HASH_SIZE);
 
       if (!peerSource->getNick().isNull())
-         Common::ProtoHelper::setStr(*protoDownload, &Protos::GUI::State::Download::set_peer_source_nick, peerSource->getNick());
+         Common::ProtoHelper::setStr(*protoDownload, &Protos::GUI::State::Download::mutable_peer_source_nick, peerSource->getNick());
    }
 
    // Uploads.
@@ -221,10 +223,10 @@ void RemoteConnection::refresh()
    {
       Common::SharedEntry sharedEntry = i.next();
       Protos::GUI::State::SharedEntry* sharedEntryProto = state.add_shared_entry();
-      Common::ProtoHelper::setStr(*sharedEntryProto, &Protos::GUI::State::SharedEntry::set_path, sharedEntry.path.getPath());
+      Common::ProtoHelper::setStr(*sharedEntryProto->mutable_entry(), &Protos::Common::SharedEntry::mutable_path, sharedEntry.path.getPath());
       sharedEntryProto->set_size(sharedEntry.size);
       sharedEntryProto->set_free_space(sharedEntry.freeSpace);
-      sharedEntryProto->mutable_id()->set_hash(sharedEntry.ID.getData(), Common::Hash::HASH_SIZE);
+      sharedEntryProto->mutable_entry()->mutable_id()->set_hash(sharedEntry.ID.getData(), Common::Hash::HASH_SIZE);
    }
 
    // Stats.
@@ -253,13 +255,13 @@ void RemoteConnection::refresh()
          {
             Protos::Common::Interface* interfaceMess = state.add_interface();
             interfaceMess->set_id(interface.index() == 0 ? Common::StringUtils::hashStringToInt(interface.name()) : interface.index());
-            Common::ProtoHelper::setStr(*interfaceMess, &Protos::Common::Interface::set_name, interface.humanReadableName());
+            Common::ProtoHelper::setStr(*interfaceMess, &Protos::Common::Interface::mutable_name, interface.humanReadableName());
             interfaceMess->set_isup(interface.flags().testFlag(QNetworkInterface::IsUp) && interface.flags().testFlag(QNetworkInterface::IsRunning));
             for (QListIterator<QNetworkAddressEntry> j(addresses); j.hasNext();)
             {
                QHostAddress address = j.next().ip();
                Protos::Common::Interface::Address* addressMess = interfaceMess->add_address();
-               Common::ProtoHelper::setStr(*addressMess, &Protos::Common::Interface::Address::set_address, address.toString());
+               Common::ProtoHelper::setStr(*addressMess, &Protos::Common::Interface::Address::mutable_address, address.toString());
                addressMess->set_protocol(address.protocol() == QAbstractSocket::IPv6Protocol ? Protos::Common::Interface::Address::IPv6 : Protos::Common::Interface::Address::IPv4);
                addressMess->set_listened(address == addressToListen);
             }
@@ -273,7 +275,7 @@ void RemoteConnection::refresh()
       const CS::IChatSystem::ChatRoom& room = i.next();
       Protos::GUI::State::Room* roomMess = state.add_room();
 
-      Common::ProtoHelper::setStr(*roomMess, &Protos::GUI::State::Room::set_name, room.name);
+      Common::ProtoHelper::setStr(*roomMess, &Protos::GUI::State::Room::mutable_name, room.name);
       for (QSetIterator<PM::IPeer*> j(room.peers); j.hasNext();)
          roomMess->add_peer_id()->set_hash(j.next()->getID().getData(), Common::Hash::HASH_SIZE);
       roomMess->set_joined(room.joined);
@@ -326,7 +328,7 @@ void RemoteConnection::newLogEntry(QSharedPointer<LM::IEntry> entry)
 {
    Protos::GUI::EventLogMessages::EventLogMessage* eventLogMessage = this->eventLogMessages.add_message();
    eventLogMessage->set_time(entry->getDate().currentMSecsSinceEpoch());
-   Common::ProtoHelper::setStr(*eventLogMessage, &Protos::GUI::EventLogMessages::EventLogMessage::set_message, entry->getMessage());
+   Common::ProtoHelper::setStr(*eventLogMessage, &Protos::GUI::EventLogMessages::EventLogMessage::mutable_message, entry->getMessage());
    eventLogMessage->set_severity(static_cast<Protos::GUI::EventLogMessages::EventLogMessage::Severity>(entry->getSeverity()));
 
    if (!this->sendLogMessagesTimer.isActive())
@@ -505,6 +507,32 @@ void RemoteConnection::onNewMessage(const Common::Message& message)
          SETTINGS.set("listen_any", static_cast<quint32>(newProtocol));
          if (currentAddressToListenTo != newAddressToListenTo || currentProtocol != newProtocol)
             this->networkListener->rebindSockets();
+
+         // DG-LAN: network / core-seeder settings.
+         if (!coreSettingsMessage.network_interface_name().empty())
+            SETTINGS.set("network_interface_name", QString::fromStdString(coreSettingsMessage.network_interface_name()));
+         SETTINGS.set("force_ipv4", coreSettingsMessage.force_ipv4());
+         if (coreSettingsMessage.multicast_ttl_override() > 0)
+            SETTINGS.set("multicast_ttl_override", static_cast<quint32>(coreSettingsMessage.multicast_ttl_override()));
+         SETTINGS.set("core_seeder_mode", coreSettingsMessage.core_seeder_mode());
+
+         // DG-LAN: rebuild known_host list.
+         {
+            Protos::Core::Settings* cs = dynamic_cast<Protos::Core::Settings*>(
+               const_cast<google::protobuf::Message*>(SETTINGS.getSettingsMessage()));
+            if (cs)
+            {
+               cs->clear_known_host();
+               for (int i = 0; i < coreSettingsMessage.known_host_size(); ++i)
+               {
+                  const auto& src = coreSettingsMessage.known_host(i);
+                  auto* dst = cs->add_known_host();
+                  dst->set_address(src.address());
+                  dst->set_port(src.port());
+                  dst->set_nick(src.nick());
+               }
+            }
+         }
 
          SETTINGS.save();
          this->refresh();

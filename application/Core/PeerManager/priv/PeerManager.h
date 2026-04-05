@@ -25,6 +25,8 @@
 #include <QElapsedTimer>
 #include <QList>
 #include <QTcpSocket>
+#include <QHostAddress>  // DG-LAN
+#include <QPair>         // DG-LAN
 
 #include <Common/Hash.h>
 #include <Common/Uncopyable.h>
@@ -87,6 +89,13 @@ namespace PM
 
       void onGetChunk(QSharedPointer<FM::IChunk> chunk, int offset, QSharedPointer<PeerMessageSocket> socket);
 
+      // DG-LAN: Gossip / PEX support
+      void addGossipCandidate(const QHostAddress& address, quint16 port);
+      QList<QPair<QHostAddress, quint16>> takeGossipCandidates(); // drain and return the current list
+
+      // DG-LAN: Core Seeder — probe known hosts at startup
+      void initKnownPeers();
+
    private slots:
       void dataReceived(QTcpSocket* tcpSocket = nullptr);
       void disconnected(QTcpSocket* tcpSocket = nullptr);
@@ -105,5 +114,8 @@ namespace PM
 
       QTimer timer; ///< Used to check periodically if some pending sockets have timeouted.
       QList<PendingSocket> pendingSockets;
+
+      // DG-LAN: gossip candidates — addresses from PEX to probe via unicast IMAlive
+      QList<QPair<QHostAddress, quint16>> gossipCandidates;
    };
 }

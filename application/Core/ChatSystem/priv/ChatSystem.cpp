@@ -417,7 +417,7 @@ void ChatSystem::retrieveLastChatMessagesFromPeers(const QList<PM::IPeer*>& peer
    for (QListIterator<quint64> i(messageIDs); i.hasNext();)
       getLastChatMessages.add_message_id(i.next());
    if (!roomName.isEmpty())
-      Common::ProtoHelper::setStr(getLastChatMessages, &Protos::Core::GetLastChatMessages::set_chat_room, roomName);
+      Common::ProtoHelper::setStr(getLastChatMessages, &Protos::Core::GetLastChatMessages::mutable_chat_room, roomName);
 
    this->networkListener->send(Common::MessageHeader::CORE_GET_LAST_CHAT_MESSAGES, getLastChatMessages, peers[QRandomGenerator64::global()->bounded(peers.size())]->getID());
 }

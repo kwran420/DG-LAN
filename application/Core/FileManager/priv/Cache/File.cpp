@@ -178,7 +178,7 @@ bool File::restoreFromFileCache(const Protos::FileCache::Hashes::File& file)
       this->chunks.size() == file.chunk_size()
    )
    {
-      L_DEBU(QString("Restoring file '%1' from the file cache").arg(this->getFullPath()));
+      L_DEBU(QString("Restoring file '%1' from the file cache").arg(this->getFullPath().getPath()));
 
       for (int i = 0; i < file.chunk_size(); i++)
       {
@@ -186,7 +186,7 @@ bool File::restoreFromFileCache(const Protos::FileCache::Hashes::File& file)
          if (this->chunks[i]->hasHash())
          {
             if (this->chunks[i]->getKnownBytes() > 0)
-               this->cache->onChunkHashKnown(this->chunks[i]);
+               this->getCache()->onChunkHashKnown(this->chunks[i]);
          }
       }
 
@@ -199,7 +199,7 @@ void File::populateHashesFile(Protos::FileCache::Hashes_File& fileToFill) const
 {
    QMutexLocker locker(&this->mutex);
 
-   Common::ProtoHelper::setStr(fileToFill, &Protos::FileCache::Hashes_File::set_filename, this->name);
+   Common::ProtoHelper::setStr(fileToFill, &Protos::FileCache::Hashes_File::mutable_filename, this->name);
    fileToFill.set_size(this->getSize());
    fileToFill.set_date_last_modified(this->getDateLastModified().toMSecsSinceEpoch());
 
@@ -244,8 +244,8 @@ bool File::matchesEntry(const Protos::Common::Entry& entry) const
    QMutexLocker locker(&this->mutex);
 
    return
-      this->getRoot()->getId() == entry.shared_dir().id().hash() &&
-      this->getPath() == Common::ProtoHelper::getStr(entry, &Protos::Common::Entry::path) &&
+      this->getRoot()->getId() == entry.shared_entry().id().hash() &&
+      this->getPath().getPath() == Common::ProtoHelper::getStr(entry, &Protos::Common::Entry::path) &&
       this->getSize() == static_cast<qint64>(entry.size()) &&
       Global::removeUnfinishedSuffix(this->getName()) == Global::removeUnfinishedSuffix(Common::ProtoHelper::getStr(entry, &Protos::Common::Entry::name));
 }
@@ -302,7 +302,7 @@ void File::newDataWriterCreated()
    {
       // We have the same performance with or without "QIODevice::Unbuffered".
       bool fileCreated;
-      this->fileInWriteMode = this->cache->getFilePool().open(this->getFullPath(), QIODevice::ReadWrite | QIODevice::Unbuffered, &fileCreated);
+      this->fileInWriteMode = this->getCache()->getFilePool().open(this->getFullPath().getPath(), QIODevice::ReadWrite | QIODevice::Unbuffered, &fileCreated);
 
       if (!this->fileInWriteMode)
          throw UnableToOpenFileInWriteModeException();
@@ -322,7 +322,7 @@ void File::newDataWriterCreated()
             if (chunk->getKnownBytes() != 0)
             {
                chunk->setKnownBytes(0);
-               this->cache->onChunkRemoved(chunk);
+               this->getCache()->onChunkRemoved(chunk);
                fileReset = true;
             }
          }
@@ -345,7 +345,7 @@ void File::newDataReaderCreated()
    {
       // Why a file in readonly need to be buffered? Without the flag "QIODevice::Unbuffered" a lot of memory is consumed for nothing
       // and this memory is not freed when the file is closed ('close()') but only when the QFile is deleted.
-      this->fileInReadMode = this->cache->getFilePool().open(this->getFullPath(), QIODevice::ReadOnly | QIODevice::Unbuffered);
+      this->fileInReadMode = this->getCache()->getFilePool().open(this->getFullPath().getPath(), QIODevice::ReadOnly | QIODevice::Unbuffered);
       if (!this->fileInReadMode)
          throw UnableToOpenFileInReadModeException();
    }
@@ -362,7 +362,7 @@ void File::dataWriterDeleted()
 
    if (--this->numDataWriter == 0)
    {
-      this->cache->getFilePool().release(this->fileInWriteMode);
+      this->getCache()->getFilePool().release(this->fileInWriteMode);
       this->fileInWriteMode = nullptr;
    }
 }
@@ -373,7 +373,7 @@ void File::dataReaderDeleted()
 
    if (--this->numDataReader == 0)
    {
-      this->cache->getFilePool().release(this->fileInReadMode);
+      this->getCache()->getFilePool().release(this->fileInReadMode);
       this->fileInReadMode = nullptr;
    }
 }
@@ -472,7 +472,7 @@ void File::chunkComplete(const Chunk* chunk)
    for (int i = 0; i < this->chunks.size(); ++i)
    {
       if (this->chunks[i].data() == chunk)
-         this->cache->onChunkHashKnown(this->chunks[i]);
+            this->getCache()->onChunkHashKnown(this->chunks[i]);
 
       if (this->chunks[i]->isComplete())
          ++nbChunkComplete;
@@ -515,13 +515,13 @@ void File::removeUnfinishedFiles()
       QMutexLocker lockerWrite(&this->writeLock);
       QMutexLocker lockerRead(&this->readLock);
 
-      this->cache->getFilePool().forceReleaseAll(this->getFullPath());
+      this->getCache()->getFilePool().forceReleaseAll(this->getFullPath().getPath());
 
       this->fileInReadMode = nullptr;
       this->fileInWriteMode = nullptr;
 
-      if (!QFile::remove(this->getFullPath()))
-         L_WARN(QString("File::removeUnfinishedFiles(): unable to delete an unfinished file: %1").arg(this->getFullPath()));
+      if (!QFile::remove(this->getFullPath().getPath()))
+         L_WARN(QString("File::removeUnfinishedFiles(): unable to delete an unfinished file: %1").arg(this->getFullPath().getPath()));
    }
 }
 
@@ -582,13 +582,13 @@ void File::setAsComplete()
          // for a long time like 10 seconds ('CloseHandle(..)' will flush all data and wait). Some actions will be also blocks by the mutex
          // like browsing the parent directory. The workaround is to temporary unlock the mutex during this operation.
          this->mutex.unlock();
-         this->cache->getFilePool().forceReleaseAll(this->getFullPath());
+         this->getCache()->getFilePool().forceReleaseAll(this->getFullPath().getPath());
          this->mutex.lock();
          this->fileInReadMode = nullptr;
          this->fileInWriteMode = nullptr;
       }
 
-      const QString oldPath = this->getFullPath();
+      const QString oldPath = this->getFullPath().getPath();
       const QString newPath = Global::removeUnfinishedSuffix(oldPath);
 
       if (!Common::Global::rename(oldPath, newPath))
@@ -600,7 +600,7 @@ void File::setAsComplete()
          this->complete = true;
          this->dateLastModified = QFileInfo(newPath).lastModified();
          this->name = Global::removeUnfinishedSuffix(this->name);
-         this->cache->onEntryAdded(this); // To add the name to the index. (a bit tricky).
+         this->getCache()->onEntryAdded(this); // To add the name to the index. (a bit tricky).
       }
    }
 }
@@ -608,7 +608,7 @@ void File::setAsComplete()
 void File::deleteAllChunks()
 {
    for (QVectorIterator<QSharedPointer<Chunk>> i(this->chunks); i.hasNext();)
-      this->cache->onChunkRemoved(i.next());
+      this->getCache()->onChunkRemoved(i.next());
    this->chunks.clear();
 }
 
@@ -619,13 +619,13 @@ void File::deleteAllChunks()
 void File::createPhysicalFile()
 {
    if (this->getSize() > 0 && !Global::isFileUnfinished(this->name))
-      L_ERRO(QString("File::createPhysicalFile(..): Cannot create a file (%1) without the 'unfinished' suffix").arg(this->getPath()));
+      L_ERRO(QString("File::createPhysicalFile(..): Cannot create a file (%1) without the 'unfinished' suffix").arg(this->getPath().getPath()));
    else
    {
-      QFile file(this->getFullPath());
+      QFile file(this->getFullPath().getPath());
       if (!file.open(QIODevice::WriteOnly) || !file.resize(this->getSize()))
       {
-         QFile::remove(this->getFullPath());
+         QFile::remove(this->getFullPath().getPath());
          throw UnableToCreateNewFileException();
       }
       this->setFileAsSparse(file);
@@ -662,7 +662,7 @@ void File::setHashes(const Common::Hashes& hashes)
          QSharedPointer<Chunk> chunk(new Chunk(this, i, chunkKnownBytes, hashes[i]));
          this->chunks << chunk;
          if (chunk->isComplete())
-            this->cache->onChunkHashKnown(chunk);
+            this->getCache()->onChunkHashKnown(chunk);
       }
       else
          // If there is too few hashes then null hashes are added.

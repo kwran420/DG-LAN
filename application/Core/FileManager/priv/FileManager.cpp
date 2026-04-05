@@ -32,6 +32,7 @@ using namespace FM;
 #include <google/protobuf/text_format.h>
 
 #include <Common/KnownExtensions.h>
+#include <Common/Path.h>
 #include <Common/PersistentData.h>
 #include <Common/Settings.h>
 #include <Common/Constants.h>
@@ -56,7 +57,7 @@ LOG_INIT_CPP(FileManager)
 
 FileManager::FileManager(QSharedPointer<HC::IHashCache> hashCache) :
    fileUpdater(this),
-   cache(hashCache),
+   cache(),
    cacheLoading(true)
 {
    Chunk::CHUNK_SIZE = Common::Constants::CHUNK_SIZE;
@@ -73,12 +74,7 @@ FileManager::FileManager(QSharedPointer<HC::IHashCache> hashCache) :
    connect(&this->fileUpdater, &FileUpdater::fileCacheLoaded, this, &FileManager::fileCacheLoadingComplete, Qt::QueuedConnection);
    connect(&this->fileUpdater, &FileUpdater::deleteSharedEntry, this, &FileManager::deleteSharedEntry, Qt::QueuedConnection); // If the 'FileUpdater' wants to delete a shared directory.
 
-   // Give stored shared entries to the cache:
-   SETTINGS.get<Protos::Common::SharedEntry>("shared_entry");
-
-   this->fileUpdater.addRoot();
-
-   // TODO: call addRoot for each shared entry in settings.
+   // Shared entries are restored via setSharedPaths() when the GUI sends settings.
    this->fileUpdater.start();
 }
 
@@ -95,7 +91,10 @@ FileManager::~FileManager()
   */
 void FileManager::setSharedPaths(const QStringList& paths)
 {
-   this->cache.setSharedPaths(paths);
+   QList<Common::Path> pathList;
+   for (const QString& p : paths)
+      pathList << Common::Path(p);
+   this->cache.setSharedPaths(pathList);
 }
 
 /**
@@ -103,7 +102,7 @@ void FileManager::setSharedPaths(const QStringList& paths)
   */
 QPair<Common::SharedEntry, QString> FileManager::addASharedPath(const QString& absolutePath)
 {
-   return this->cache.addASharedPath(absolutePath);
+   return this->cache.addASharedEntry(absolutePath);
 }
 
 QList<Common::SharedEntry> FileManager::getSharedEntries() const

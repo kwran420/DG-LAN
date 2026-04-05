@@ -59,6 +59,10 @@ namespace Common
          CORE_GET_CHUNKS =                0x0051,
          CORE_GET_CHUNKS_RESULT =         0x0052,
 
+         // DG-LAN: Gossip / Peer Exchange (PEX)
+         CORE_GET_PEER_LIST =             0x0061,
+         CORE_GET_PEER_LIST_RESULT =      0x0062,
+
          /***** GUI *****/
          GUI_STATE =                      0x1001,
          GUI_STATE_RESULT =               0x1002,

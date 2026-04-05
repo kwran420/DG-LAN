@@ -1,0 +1,42 @@
+/**
+  * The persisted file hash cache.
+  * Version : 2
+  * All string are encoded in UTF-8.
+  */
+
+syntax = "proto3";
+
+import "common.proto";
+
+package Protos.FileCache;
+
+// All the hashes for a set of shared directories.
+message Hashes {
+   message Chunk {
+      uint32 known_bytes = 1;
+      Protos.Common.Hash hash = 2;
+   }
+
+   message File {
+      string filename = 1;
+      uint64 size = 2;
+      uint64 date_last_modified = 3; // In ms since Epoch.
+      repeated Chunk chunk = 4;
+   }
+
+   message Dir {
+      string name = 1;                // Empty for the root.
+      repeated File file = 2;         // Files with at least one known hash.
+      repeated Dir dir = 3;
+   }
+
+   message SharedDir {
+      Protos.Common.Hash id = 1;
+      string path = 2;               // Always ends with '/'.
+      Dir root = 3;
+   }
+
+   uint32 version = 1;
+   uint32 chunkSize = 2;
+   repeated SharedDir sharedDir = 3;
+}

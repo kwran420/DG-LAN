@@ -29,5 +29,6 @@ namespace NL
       static QNetworkInterface getCurrentInterfaceToListenTo();
       static QHostAddress getCurrentAddressToListenTo();
       static QHostAddress getMulticastGroup();
+      static QHostAddress getBroadcastAddress(); // DG-LAN: subnet broadcast for fallback discovery
    };
 }

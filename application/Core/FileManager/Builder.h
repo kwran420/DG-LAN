@@ -29,6 +29,6 @@ namespace FM
    class Builder
    {
    public:
-      static QSharedPointer<IFileManager> newFileManager(QSharedPointer<HC::IHashCache> hashCache);
+      static QSharedPointer<IFileManager> newFileManager(QSharedPointer<HC::IHashCache> hashCache = nullptr);
    };
 }

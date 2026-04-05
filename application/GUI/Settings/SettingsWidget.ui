@@ -293,6 +293,65 @@
          </property>
         </spacer>
        </item>
+       <item>
+        <widget class="QGroupBox" name="grpDgLanNetwork">
+         <property name="title">
+          <string>DG-LAN / ZeroTier Network</string>
+         </property>
+         <layout class="QFormLayout" name="formDgLanNetwork">
+          <item row="0" column="0">
+           <widget class="QLabel" name="lblInterfaceName">
+            <property name="text">
+             <string>Interface name</string>
+            </property>
+            <property name="toolTip">
+             <string>Name of the network interface to bind to (e.g. zt0 for ZeroTier). Leave empty for automatic selection.</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QLineEdit" name="txtInterfaceName">
+            <property name="placeholderText">
+             <string>e.g. zt0 (empty = auto)</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="lblMulticastTTL">
+            <property name="text">
+             <string>Multicast TTL override</string>
+            </property>
+            <property name="toolTip">
+             <string>Set to 1 for ZeroTier (multicast does not cross routers). 0 = use core default.</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QSpinBox" name="spnMulticastTTL">
+            <property name="minimum">
+             <number>0</number>
+            </property>
+            <property name="maximum">
+             <number>255</number>
+            </property>
+            <property name="specialValueText">
+             <string>Auto</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0" colspan="2">
+           <widget class="QCheckBox" name="chkForceIPv4">
+            <property name="text">
+             <string>Force IPv4</string>
+            </property>
+            <property name="toolTip">
+             <string>When checked, only IPv4 addresses are used. Recommended for ZeroTier.</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
       </layout>
      </widget>
      <widget class="QWidget" name="tabAdvancedSettings">
@@ -474,6 +533,97 @@
           </size>
          </property>
         </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="tabCoreSeeders">
+      <attribute name="title">
+       <string>Core Seeders</string>
+      </attribute>
+      <attribute name="toolTip">
+       <string>Always-on hosts that are probed at startup for reliable peer discovery</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="layCoreSeeders">
+       <item>
+        <widget class="QCheckBox" name="chkCoreSeederMode">
+         <property name="text">
+          <string>This machine is a core seeder (always-on host)</string>
+         </property>
+         <property name="toolTip">
+          <string>Enable to advertise this machine as a reliable always-on host. Other peers will prioritise contacting it at startup.</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="lblKnownHosts">
+         <property name="text">
+          <string>Known core seeders (probed at startup):</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QTableWidget" name="tblKnownHosts">
+         <property name="selectionBehavior">
+          <enum>QAbstractItemView::SelectRows</enum>
+         </property>
+         <property name="selectionMode">
+          <enum>QAbstractItemView::SingleSelection</enum>
+         </property>
+         <column>
+          <property name="text">
+           <string>Address</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Port</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Nick</string>
+          </property>
+         </column>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="layKnownHostButtons">
+         <item>
+          <widget class="QPushButton" name="butAddKnownHost">
+           <property name="text">
+            <string>Add</string>
+           </property>
+           <property name="icon">
+            <iconset resource="../ressources.qrc">
+             <normaloff>:/icons/ressources/add.png</normaloff>:/icons/ressources/add.png</iconset>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="butRemoveKnownHost">
+           <property name="text">
+            <string>Remove</string>
+           </property>
+           <property name="icon">
+            <iconset resource="../ressources.qrc">
+             <normaloff>:/icons/ressources/remove.png</normaloff>:/icons/ressources/remove.png</iconset>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer_seeders">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
        </item>
       </layout>
      </widget>

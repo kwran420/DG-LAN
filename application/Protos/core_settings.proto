@@ -94,4 +94,46 @@ message Settings {
    uint32 search_lifetime = 84; // [default = 5000] [ms]. (5s)
    uint32 delay_gui_connection_fail = 88; // [default = 200] When a GUI fails to connect to the core (for example by giving a wrong password) the answer is delayed [ms]. (0.2s)
    uint32 delay_before_sending_log_messages = 100; // [default = 250] [ms]. When a new log message should be sent to the Core we wait this time for another log messages to try to send many at the same time.
+
+   ///// DG-LAN: ZeroTier & Discovery /////
+
+   // [default = ""] If set, bind all sockets (UDP multicast, UDP unicast, TCP) to this network interface by name.
+   // Examples: "zt0" (Linux/macOS ZeroTier), "ZeroTier One [...]" (Windows).
+   // If empty, falls back to 'listen_address' / 'listen_any' as before.
+   string network_interface_name = 110;
+
+   // [default = 0] Override the multicast TTL. Set to 1 for ZeroTier virtual networks.
+   // 0 means use the value of 'multicast_ttl' (default 31).
+   uint32 multicast_ttl_override = 111;
+
+   // [default = false] Force IPv4 even if IPv6 is available.
+   // Useful for ZeroTier environments where IPv6 link-local causes address conflicts.
+   bool force_ipv4 = 112;
+
+   // [default = 3] Number of consecutive multicast send/receive failures before
+   // escalating to the broadcast fallback. 0 = never escalate (multicast only).
+   uint32 multicast_failure_threshold = 113;
+
+   // [default = 30] Gossip peer-exchange TTL in minutes. Received peer entries older
+   // than this value are discarded.
+   uint32 gossip_peer_ttl_minutes = 114;
+
+   // [default = 50] Maximum number of peer entries to share in a single gossip exchange.
+   uint32 gossip_max_peers = 115;
+
+   ///// DG-LAN: Core Seeders /////
+
+   // A known host is a static peer probed at startup before the full subnet scan.
+   // Typically a Core Seeder: always-on machine with files.
+   message KnownHost {
+      string address = 1;  // IP address (ZeroTier IP or LAN IP)
+      uint32 port = 2;     // [default = 59487] Unicast port
+      string nick = 3;     // Display name (optional)
+   }
+
+   repeated KnownHost known_host = 120;
+
+   // [default = false] Mark this instance as a Core Seeder.
+   // Affects only GUI labelling and download peer priority — no relay logic.
+   bool core_seeder_mode = 121;
 }

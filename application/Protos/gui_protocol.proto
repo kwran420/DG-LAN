@@ -235,6 +235,19 @@ message CoreSettings {
 
    string listen_address = 4; // [default = ""] If address is empty then listen to any addresses, in this case the protocol is given by 'listenAny'.
    Common.Interface.Address.Protocol listen_any = 5; // [default = IPv6]
+
+   // DG-LAN extensions.
+   string network_interface_name = 6;  // e.g. "zt0". Empty = auto.
+   bool force_ipv4 = 7;
+   uint32 multicast_ttl_override = 8;  // 0 = use core default.
+   bool core_seeder_mode = 9;
+
+   message KnownHost {
+      string address = 1;
+      uint32 port    = 2;
+      string nick    = 3;
+   }
+   repeated KnownHost known_host = 10; // Core seeders to probe at startup.
 }
 
 

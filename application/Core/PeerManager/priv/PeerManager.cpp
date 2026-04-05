@@ -20,6 +20,7 @@
 using namespace PM;
 
 #include <Protos/common.pb.h>
+#include <Protos/core_settings.pb.h>   // DG-LAN: for KnownHost settings
 
 #include <Common/Hash.h>
 #include <Common/PersistentData.h>
@@ -198,9 +199,9 @@ void PeerManager::onGetChunk(QSharedPointer<FM::IChunk> chunk, int offset, QShar
 {
    if (this->receivers(SIGNAL(getChunk(QSharedPointer<FM::IChunk>, int, QSharedPointer<PM::ISocket>))) < 1)
    {
-      Protos::Core::GetChunkResult mess;
-      mess.set_status(Protos::Core::GetChunkResult::ERROR_UNKNOWN);
-      socket->send(Common::MessageHeader::CORE_GET_CHUNK_RESULT, mess);
+      Protos::Core::GetChunksResult mess;
+      mess.set_status(Protos::Core::GetChunksResult::ERROR_UNKNOWN);
+      socket->send(Common::MessageHeader::CORE_GET_CHUNKS_RESULT, mess);
       socket->finished();
       L_ERRO("PeerManager::onGetChunk(..): no slot connected to the signal 'getChunk(..)'");
       return;
@@ -266,6 +267,54 @@ void PeerManager::peerUnblocked()
    Peer* peer = static_cast<Peer*>(this->sender());
    if (peer->isAvailable())
       emit peerBecomesAvailable(peer);
+}
+
+// DG-LAN: Store an address received via gossip PEX. UDPListener drains this
+// list and probes each address with a unicast IMAlive.
+void PeerManager::addGossipCandidate(const QHostAddress& address, quint16 port)
+{
+   const QPair<QHostAddress, quint16> entry(address, port);
+   if (!this->gossipCandidates.contains(entry))
+      this->gossipCandidates.append(entry);
+}
+
+QList<QPair<QHostAddress, quint16>> PeerManager::takeGossipCandidates()
+{
+   QList<QPair<QHostAddress, quint16>> result;
+   result.swap(this->gossipCandidates);
+   return result;
+}
+
+// DG-LAN: Probe known hosts (core seeders) at startup.
+// Adds them to the gossip candidate list so UDPListener sends unicast IMAlive
+// probes before the full subnet scan starts.
+void PeerManager::initKnownPeers()
+{
+   const Protos::Core::Settings* coreSettings =
+      dynamic_cast<const Protos::Core::Settings*>(SETTINGS.getSettingsMessage());
+
+   if (!coreSettings)
+   {
+      L_DEBU("DG-LAN: initKnownPeers — settings not available");
+      return;
+   }
+
+   L_DEBU(QString("DG-LAN: initKnownPeers — %1 known host(s)").arg(coreSettings->known_host_size()));
+
+   for (int i = 0; i < coreSettings->known_host_size(); ++i)
+   {
+      const Protos::Core::Settings_KnownHost& kh = coreSettings->known_host(i);
+      const QHostAddress addr(QString::fromStdString(kh.address()));
+      const quint16 port = kh.port() > 0
+         ? static_cast<quint16>(kh.port())
+         : static_cast<quint16>(SETTINGS.get<quint32>("unicast_base_port"));
+
+      if (!addr.isNull())
+      {
+         L_DEBU(QString("DG-LAN: Probing known host %1:%2").arg(addr.toString()).arg(port));
+         this->addGossipCandidate(addr, port);
+      }
+   }
 }
 
 void PeerManager::removeFromPending(QTcpSocket* socket)

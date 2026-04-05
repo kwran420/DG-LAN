@@ -19,6 +19,7 @@
 #pragma once
 
 #include <functional>
+#include <limits>
 
 #include <QObject>
 #include <QPair>
@@ -27,15 +28,14 @@
 #include <QMutex>
 #include <QSharedPointer>
 
+#include <Protos/file_cache.pb.h>
 #include <Protos/core_protocol.pb.h>
-
-#include <Core/HashCache/IHashCache.h>
 
 #include <Common/Uncopyable.h>
 #include <Common/SharedEntry.h>
+#include <Common/Path.h>
 
 #include <priv/FileUpdater/DirWatcher.h>
-#include <priv/Cache/Entry.h>
 #include <priv/Cache/SharedEntry.h>
 #include <priv/Cache/Chunk.h>
 #include <priv/Cache/FilePool.h>
@@ -43,41 +43,43 @@
 namespace FM
 {
    class Entry;
+   class File;
+   class Directory;
    class FileUpdater;
 
    class Cache : public QObject, Common::Uncopyable
    {
       Q_OBJECT
    public:
-      Cache(QSharedPointer<HC::IHashCache> hashCache);
+      Cache();
       ~Cache();
 
       void forall(std::function<void(Entry*)> fun) const;
 
       Protos::Common::Entries getProtoSharedEntries() const;
       Protos::Common::Entries getProtoEntries(const Protos::Common::Entry& dir, int maxNbHashesPerEntry = std::numeric_limits<int>::max()) const;
-
       Directory* getDirectory(const Protos::Common::Entry& dir) const;
-      Entry* getEntry(const Common::Path& path) const;
-      SharedEntry* getSharedEntry(const Common::Path& path) const;
+
+      Entry* getEntry(const QString& path) const;
       File* getFile(const Protos::Common::Entry& fileEntry) const;
       QList<QSharedPointer<IChunk>> newFile(Protos::Common::Entry& fileEntry);
       void newDirectory(Protos::Common::Entry& dirEntry);
 
       QList<Common::SharedEntry> getSharedEntries() const;
-      SharedEntry* getSharedEntry(const Common::Hash& ID) const;
+      SharedDirectory* getSharedEntry(const Common::Hash& ID) const;
+      SharedEntry* getSharedEntry(const QString& path) const;
       void setSharedPaths(const QList<Common::Path>& paths);
-      QPair<Common::SharedEntry, QString> addASharedEntry(const QString& path);
-      void removeSharedEntry(SharedEntry* item, Directory* dir2 = nullptr);
+      QPair<Common::SharedEntry, QString> addASharedEntry(const QString& absoluteDir);
+      void removeSharedEntry(SharedEntry* dir, Directory* dir2 = nullptr);
 
-      SharedEntry* getSuperSharedEntry(const Common::Path& path) const;
-      QList<SharedDirectory*> getSubSharedEntries(const Common::Path& path) const;
-      bool isShared(const Common::Path& path) const;
+      SharedDirectory* getSuperSharedEntry(const QString& path) const;
+      QList<SharedEntry*> getSubSharedEntries(const QString& path) const;
+      bool isShared(const QString& path) const;
 
-      Directory* getFittestDirectory(const Common::Path& path) const;
+      Directory* getFittestDirectory(const QString& path) const;
 
-      void scanSharedEntries();
-      //void populateHashes(Protos::FileCache::Hashes& hashes) const;
+      void createSharedEntries(const Protos::FileCache::Hashes& hashes);
+      void populateHashes(Protos::FileCache::Hashes& hashes) const;
 
       quint64 getAmount() const;
 
@@ -104,31 +106,24 @@ namespace FM
       void entryResizing(Entry* entry);
       void entryResized(Entry* entry, qint64 oldSize);
 
-      /**
-        * May be emitted from a separated thread.
-        */
       void chunkHashKnown(const QSharedPointer<Chunk>& chunk);
       void chunkRemoved(const QSharedPointer<Chunk>& chunk);
       void directoryScanned(Directory* dir);
 
-      void newSharedEntry(SharedEntry* item);
-      void sharedEntryRemoved(SharedEntry* item, Directory* dir);
+      void newSharedEntry(SharedEntry* dir);
+      void sharedEntryRemoved(SharedEntry* dir, Directory* dir2);
 
    private:
       static Common::SharedEntry makeSharedEntry(const SharedEntry* entry);
-      SharedEntry* createShareEntry(const Common::Path& path, const Common::Hash& ID = Common::Hash(), int pos = -1);
-      void createSharedEntries(const QList<Common::Path>& paths, const QList<Common::Hash>& ids = QList<Common::Hash>());
+      SharedDirectory* createShareEntry(const QString path, const Common::Hash& ID = Common::Hash(), int pos = -1);
+      void createSharedEntries(const QStringList& dirs, const QList<Common::Hash>& ids = QList<Common::Hash>());
 
-      Directory* getWriteableDirectory(const Common::Path& path, qint64 spaceNeeded = 0) const;
+      Directory* getWriteableDirectory(const QString& path, qint64 spaceNeeded = 0) const;
 
-      QSharedPointer<HC::IHashCache> hashCache;
-
-      QList<SharedEntry*> sharedEntries;
+      QList<SharedDirectory*> sharedEntries;
 
       FilePool filePool;
 
-      const quint32 MINIMUM_FREE_SPACE;
-
-      mutable QMutex mutex; ///< To protect all the data into the cache, files and directories.
+      mutable QMutex mutex;
    };
 }

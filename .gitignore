@@ -14,11 +14,32 @@ moc_*.cpp
 *.dll
 Makefile*
 output/
+release/
+debug/
 Installations/
 .tmp/
 /doc/doxygen/html
 qrc_*.cpp
 TODO
-*.session
 *.DS_STORE
 Thumbs.db
+
+# Build logs and temp files
+*.log
+*.old
+*/.qmake.stash
+**/*_backup.*
+
+# Root-level dev temp files
+/build_*.txt
+/copy_log.txt
+/gen_icons*.txt
+/installer*.txt
+/inst_*.txt
+/git_*.txt
+/gi_check.txt
+/github_check.txt
+/logo.png
+
+# Inno Setup temp output
+application/Setups/Windows/iscc_*.txt

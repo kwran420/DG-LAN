@@ -3,20 +3,20 @@ using namespace FM;
 
 #include <QMutexLocker>
 
+#include <Common/Path.h>
+#include <priv/Cache/SharedEntry.h>
+
 class FakeEntry : public Entry
 {
 public:
    FakeEntry(qint64 size) : Entry(nullptr, QString(), size) {}
    ~FakeEntry() {}
 
-   QString getFullPath() const { return QString(); }
-   QString getPath() const { return QString(); }
-   SharedDirectory* getRoot() const { return nullptr; }
+   Common::Path getFullPath() const { return Common::Path(); }
+   Common::Path getPath() const { return Common::Path(); }
    void removeUnfinishedFiles() {}
-   void moveInto(Directory* directory) {}
+   void moveInto(Directory*) {}
 };
-
-/////
 
 SizeIndexEntries::SizeIndexEntries()
 {
