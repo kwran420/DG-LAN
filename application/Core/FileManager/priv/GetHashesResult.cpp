@@ -77,20 +77,15 @@ Protos::Core::GetHashesResult GetHashesResult::start()
       connect(&this->cache, &Cache::chunkHashKnown, this, &GetHashesResult::chunkHashKnown, Qt::DirectConnection);
 
       int nbOfHashToBeSent = 0;
-      int j = 0;
       for (QVectorIterator<QSharedPointer<Chunk>> i(chunks); i.hasNext();)
       {
          auto chunk = i.next();
-         const Protos::Common::Hash& protoChunk = this->fileEntry.chunk(j++);
 
-         if (protoChunk.hash().size() > 0)
-         {
-            nbOfHashToBeSent++;
-            if (chunk->hasHash())
-               this->sendNextHash(chunk, true);
-            else
-               this->hashesRemaining << chunk->getNum();
-         }
+         nbOfHashToBeSent++;
+         if (chunk->hasHash())
+            this->sendNextHash(chunk, true);
+         else
+            this->hashesRemaining << chunk->getNum();
       }
 
       result.set_nb_hash(nbOfHashToBeSent);

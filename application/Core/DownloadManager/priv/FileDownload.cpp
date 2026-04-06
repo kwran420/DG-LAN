@@ -445,8 +445,8 @@ void FileDownload::result(const Protos::Core::GetHashesResult& result)
 {
    if (result.status() == Protos::Core::GetHashesResult::OK)
    {
-      if (this->nbHashesKnown + static_cast<int>(result.nb_hash()) != this->NB_CHUNK)
-         L_WARN(QString("The received hashes (%1) plus the known hashes (%2) is not equal to the number of chunks (%3)").arg(result.nb_hash()).arg(this->nbHashesKnown).arg(this->NB_CHUNK));
+      if (static_cast<int>(result.nb_hash()) < this->NB_CHUNK - this->nbHashesKnown)
+         L_WARN(QString("The received hashes (%1) is less than the remaining unknown hashes (%2) of (%3) chunks").arg(result.nb_hash()).arg(this->NB_CHUNK - this->nbHashesKnown).arg(this->NB_CHUNK));
    }
    else
    {
