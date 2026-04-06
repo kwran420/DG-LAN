@@ -215,42 +215,16 @@
              </property>
              <layout class="QVBoxLayout" name="layInterfaces">
               <item>
-               <widget class="QLabel" name="lblAnyInterface">
+               <widget class="QRadioButton" name="radAllInterfaces">
                 <property name="text">
                  <string>All interfaces (recommended)</string>
                 </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QWidget" name="widgetAllInterfaces" native="true">
-                <layout class="QVBoxLayout" name="verticalLayout_2">
-                 <property name="topMargin">
-                  <number>3</number>
-                 </property>
-                 <item>
-                  <widget class="QRadioButton" name="radIPv6">
-                   <property name="text">
-                    <string>IPv6</string>
-                   </property>
-                   <property name="checked">
-                    <bool>true</bool>
-                   </property>
-                   <attribute name="buttonGroup">
-                    <string notr="true">grpAddressesToListenTo</string>
-                   </attribute>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QRadioButton" name="radIPv4">
-                   <property name="text">
-                    <string>IPv4</string>
-                   </property>
-                   <attribute name="buttonGroup">
-                    <string notr="true">grpAddressesToListenTo</string>
-                   </attribute>
-                  </widget>
-                 </item>
-                </layout>
+                <property name="checked">
+                 <bool>true</bool>
+                </property>
+                <attribute name="buttonGroup">
+                 <string notr="true">grpAddressesToListenTo</string>
+                </attribute>
                </widget>
               </item>
              </layout>
@@ -346,6 +320,9 @@
             </property>
             <property name="toolTip">
              <string>When checked, only IPv4 addresses are used. Recommended for ZeroTier.</string>
+            </property>
+            <property name="visible">
+             <bool>false</bool>
             </property>
            </widget>
           </item>

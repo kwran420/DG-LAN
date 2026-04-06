@@ -74,18 +74,10 @@ QHostAddress Utils::getCurrentAddressToListenTo()
       {
          if (iface.name() != interfaceName)
             continue;
+         // DG-LAN: always prefer IPv4 — IPv6 multicast is unreliable
          foreach (const QNetworkAddressEntry& entry, iface.addressEntries())
-         {
-            // DG-LAN: prefer IPv4 if force_ipv4 is set, otherwise use first address
-            if (SETTINGS.get<bool>("force_ipv4"))
-            {
-               if (entry.ip().protocol() == QAbstractSocket::IPv4Protocol)
-                  return entry.ip();
-            }
-            else if (entry.ip().protocol() == QAbstractSocket::IPv6Protocol ||
-                     entry.ip().protocol() == QAbstractSocket::IPv4Protocol)
+            if (entry.ip().protocol() == QAbstractSocket::IPv4Protocol)
                return entry.ip();
-         }
       }
    }
 
@@ -101,19 +93,9 @@ QHostAddress Utils::getCurrentAddressToListenTo()
       SETTINGS.set("listen_address", QString(""));
    }
 
-   // Check if IPv6 is available.
-   bool hasAnyIPv6 = false;
-   foreach (QHostAddress address, QNetworkInterface::allAddresses())
-      if (address == QHostAddress::AnyIPv6 || address == QHostAddress::LocalHostIPv6)
-      {
-         hasAnyIPv6 = true;
-         break;
-      }
-
-   if (!hasAnyIPv6 && SETTINGS.get<quint32>("listen_any") == Protos::Common::Interface::Address::IPv6)
-      SETTINGS.set("listen_any", static_cast<quint32>(Protos::Common::Interface::Address::IPv4));
-
-   return SETTINGS.get<quint32>("listen_any") == Protos::Common::Interface::Address::IPv4 ? QHostAddress::AnyIPv4 : QHostAddress::AnyIPv6;
+   // DG-LAN: always use IPv4 for "listen on all" — IPv6 multicast is unreliable
+   // and ZeroTier uses IPv4 addressing.
+   return QHostAddress::AnyIPv4;
 }
 
 /**

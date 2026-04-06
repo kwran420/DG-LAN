@@ -240,7 +240,7 @@ void RemoteConnection::refresh()
    const QString& addressToListenStr = SETTINGS.get<QString>("listen_address");
    const QHostAddress addressToListen(addressToListenStr);
    if (addressToListenStr.isEmpty())
-      state.set_listenany(static_cast<Protos::Common::Interface::Address::Protocol>(SETTINGS.get<quint32>("listen_any")));
+      state.set_listenany(Protos::Common::Interface::Address::IPv4);
    for (QListIterator<QNetworkInterface> i(this->interfaces); i.hasNext();)
    {
       const QNetworkInterface& interface = i.next();

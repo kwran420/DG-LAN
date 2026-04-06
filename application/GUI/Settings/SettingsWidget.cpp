@@ -306,7 +306,7 @@ void SettingsWidget::updateNetworkInterfaces(const Protos::GUI::State& state)
    }
 
    // Set the current address.
-   // Only select an "any" radio button if no specific address is being listened to.
+   // Select "All interfaces" if no specific address is being listened to.
    bool anySpecificAddressListened = false;
    for (int i = 0; i < state.interface_size(); i++)
       for (int j = 0; j < state.interface(i).address_size(); j++)
@@ -317,12 +317,7 @@ void SettingsWidget::updateNetworkInterfaces(const Protos::GUI::State& state)
          }
 
    if (!anySpecificAddressListened)
-   {
-      if (state.listenany() == Protos::Common::Interface::Address::IPv6)
-         this->ui->radIPv6->setChecked(true);
-      else
-         this->ui->radIPv4->setChecked(true);
-   }
+      this->ui->radAllInterfaces->setChecked(true);
 
    this->connectAllAddressButtons();
 }
@@ -516,9 +511,7 @@ void SettingsWidget::saveCoreSettings()
    for (QListIterator<Common::SharedEntry> i(this->sharedEntryListModel.getSharedEntries()); i.hasNext();)
       Common::ProtoHelper::addRepeatedStr(*settings.mutable_shared_paths(), &Protos::GUI::CoreSettings::SharedPaths::add_path, i.next().path.getPath());
 
-   if (this->ui->radIPv6->isChecked())
-      settings.set_listen_any(Protos::Common::Interface::Address::IPv6);
-   else if (this->ui->radIPv4->isChecked())
+   if (this->ui->radAllInterfaces->isChecked())
       settings.set_listen_any(Protos::Common::Interface::Address::IPv4);
    else
    {
