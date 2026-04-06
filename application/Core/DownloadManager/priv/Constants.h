@@ -28,5 +28,6 @@ namespace DM
 
    // 2 -> 3 : BLAKE -> Sha-1
    // 3 -> 4 : Replace Entry::complete by a status.
-   const int FILE_QUEUE_VERSION = 4;
+   // 4 -> 5 : Fixed DM::Status enum values to match proto (v1.2.19).
+   const int FILE_QUEUE_VERSION = 5;
 }

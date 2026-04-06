@@ -89,6 +89,7 @@ namespace DM
       void result(const Protos::Core::GetHashesResult& result);
       void nextHash(const Protos::Core::HashResult&);
       void getHashTimeout();
+      void retryRetrieveHashes();
 
       void chunkDownloaderStarted();
       void chunkDownloaderFinished();

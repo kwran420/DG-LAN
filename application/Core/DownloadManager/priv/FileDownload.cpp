@@ -337,8 +337,7 @@ bool FileDownload::retrieveHashes()
       this->status == COMPLETE ||
       this->status == DELETED ||
       this->status == PAUSED ||
-      this->status == GETTING_THE_HASHES ||
-      this->status == ENTRY_NOT_FOUND
+      this->status == GETTING_THE_HASHES
    )
       return false;
 
@@ -453,7 +452,7 @@ void FileDownload::result(const Protos::Core::GetHashesResult& result)
    {
       if (result.status() == Protos::Core::GetHashesResult::DONT_HAVE)
       {
-         L_DEBU("Unable to retrieve the hashes: DONT_HAVE");
+         L_DEBU("Unable to retrieve the hashes: DONT_HAVE, will retry");
          this->setStatus(ENTRY_NOT_FOUND);
       }
       else
@@ -464,6 +463,9 @@ void FileDownload::result(const Protos::Core::GetHashesResult& result)
 
       this->getHashesResult.clear();
       this->occupiedPeersAskingForHashes.setPeerAsFree(this->peerSource);
+
+      // Retry after a delay, like DirDownload does.
+      QTimer::singleShot(RETRY_PEER_GET_HASHES_PERIOD, this, &FileDownload::retryRetrieveHashes);
    }
 }
 
@@ -532,6 +534,14 @@ void FileDownload::getHashTimeout()
    this->getHashesResult.clear();
    this->setStatus(UNABLE_TO_RETRIEVE_THE_HASHES);
    this->occupiedPeersAskingForHashes.setPeerAsFree(this->peerSource);
+
+   QTimer::singleShot(RETRY_PEER_GET_HASHES_PERIOD, this, &FileDownload::retryRetrieveHashes);
+}
+
+void FileDownload::retryRetrieveHashes()
+{
+   if (this->status == ENTRY_NOT_FOUND || this->status == UNABLE_TO_RETRIEVE_THE_HASHES)
+      this->retrieveHashes();
 }
 
 void FileDownload::chunkDownloaderStarted()
