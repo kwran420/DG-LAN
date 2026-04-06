@@ -144,8 +144,12 @@ Common::Path SharedEntry::pathWithoutEntryName(const Common::Path& path)
 {
    if (path.isFile())
       return path.removeFilename();
-   else
-      return path.removeLastDir();
+   // DG-LAN: when sharing a drive root (e.g. "C:/"), dirs is empty and
+   // removeLastDir() is a no-op, returning the root path again.
+   // The parent of a root share is empty — no prefix path.
+   if (path.getDirs().isEmpty())
+      return Common::Path();
+   return path.removeLastDir();
 }
 
 /////

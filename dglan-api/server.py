@@ -224,17 +224,15 @@ class CoreClient:
         log.info("Got state: peer_id=%s, %d shared entries", self.peer_hex, len(self.shared_entries))
 
     # ── Browse files ──────────────────────────────────────────
-    async def browse(self, shared_entry_hash: bytes = b"", path: str = "", timeout: float = 15.0) -> gui.BrowseResult:
-        """Send a Browse request and wait for the result."""
+    async def browse_entry(self, dir_entry=None, get_roots: bool = False, timeout: float = 15.0) -> gui.BrowseResult:
+        """Send a Browse request and wait for the result.
+        If dir_entry is provided, it's a protobuf Entry to browse into."""
         browse = gui.Browse()
         browse.peer_id.hash = self.peer_id
-        browse.get_roots = True
+        browse.get_roots = get_roots
 
-        if shared_entry_hash:
-            entry = browse.dirs.entry.add()
-            entry.type = common.Entry.DIR
-            entry.path = path or "/"
-            entry.shared_entry.id.hash = shared_entry_hash
+        if dir_entry is not None:
+            browse.dirs.entry.add().CopyFrom(dir_entry)
 
         # Create a future BEFORE sending so we don't miss the tag/result
         loop = asyncio.get_event_loop()
@@ -256,22 +254,30 @@ class CoreClient:
         all_files = []
 
         # First browse: get roots
-        result = await self.browse()
+        result = await self.browse_entry(get_roots=True)
 
         for entries_group in result.entries:
             for entry in entries_group.entry:
+                log.debug("Root entry: type=%s name=%r path=%r se_hash=%s",
+                          "DIR" if entry.type == common.Entry.DIR else "FILE",
+                          entry.name, entry.path,
+                          hash_to_hex(entry.shared_entry.id.hash)[:16] if entry.shared_entry.id.hash else "none")
                 await self._collect_files(entry, all_files)
 
         return all_files
 
-    async def _collect_files(self, entry, all_files: list, depth: int = 0):
+    async def _collect_files(self, entry, all_files: list, depth: int = 0, parent_se_hash: bytes = b""):
         if depth > 20:  # safety limit
             return
 
+        # Use the entry's own shared_entry hash, or inherit from parent
+        se_hash_raw = entry.shared_entry.id.hash if entry.shared_entry.id.hash else parent_se_hash
+
         if entry.type == common.Entry.FILE:
-            # Build the file record with everything needed for a dglan:// link
-            se_hash = hash_to_hex(entry.shared_entry.id.hash) if entry.shared_entry.id.hash else ""
+            se_hash = hash_to_hex(se_hash_raw) if se_hash_raw else ""
             chunks = [hash_to_hex(c.hash) for c in entry.chunk if c.hash]
+
+            log.debug("  FILE: %s%s (%d bytes, %d chunks)", entry.path, entry.name, entry.size, len(chunks))
 
             all_files.append({
                 "name": entry.name,
@@ -280,24 +286,31 @@ class CoreClient:
                 "shared_entry_hash": se_hash,
                 "peer": self.peer_hex,
                 "chunks": chunks,
-                "dglan_url": self._build_dglan_url(entry),
+                "dglan_url": self._build_dglan_url(entry, se_hash_raw),
             })
 
-        elif entry.type == common.Entry.DIR and entry.shared_entry.id.hash:
-            # Recurse into subdirectories
+        elif entry.type == common.Entry.DIR:
+            if not se_hash_raw:
+                return
+            # Recurse into subdirectories — pass the entry object directly back to Core
+            log.debug("  DIR:  %s%s (depth=%d)", entry.path, entry.name, depth)
             try:
-                sub_result = await self.browse(
-                    shared_entry_hash=entry.shared_entry.id.hash,
-                    path=entry.path + entry.name + "/" if entry.path else "/" + entry.name + "/",
-                )
-                for entries_group in sub_result.entries:
+                sub_result = await self.browse_entry(dir_entry=entry)
+                for gi, entries_group in enumerate(sub_result.entries):
+                    log.debug("    Group %d: %d entries", gi, len(entries_group.entry))
                     for sub_entry in entries_group.entry:
-                        await self._collect_files(sub_entry, all_files, depth + 1)
+                        log.debug("      -> type=%s name=%r path=%r se=%s",
+                                  "DIR" if sub_entry.type == common.Entry.DIR else "FILE",
+                                  sub_entry.name, sub_entry.path,
+                                  hash_to_hex(sub_entry.shared_entry.id.hash)[:16] if sub_entry.shared_entry.id.hash else "none")
+                        await self._collect_files(sub_entry, all_files, depth + 1, se_hash_raw)
             except TimeoutError:
-                log.warning("Timeout browsing dir: %s/%s", entry.path, entry.name)
+                log.warning("Timeout browsing dir: %s%s", entry.path, entry.name)
 
-    def _build_dglan_url(self, entry) -> str:
-        se_hash = hash_to_hex(entry.shared_entry.id.hash) if entry.shared_entry.id.hash else ""
+    def _build_dglan_url(self, entry, se_hash_raw: bytes = b"") -> str:
+        se_hash = hash_to_hex(se_hash_raw) if se_hash_raw else ""
+        if not se_hash and entry.shared_entry.id.hash:
+            se_hash = hash_to_hex(entry.shared_entry.id.hash)
         params = {
             "peer": self.peer_hex,
             "hash": se_hash,

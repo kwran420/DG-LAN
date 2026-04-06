@@ -27,5 +27,5 @@ namespace FM
    const int NB_MAX_HASHES_PER_ENTRY_SEARCH = 8;
 
    // Version of the file cache format.
-   const int FILE_CACHE_VERSION = 2;
+   const int FILE_CACHE_VERSION = 3; // DG-LAN v1.2.30: fix C_ nested dirs from root shares
 }
