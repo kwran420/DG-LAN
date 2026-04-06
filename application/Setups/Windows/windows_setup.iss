@@ -80,6 +80,14 @@ Name: "fr"; MessagesFile: "compiler:Languages/French.isl,{#ApplicationDir}/trans
 Name: "Firewall"; Description: {cm:firewallException}; MinVersion: 0,5.01.2600sp2;
 Name: "ResetSettings"; Description: {cm:resetSettings}
 
+[Registry]
+; Register dglan:// URL protocol handler — launches GUI with the URL as argument.
+; Uses HKCU so no admin elevation is needed and it persists across upgrades.
+Root: HKCU; Subkey: "Software\Classes\dglan"; ValueType: string; ValueName: ""; ValueData: "URL:DG-LAN Protocol"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\dglan"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\dglan\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\DG-LAN.GUI.exe"",0"
+Root: HKCU; Subkey: "Software\Classes\dglan\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\DG-LAN.GUI.exe"" ""%1"""
+
 [Run]
 Filename: "{sys}/netsh.exe"; Parameters: "firewall add allowedprogram ""{app}/DG-LAN.Core.exe"" ""DG-LAN.Core"" ENABLE ALL"; Flags: runhidden; MinVersion: 0,5.01.2600sp2; Tasks: Firewall
 Filename: "{app}/DG-LAN.Core.exe"; Parameters: "--reset-settings"; Flags: RunHidden; Description: "Reset settings"; Tasks: ResetSettings
