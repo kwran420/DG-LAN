@@ -45,12 +45,15 @@ Directory::Directory(SharedEntry* root, const QString& name, Directory* parent, 
    L_DEBU(QString("New Directory: %1, createPhysically = %2").arg(this->getFullPath().getPath()).arg(createPhysically));
 
    if (createPhysically)
-      if (!QDir(this->getFullPath().removeLastDir().getPath()).mkdir(this->name))
+   {
+      QDir parentDir(this->getFullPath().removeLastDir().getPath());
+      if (!parentDir.exists(this->name) && !parentDir.mkdir(this->name))
       {
          L_ERRO(QString("Unable to create the directory: %1").arg(this->getFullPath().getPath()));
          Entry::del(false);
          throw UnableToCreateNewDirException();
       }
+   }
 
    if (this->parent)
       this->parent->add(this);

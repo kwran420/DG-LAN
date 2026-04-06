@@ -275,7 +275,9 @@ QList<QSharedPointer<IChunk>> Cache::newFile(Protos::Common::Entry& fileEntry)
 {
    QMutexLocker locker(&this->mutex);
 
-   const QString& dirPath = QDir::cleanPath(Common::ProtoHelper::getStr(fileEntry, &Protos::Common::Entry::path));
+   QString dirPath = QDir::cleanPath(Common::ProtoHelper::getStr(fileEntry, &Protos::Common::Entry::path));
+   if (dirPath == ".")
+      dirPath.clear();
    const qint64 spaceNeeded = fileEntry.size() + SETTINGS.get<quint32>("minimum_free_space");
 
    // If we know where to put the file.
@@ -355,7 +357,10 @@ void Cache::newDirectory(Protos::Common::Entry& dirEntry)
 {
    QMutexLocker locker(&this->mutex);
 
-   const QString& dirPath = QDir::cleanPath(Common::ProtoHelper::getStr(dirEntry, &Protos::Common::Entry::path)) + '/' + Common::ProtoHelper::getStr(dirEntry, &Protos::Common::Entry::name);
+   QString dirPath = QDir::cleanPath(Common::ProtoHelper::getStr(dirEntry, &Protos::Common::Entry::path));
+   if (dirPath == ".")
+      dirPath.clear();
+   dirPath += '/' + Common::ProtoHelper::getStr(dirEntry, &Protos::Common::Entry::name);
 
    // If we know where to create the directory.
    Directory* dir = nullptr;
@@ -806,7 +811,8 @@ Directory* Cache::getWriteableDirectory(const QString& path, qint64 spaceNeeded)
 {
    QMutexLocker locker(&this->mutex);
 
-   const QStringList folders = path.split('/', QString::SkipEmptyParts);
+   QStringList folders = path.split('/', QString::SkipEmptyParts);
+   folders.removeAll(".");
 
    if (this->sharedEntries.isEmpty())
       throw NoWriteableDirectoryException();
