@@ -217,7 +217,7 @@
               <item>
                <widget class="QLabel" name="lblAnyInterface">
                 <property name="text">
-                 <string>Any</string>
+                 <string>All interfaces (recommended)</string>
                 </property>
                </widget>
               </item>

@@ -306,10 +306,23 @@ void SettingsWidget::updateNetworkInterfaces(const Protos::GUI::State& state)
    }
 
    // Set the current address.
-   if (state.listenany() == Protos::Common::Interface::Address::IPv6)
-      this->ui->radIPv6->setChecked(true);
-   else
-      this->ui->radIPv4->setChecked(true);
+   // Only select an "any" radio button if no specific address is being listened to.
+   bool anySpecificAddressListened = false;
+   for (int i = 0; i < state.interface_size(); i++)
+      for (int j = 0; j < state.interface(i).address_size(); j++)
+         if (state.interface(i).address(j).listened())
+         {
+            anySpecificAddressListened = true;
+            break;
+         }
+
+   if (!anySpecificAddressListened)
+   {
+      if (state.listenany() == Protos::Common::Interface::Address::IPv6)
+         this->ui->radIPv6->setChecked(true);
+      else
+         this->ui->radIPv4->setChecked(true);
+   }
 
    this->connectAllAddressButtons();
 }
