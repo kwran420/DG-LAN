@@ -260,7 +260,7 @@ void UDPListener::sendIMAliveMessage()
       );
       const QList<PM::IPeer*> peers = this->peerManager->getPeers();
       for (PM::IPeer* peer : peers)
-         this->unicastSocket.writeDatagram(this->buffer, messageSize, peer->getIP(), peer->getPort());
+         this->unicastSocket.writeDatagram(this->buffer, messageSize, peer->getIP(), MULTICAST_PORT);
    }
 
    // DG-LAN: drain gossip candidates from PeerManager and probe each one
@@ -447,7 +447,7 @@ void UDPListener::sendNextSubnetScanProbe()
    }
 
    const QHostAddress& target = this->subnetScanTargets[this->subnetScanIndex++];
-   this->sendUnicastIMAlive(target, this->UNICAST_PORT);
+   this->sendUnicastIMAlive(target, MULTICAST_PORT);
 }
 
 // DG-LAN: Send a unicast IMAlive directly to a specific peer address.
@@ -469,6 +469,9 @@ void UDPListener::sendUnicastIMAlive(const QHostAddress& addr, quint16 port)
    if (!messageSize)
       return;
 
+   // DG-LAN: send to multicast port — the multicast socket is always bound to
+   // 0.0.0.0 so it receives on ALL interfaces. The unicast socket may be bound
+   // to a specific IP and miss traffic from other interfaces.
    this->unicastSocket.writeDatagram(this->buffer, messageSize, addr, port);
 }
 

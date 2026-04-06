@@ -1,0 +1,142 @@
+/**
+  * Protocol between core and GUI.
+  */
+
+syntax = "proto3";
+
+import "common.proto";
+
+package Protos.GUI;
+
+message State {
+   message Download {
+      enum Status {
+         QUEUED = 0;
+         GETTING_THE_HASHES = 1;
+         DOWNLOADING = 2;
+         COMPLETE = 3;
+         PAUSED = 4;
+         DELETED = 5;
+         UNKNOWN_PEER_SOURCE = 16;
+         ENTRY_NOT_FOUND = 17;
+         NO_SOURCE = 18;
+         NO_SHARED_DIRECTORY_TO_WRITE = 32;
+         NO_ENOUGH_FREE_SPACE = 33;
+         UNABLE_TO_CREATE_THE_FILE = 34;
+         UNABLE_TO_CREATE_THE_DIRECTORY = 48;
+         UNABLE_TO_RETRIEVE_THE_HASHES = 35;
+         TRANSFER_ERROR = 36;
+         UNABLE_TO_OPEN_THE_FILE = 37;
+         FILE_IO_ERROR = 38;
+         FILE_NON_EXISTENT = 39;
+         GOT_TOO_MUCH_DATA = 40;
+         HASH_MISMATCH = 41;
+         REMOTE_SCANNING_IN_PROGRESS = 49;
+         LOCAL_SCANNING_IN_PROGRESS = 51;
+         UNABLE_TO_GET_ENTRIES = 50;
+      }
+      uint64 id = 1;
+      Common.Entry local_entry = 2;
+      Status status = 3;
+      uint64 downloaded_bytes = 4;
+      repeated Common.Hash peer_id = 5;
+      string peer_source_nick = 6;
+   }
+   message Upload {
+      uint64 id = 1;
+      Common.Entry file = 2;
+      uint32 current_part = 3;
+      uint32 nb_part = 4;
+      uint32 progress = 5;
+      Common.Hash peer_id = 6;
+   }
+   message Stats {
+      enum CacheStatus {
+         LOADING_CACHE_IN_PROGRESS = 0;
+         SCANNING_IN_PROGRESS = 1;
+         HASHING_IN_PROGRESS = 2;
+         UP_TO_DATE = 3;
+         UNKNOWN = 4;
+      }
+      CacheStatus cache_status = 1;
+      uint32 progress = 2;
+      uint32 download_rate = 3;
+      uint32 upload_rate = 4;
+   }
+   message Peer {
+      enum PeerStatus {
+         OK = 0;
+         VERSION_OUTDATED = 1;
+         MORE_RECENT_VERSION = 2;
+      }
+      Common.Hash peer_id = 1;
+      string nick = 2;
+      uint64 sharing_amount = 3;
+      uint32 download_rate = 6;
+      uint32 upload_rate = 7;
+      Common.IP ip = 4;
+      string core_version = 5;
+      PeerStatus status = 8;
+   }
+   message SharedEntry {
+      Common.SharedEntry entry = 1;
+      uint64 size = 2;
+      uint64 free_space = 3;
+   }
+   message Room {
+      string name = 1;
+      repeated Common.Hash peer_id = 2;
+      bool joined = 3;
+   }
+
+   repeated Peer peer = 2;
+   repeated SharedEntry shared_entry = 3;
+   bool integrity_check_enabled = 7;
+   bool password_defined = 10;
+   repeated Download download = 4;
+   repeated Upload upload = 5;
+   Stats stats = 6;
+   Common.Interface.Address.Protocol listenAny = 8;
+   repeated Common.Interface interface = 9;
+   repeated Room room = 11;
+}
+
+// id: 0x1021
+message AskForAuthentication {
+   uint64 salt = 1;
+   uint64 salt_challenge = 2;
+}
+
+// id: 0x1022
+message Authentication {
+   Common.Hash password_challenge = 1;
+}
+
+// id: 0x1023
+message AuthenticationResult {
+   enum Status {
+      AUTH_OK = 0;
+      AUTH_BAD_PASSWORD = 1;
+      AUTH_PASSWORD_NOT_DEFINED = 2;
+      AUTH_ERROR = 255;
+   }
+   Status status = 1;
+}
+
+// id: 0x1042
+message Tag {
+   uint64 tag = 1;
+}
+
+// id: 0x1051
+message Browse {
+   Common.Hash peer_id = 1;
+   Common.Entries dirs = 2;
+   bool get_roots = 3;
+}
+
+// id: 0x1053
+message BrowseResult {
+   uint64 tag = 1;
+   repeated Common.Entries entries = 2;
+}

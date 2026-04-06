@@ -1,0 +1,117 @@
+/**
+  * Some common messages.
+  * All string are encoded in UTF-8.
+  */
+
+syntax = "proto3";
+
+package Protos.Common;
+
+message Null {
+}
+
+enum TriState {
+   TS_NO_CHANGE = 0;
+   TS_TRUE = 1;
+   TS_FALSE = 2;
+}
+
+message Error {
+   string message = 1;
+}
+
+message Language {
+   string lang = 1;
+   string country = 2;
+}
+
+message Hash {
+   bytes hash = 1; // 28 bytes. If it doesn't exist the hash is null.
+}
+
+message IP {
+   enum Type {
+      IPv4 = 0;
+      IPv6 = 1;
+   }
+   Type type = 1;
+   bytes ip = 2;
+}
+
+message SharedEntry {
+   Hash id = 1;
+   string shared_name = 2;
+   string path = 3;
+}
+
+message Entry {
+   enum Type {
+      FILE = 0;
+      DIR = 1;
+   }
+   Type type = 1;
+   string path = 2;
+   string name = 3;
+   uint64 size = 4;
+   SharedEntry shared_entry = 5;
+   bool exists = 6;
+   bool is_empty = 7;
+   repeated Hash chunk = 8;
+}
+
+message Entries {
+   repeated Entry entry = 1;
+}
+
+message FindPattern {
+   string pattern = 2;
+   uint64 min_size = 3;
+   uint64 max_size = 4;
+   repeated string extension_filter = 5;
+   enum Category {
+      FILE_DIR = 0;
+      FILE = 1;
+      DIR = 2;
+   }
+   Category category = 6;
+}
+
+message FindResult {
+   message EntryLevel {
+      uint32 level = 1;
+      Entry entry = 2;
+   }
+   uint64 tag = 1;
+   repeated EntryLevel entry = 2;
+   Hash peer_id = 3;
+}
+
+message ChatMessage {
+   uint64 id = 1;
+   string message = 2;
+   Hash peer_id = 3;
+   uint64 time = 4;
+   string peer_nick = 5;
+   string chat_room = 6;
+   repeated Hash peer_ids_answer = 7;
+}
+
+message ChatMessages {
+   repeated ChatMessage message = 1;
+}
+
+message Interface {
+   message Address {
+      enum Protocol {
+         IPv6 = 0;
+         IPv4 = 1;
+      }
+      string address = 1;
+      Protocol protocol = 2;
+      bool listened = 3;
+   }
+   uint32 id = 1;
+   string name = 2;
+   repeated Address address = 3;
+   bool isUp = 4;
+}
