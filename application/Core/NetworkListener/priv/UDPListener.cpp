@@ -250,6 +250,19 @@ void UDPListener::sendIMAliveMessage()
    // so we can't rely on failure counting. Broadcast is cheap and reliable.
    this->sendBroadcastIMAlive();
 
+   // DG-LAN: send unicast heartbeat directly to every known peer.
+   // ZeroTier doesn't support multicast or broadcast, so without direct
+   // unicast heartbeats, ZT peers would time out after ~15 seconds.
+   {
+      const int messageSize = static_cast<int>(
+         Common::MessageHeader::HEADER_SIZE +
+         Common::MessageHeader::readHeader(this->buffer).getSize()
+      );
+      const QList<PM::IPeer*> peers = this->peerManager->getPeers();
+      for (PM::IPeer* peer : peers)
+         this->unicastSocket.writeDatagram(this->buffer, messageSize, peer->getIP(), peer->getPort());
+   }
+
    // DG-LAN: drain gossip candidates from PeerManager and probe each one
    const auto gossipCandidates = this->peerManager->takeGossipCandidates();
    if (!gossipCandidates.isEmpty())
@@ -257,21 +270,10 @@ void UDPListener::sendIMAliveMessage()
    for (const auto& candidate : gossipCandidates)
       this->sendUnicastIMAlive(candidate.first, candidate.second);
 
-   // DG-LAN: if no peers known and not already scanning, start subnet scan
-   if (this->peerManager->getNbOfPeers() == 0 && !this->subnetScanActive)
+   // DG-LAN: periodic subnet scan — every 12 heartbeats (~60 seconds).
+   // Unicast scan is the ONLY reliable discovery on ZeroTier.
+   if (!this->subnetScanActive && (this->imAliveCounter % 12 == 1))
       this->runSubnetScan();
-
-   // DG-LAN: if peers were discovered (scan succeeded), stop scan
-   if (this->subnetScanActive && this->peerManager->getNbOfPeers() > 0)
-   {
-      L_USER(QString("Network: subnet scan found %1 peer(s)").arg(numberOfPeers));
-      this->timerSubnetScan.stop();
-      this->subnetScanActive = false;
-      this->subnetScanTargets.clear();
-      // Also deactivate broadcast fallback if multicast seems to be working
-      this->broadcastFallbackActive = false;
-      this->multicastFailureCount = 0;
-   }
 }
 
 void UDPListener::rebindSockets()
@@ -315,11 +317,19 @@ void UDPListener::sendBroadcastIMAlive()
       if (!specificIface.isEmpty() && iface.name() != specificIface)
          continue;
 
+      // DG-LAN: skip packet-capture loopback adapters (Npcap/WinPcap)
+      if (iface.humanReadableName().contains("Npcap", Qt::CaseInsensitive) ||
+          iface.humanReadableName().contains("Loopback", Qt::CaseInsensitive))
+         continue;
+
       foreach (const QNetworkAddressEntry& entry, iface.addressEntries())
       {
          if (entry.ip().protocol() != QAbstractSocket::IPv4Protocol)
             continue;
          if (entry.broadcast().isNull())
+            continue;
+         // DG-LAN: skip APIPA/link-local addresses (169.254.x.x)
+         if ((entry.ip().toIPv4Address() & 0xFFFF0000) == 0xA9FE0000)
             continue;
 
          L_DEBU(QString("DG-LAN: Sending broadcast IMAlive to %1 via %2")
@@ -361,9 +371,18 @@ void UDPListener::runSubnetScan()
       if (!specificIface.isEmpty() && iface.name() != specificIface)
          continue;
 
+      // DG-LAN: skip packet-capture loopback adapters (Npcap/WinPcap)
+      if (iface.humanReadableName().contains("Npcap", Qt::CaseInsensitive) ||
+          iface.humanReadableName().contains("Loopback", Qt::CaseInsensitive))
+         continue;
+
       foreach (const QNetworkAddressEntry& entry, iface.addressEntries())
       {
          if (entry.ip().protocol() != QAbstractSocket::IPv4Protocol)
+            continue;
+
+         // DG-LAN: skip APIPA/link-local addresses (169.254.x.x)
+         if ((entry.ip().toIPv4Address() & 0xFFFF0000) == 0xA9FE0000)
             continue;
 
          const quint32 ip = entry.ip().toIPv4Address();
@@ -423,18 +442,7 @@ void UDPListener::sendNextSubnetScanProbe()
       this->subnetScanActive = false;
       this->subnetScanTargets.clear();
       this->subnetScanIndex = 0;
-      L_USER("Network: subnet scan complete \u2014 no new peers found");
-      return;
-   }
-
-   // Stop early if we found peers
-   if (this->peerManager->getNbOfPeers() > 0)
-   {
-      this->timerSubnetScan.stop();
-      this->subnetScanActive = false;
-      this->subnetScanTargets.clear();
-      this->subnetScanIndex = 0;
-      L_USER(QString("Network: subnet scan stopped \u2014 %1 peer(s) found").arg(this->peerManager->getNbOfPeers()));
+      L_DEBU("DG-LAN: subnet scan cycle complete");
       return;
    }
 
@@ -581,6 +589,49 @@ void UDPListener::processPendingUnicastDatagrams()
       try
       {
          const Common::Message& message = Common::Message::readMessageBody(header, this->bodyBuffer);
+
+         // DG-LAN: handle IMAlive received via unicast (subnet scan, broadcast, gossip).
+         // This is essential for ZeroTier where multicast doesn't work.
+         if (header.getType() == Common::MessageHeader::CORE_IM_ALIVE)
+         {
+            const Protos::Core::IMAlive& IMAliveMessage = message.getMessage<Protos::Core::IMAlive>();
+
+            this->peerManager->updatePeer(
+               header.getSenderID(),
+               peerAddress,
+               IMAliveMessage.port(),
+               Common::ProtoHelper::getStr(IMAliveMessage, &Protos::Core::IMAlive::nick),
+               IMAliveMessage.amount(),
+               Common::ProtoHelper::getStr(IMAliveMessage, &Protos::Core::IMAlive::core_version),
+               IMAliveMessage.download_rate(),
+               IMAliveMessage.upload_rate(),
+               IMAliveMessage.version()
+            );
+
+            if (IMAliveMessage.chunk_size() > 0)
+            {
+               QList<Common::Hash> hashes;
+               hashes.reserve(IMAliveMessage.chunk_size());
+               for (int i = 0; i < IMAliveMessage.chunk_size(); i++)
+                  hashes << IMAliveMessage.chunk(i).hash();
+
+               const QBitArray& bitArray = this->fileManager->haveChunks(hashes);
+
+               if (!bitArray.isNull())
+               {
+                  Protos::Core::ChunksOwned chunkOwnedMessage;
+                  chunkOwnedMessage.set_tag(IMAliveMessage.tag());
+                  chunkOwnedMessage.mutable_chunk_state()->Reserve(bitArray.size());
+                  for (int i = 0; i < bitArray.size(); i++)
+                     chunkOwnedMessage.add_chunk_state(bitArray[i]);
+                  this->send(Common::MessageHeader::CORE_CHUNKS_OWNED, chunkOwnedMessage, header.getSenderID());
+               }
+            }
+
+            emit received(message);
+            continue;
+         }
+
          PM::IPeer* peer = this->peerManager->getPeer(header.getSenderID());
          if (!peer || !peer->isAvailable())
             continue;
@@ -675,10 +726,19 @@ void UDPListener::initMulticastUDPSocket()
       if (!specificIface.isEmpty() && iface.name() != specificIface)
          continue;
 
-      // Only join if interface has an IPv4 address
+      // DG-LAN: skip packet-capture loopback adapters (Npcap/WinPcap)
+      if (iface.humanReadableName().contains("Npcap", Qt::CaseInsensitive) ||
+          iface.humanReadableName().contains("Loopback", Qt::CaseInsensitive))
+         continue;
+
+      // Only join if interface has a real (non-APIPA) IPv4 address
       bool hasIPv4 = false;
       foreach (const QNetworkAddressEntry& entry, iface.addressEntries())
-         if (entry.ip().protocol() == QAbstractSocket::IPv4Protocol) { hasIPv4 = true; break; }
+      {
+         if (entry.ip().protocol() == QAbstractSocket::IPv4Protocol &&
+             (entry.ip().toIPv4Address() & 0xFFFF0000) != 0xA9FE0000) // skip 169.254.x.x
+         { hasIPv4 = true; break; }
+      }
       if (!hasIPv4)
          continue;
 
