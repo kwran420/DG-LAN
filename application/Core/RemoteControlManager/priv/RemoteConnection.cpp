@@ -251,7 +251,11 @@ void RemoteConnection::refresh()
       )
       {
          const QList<QNetworkAddressEntry>& addresses = interface.addressEntries();
-         if (!addresses.isEmpty())
+         // DG-LAN: count IPv4 addresses only
+         bool hasIPv4 = false;
+         for (const auto& entry : addresses)
+            if (entry.ip().protocol() == QAbstractSocket::IPv4Protocol) { hasIPv4 = true; break; }
+         if (hasIPv4)
          {
             Protos::Common::Interface* interfaceMess = state.add_interface();
             interfaceMess->set_id(interface.index() == 0 ? Common::StringUtils::hashStringToInt(interface.name()) : interface.index());
@@ -260,9 +264,12 @@ void RemoteConnection::refresh()
             for (QListIterator<QNetworkAddressEntry> j(addresses); j.hasNext();)
             {
                QHostAddress address = j.next().ip();
+               // DG-LAN: skip IPv6 addresses — app is IPv4-only
+               if (address.protocol() == QAbstractSocket::IPv6Protocol)
+                  continue;
                Protos::Common::Interface::Address* addressMess = interfaceMess->add_address();
                Common::ProtoHelper::setStr(*addressMess, &Protos::Common::Interface::Address::mutable_address, address.toString());
-               addressMess->set_protocol(address.protocol() == QAbstractSocket::IPv6Protocol ? Protos::Common::Interface::Address::IPv6 : Protos::Common::Interface::Address::IPv4);
+               addressMess->set_protocol(Protos::Common::Interface::Address::IPv4);
                addressMess->set_listened(address == addressToListen);
             }
          }

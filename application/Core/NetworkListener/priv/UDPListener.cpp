@@ -604,7 +604,8 @@ void UDPListener::initMulticastUDPSocket()
 
    this->multicastGroup = Utils::getMulticastGroup();
 
-   if (!this->multicastSocket.bind(Utils::getCurrentAddressToListenTo(), MULTICAST_PORT))
+   // DG-LAN: bind to AnyIPv4 so we receive multicast from ALL interfaces (hybrid LAN+ZeroTier)
+   if (!this->multicastSocket.bind(QHostAddress::AnyIPv4, MULTICAST_PORT))
    {
       L_ERRO("Can't bind the multicast socket");
       return;
@@ -623,9 +624,41 @@ void UDPListener::initMulticastUDPSocket()
    const quint32 ttl = (ttlOverride > 0) ? ttlOverride : SETTINGS.get<quint32>("multicast_ttl");
    this->multicastSocket.setSocketOption(QAbstractSocket::MulticastTtlOption, ttl);
 
-   QNetworkInterface networkInterface = Utils::getCurrentInterfaceToListenTo();
-   if (networkInterface.isValid() ? !this->multicastSocket.joinMulticastGroup(this->multicastGroup, networkInterface) : !this->multicastSocket.joinMulticastGroup(this->multicastGroup))
-      L_ERRO(QString("Unable to join the multicast group: %1 on the interface: %2").arg(this->multicastGroup.toString()).arg(networkInterface.name()));
+   // DG-LAN: join multicast group on ALL non-loopback interfaces for hybrid LAN+ZeroTier discovery.
+   // A specific interface name can still be set to restrict to one interface.
+   const QString specificIface = SETTINGS.get<QString>("network_interface_name");
+   int joinedCount = 0;
+   foreach (const QNetworkInterface& iface, QNetworkInterface::allInterfaces())
+   {
+      if (!iface.isValid() ||
+          iface.flags().testFlag(QNetworkInterface::IsLoopBack) ||
+          !iface.flags().testFlag(QNetworkInterface::IsUp) ||
+          !iface.flags().testFlag(QNetworkInterface::IsRunning) ||
+          !iface.flags().testFlag(QNetworkInterface::CanMulticast))
+         continue;
+
+      // If a specific interface is configured, only join on that one
+      if (!specificIface.isEmpty() && iface.name() != specificIface)
+         continue;
+
+      // Only join if interface has an IPv4 address
+      bool hasIPv4 = false;
+      foreach (const QNetworkAddressEntry& entry, iface.addressEntries())
+         if (entry.ip().protocol() == QAbstractSocket::IPv4Protocol) { hasIPv4 = true; break; }
+      if (!hasIPv4)
+         continue;
+
+      if (this->multicastSocket.joinMulticastGroup(this->multicastGroup, iface))
+      {
+         L_USER(QString("Network: joined multicast on %1").arg(iface.humanReadableName()));
+         ++joinedCount;
+      }
+      else
+         L_WARN(QString("Network: failed to join multicast on %1: %2").arg(iface.humanReadableName()).arg(this->multicastSocket.errorString()));
+   }
+
+   if (joinedCount == 0)
+      L_ERRO("Unable to join the multicast group on any interface");
 
    static const int BUFFER_SIZE_UDP = SETTINGS.get<quint32>("udp_buffer_size");
    this->multicastSocket.setSocketOption(QAbstractSocket::SendBufferSizeSocketOption, BUFFER_SIZE_UDP);

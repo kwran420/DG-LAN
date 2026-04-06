@@ -270,23 +270,29 @@
        <item>
         <widget class="QGroupBox" name="grpDgLanNetwork">
          <property name="title">
-          <string>DG-LAN / ZeroTier Network</string>
+          <string>Advanced Network</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+         <property name="checked">
+          <bool>false</bool>
          </property>
          <layout class="QFormLayout" name="formDgLanNetwork">
           <item row="0" column="0">
            <widget class="QLabel" name="lblInterfaceName">
             <property name="text">
-             <string>Interface name</string>
+             <string>Restrict to interface</string>
             </property>
             <property name="toolTip">
-             <string>Name of the network interface to bind to (e.g. zt0 for ZeroTier). Leave empty for automatic selection.</string>
+             <string>Only use this specific network interface. Leave empty to use all interfaces (LAN + ZeroTier hybrid).</string>
             </property>
            </widget>
           </item>
           <item row="0" column="1">
            <widget class="QLineEdit" name="txtInterfaceName">
             <property name="placeholderText">
-             <string>e.g. zt0 (empty = auto)</string>
+             <string>empty = all interfaces (recommended)</string>
             </property>
            </widget>
           </item>
@@ -296,7 +302,7 @@
              <string>Multicast TTL override</string>
             </property>
             <property name="toolTip">
-             <string>Set to 1 for ZeroTier (multicast does not cross routers). 0 = use core default.</string>
+             <string>Override the multicast time-to-live. 0 = use default (31).</string>
             </property>
            </widget>
           </item>
