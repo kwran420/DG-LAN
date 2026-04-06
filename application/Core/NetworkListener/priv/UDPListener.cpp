@@ -249,6 +249,11 @@ void UDPListener::sendIMAliveMessage()
    if (this->broadcastFallbackActive)
       this->sendBroadcastIMAlive();
 
+   // DG-LAN: if no peers are known, always send broadcast as well (multicast may
+   // succeed at send level but fail at receive on ZeroTier / some routers).
+   if (numberOfPeers == 0)
+      this->sendBroadcastIMAlive();
+
    // DG-LAN: drain gossip candidates from PeerManager and probe each one
    const auto gossipCandidates = this->peerManager->takeGossipCandidates();
    if (!gossipCandidates.isEmpty())

@@ -232,8 +232,8 @@ Protos::Core::Settings* Core::createDefaultValuesSettings()
    // DG-LAN discovery defaults.
    settings->set_gossip_peer_ttl_minutes(30);
    settings->set_gossip_max_peers(50);
-   // network_interface_name = "" (auto), multicast_ttl_override = 0 (auto), force_ipv4 = false by proto3 defaults.
-   // multicast_failure_threshold = 0 means threshold check disabled (safe default).
+   settings->set_multicast_failure_threshold(3); // Activate broadcast fallback after 3 multicast failures.
+   // network_interface_name = "" (auto), multicast_ttl_override = 0 (auto) by proto3 defaults.
 
    return settings;
 }
