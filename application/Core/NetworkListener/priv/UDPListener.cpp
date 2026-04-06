@@ -245,14 +245,10 @@ void UDPListener::sendIMAliveMessage()
          .arg(QDateTime::currentDateTime().toString("HH:mm"))
          .arg(numberOfPeers));
 
-   // DG-LAN: if broadcast fallback is active, also send via broadcast
-   if (this->broadcastFallbackActive)
-      this->sendBroadcastIMAlive();
-
-   // DG-LAN: if no peers are known, always send broadcast as well (multicast may
-   // succeed at send level but fail at receive on ZeroTier / some routers).
-   if (numberOfPeers == 0)
-      this->sendBroadcastIMAlive();
+   // DG-LAN: always broadcast on ALL interfaces.
+   // Multicast silently fails on ZeroTier (send succeeds but never arrives),
+   // so we can't rely on failure counting. Broadcast is cheap and reliable.
+   this->sendBroadcastIMAlive();
 
    // DG-LAN: drain gossip candidates from PeerManager and probe each one
    const auto gossipCandidates = this->peerManager->takeGossipCandidates();
@@ -292,73 +288,111 @@ void UDPListener::rebindSockets()
    this->initUnicastUDPSocket();
 }
 
-// DG-LAN: Fallback level 2 — send IMAlive to subnet broadcast address.
+// DG-LAN: Send IMAlive via broadcast on ALL network interfaces.
+// ZeroTier doesn't support multicast, so broadcast is the primary discovery
+// mechanism for virtual networks. We send on every interface to support
+// hybrid LAN + ZeroTier setups.
 void UDPListener::sendBroadcastIMAlive()
 {
-   QHostAddress broadcast = Utils::getBroadcastAddress();
-   if (broadcast.isNull())
-   {
-      L_WARN("DG-LAN: sendBroadcastIMAlive: no broadcast address available");
-      return;
-   }
-
    // Reuse the existing buffer — it was just filled by sendIMAliveMessage()
    const int messageSize = static_cast<int>(
       Common::MessageHeader::HEADER_SIZE +
       Common::MessageHeader::readHeader(this->buffer).getSize()
    );
 
-   L_DEBU(QString("DG-LAN: Sending broadcast IMAlive to %1:%2").arg(broadcast.toString()).arg(MULTICAST_PORT));
+   const QString specificIface = SETTINGS.get<QString>("network_interface_name");
+   int sent = 0;
 
-   if (this->unicastSocket.writeDatagram(this->buffer, messageSize, broadcast, MULTICAST_PORT) == -1)
+   foreach (const QNetworkInterface& iface, QNetworkInterface::allInterfaces())
    {
-      L_WARN(QString("DG-LAN: broadcast IMAlive failed: %1").arg(this->unicastSocket.errorString()));
+      if (!iface.isValid() ||
+          iface.flags().testFlag(QNetworkInterface::IsLoopBack) ||
+          !iface.flags().testFlag(QNetworkInterface::IsUp) ||
+          !iface.flags().testFlag(QNetworkInterface::IsRunning))
+         continue;
+
+      // If a specific interface is configured, only broadcast on that one
+      if (!specificIface.isEmpty() && iface.name() != specificIface)
+         continue;
+
+      foreach (const QNetworkAddressEntry& entry, iface.addressEntries())
+      {
+         if (entry.ip().protocol() != QAbstractSocket::IPv4Protocol)
+            continue;
+         if (entry.broadcast().isNull())
+            continue;
+
+         L_DEBU(QString("DG-LAN: Sending broadcast IMAlive to %1 via %2")
+            .arg(entry.broadcast().toString()).arg(iface.humanReadableName()));
+
+         if (this->unicastSocket.writeDatagram(this->buffer, messageSize, entry.broadcast(), MULTICAST_PORT) == -1)
+            L_WARN(QString("DG-LAN: broadcast on %1 failed: %2")
+               .arg(iface.humanReadableName()).arg(this->unicastSocket.errorString()));
+         else
+            ++sent;
+
+         break; // one broadcast per interface is enough
+      }
    }
+
+   if (sent == 0)
+      L_WARN("DG-LAN: sendBroadcastIMAlive: no broadcast address available on any interface");
 }
 
-// DG-LAN: Fallback level 3 — enumerate all host addresses in the current subnet
-// and prepare a rate-limited probe list. No size cap — works on /16, /20, etc.
+// DG-LAN: Fallback level 3 — enumerate all host addresses in ALL subnets
+// and prepare a rate-limited probe list. Covers both LAN and ZeroTier.
 void UDPListener::runSubnetScan()
 {
    if (this->subnetScanActive)
       return;
 
-   QNetworkInterface iface = Utils::getCurrentInterfaceToListenTo();
-   if (!iface.isValid())
-      return;
-
    this->subnetScanTargets.clear();
 
-   foreach (const QNetworkAddressEntry& entry, iface.addressEntries())
+   const QString specificIface = SETTINGS.get<QString>("network_interface_name");
+
+   foreach (const QNetworkInterface& iface, QNetworkInterface::allInterfaces())
    {
-      if (entry.ip().protocol() != QAbstractSocket::IPv4Protocol)
+      if (!iface.isValid() ||
+          iface.flags().testFlag(QNetworkInterface::IsLoopBack) ||
+          !iface.flags().testFlag(QNetworkInterface::IsUp) ||
+          !iface.flags().testFlag(QNetworkInterface::IsRunning))
          continue;
 
-      const quint32 ip = entry.ip().toIPv4Address();
-      const quint32 mask = entry.netmask().toIPv4Address();
-      if (mask == 0)
+      if (!specificIface.isEmpty() && iface.name() != specificIface)
          continue;
 
-      const quint32 network = ip & mask;
-      const quint32 broadcast = network | (~mask);
-      const quint32 numHosts = broadcast - network - 1;
-
-      if (numHosts == 0)
-         continue;
-
-      L_USER(QString("Network: no peers found \u2014 scanning %1 host(s) in %2/%3")
-         .arg(numHosts)
-         .arg(QHostAddress(network).toString())
-         .arg(QHostAddress(mask).toString()));
-
-      for (quint32 h = 1; h <= numHosts; ++h)
+      foreach (const QNetworkAddressEntry& entry, iface.addressEntries())
       {
-         QHostAddress target(network + h);
-         if (target == entry.ip()) // skip our own address
+         if (entry.ip().protocol() != QAbstractSocket::IPv4Protocol)
             continue;
-         this->subnetScanTargets.append(target);
+
+         const quint32 ip = entry.ip().toIPv4Address();
+         const quint32 mask = entry.netmask().toIPv4Address();
+         if (mask == 0)
+            continue;
+
+         const quint32 network = ip & mask;
+         const quint32 broadcast = network | (~mask);
+         const quint32 numHosts = broadcast - network - 1;
+
+         if (numHosts == 0 || numHosts > 65534) // skip /16+ to avoid flooding
+            continue;
+
+         L_USER(QString("Network: scanning %1 host(s) in %2/%3 (%4)")
+            .arg(numHosts)
+            .arg(QHostAddress(network).toString())
+            .arg(QHostAddress(mask).toString())
+            .arg(iface.humanReadableName()));
+
+         for (quint32 h = 1; h <= numHosts; ++h)
+         {
+            QHostAddress target(network + h);
+            if (target == entry.ip()) // skip our own address
+               continue;
+            this->subnetScanTargets.append(target);
+         }
+         break; // one IPv4 entry per interface is enough
       }
-      break; // use first IPv4 entry
    }
 
    if (this->subnetScanTargets.isEmpty())
