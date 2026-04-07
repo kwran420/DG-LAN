@@ -27,8 +27,6 @@
 
 #include <Peers/PeerListModel.h>
 #include <Settings/SharedEntryListModel.h>
-#include <Downloads/DownloadsWidget.h>
-#include <Uploads/UploadsWidget.h>
 #include <Browse/BrowseWidget.h>
 #include <Browse/NetworkWidget.h>
 #include <Search/SearchWidget.h>
@@ -50,9 +48,6 @@ namespace GUI
       void openBrowseWindow(const Common::Hash& peerID);
       void openSearchWindow(const Protos::Common::FindPattern& findPattern, bool local = false);
 
-      void showDownloads();
-      void showUploads();
-
    signals:
 
    protected:
@@ -69,17 +64,10 @@ namespace GUI
 
       void removeWidget(QWidget* widget);
 
+   public slots:
       void onGlobalProgressChanged(quint64 completed, quint64 total);
 
    private:
-      QString getBusyIndicatorToolTip() const;
-
-      void addDownloadsWindow();
-      void removeDownloadsWindow();
-
-      void addUploadsWindow();
-      void removeUploadsWindow();
-
       BrowseWidget* addBrowseWindow(const Common::Hash& peerID);
 
    private slots:
@@ -96,18 +84,10 @@ namespace GUI
 
       QTabBar* mdiAreaTabBar;
 
-      // Permanent windows.
-      DownloadsWidget*       downloadsWidget;
-      UploadsWidget*         uploadsWidget;
       NetworkWidget*         networkWidget;
 
       QList<BrowseWidget*> browseWidgets;
       QList<SearchWidget*> searchWidgets;
-
-      // This widget is shown on the tab of the downloads page. It is visible only after D-LAN has started and during the loading
-      // of the cache (before the downloads are loaded).
-      // This widget is owned by the tab bar of the 'QMdiArea'.
-      BusyIndicator* downloadsBusyIndicator;
 
       SharedEntryListModel& sharedEntryListModel;
    };

@@ -23,6 +23,7 @@ using namespace GUI;
 #include <QCoreApplication>
 #include <QStringBuilder>
 #include <QHBoxLayout>
+#include <QMouseEvent>
 
 #include <Common/Settings.h>
 
@@ -37,15 +38,10 @@ MdiArea::MdiArea(QSharedPointer<RCC::ICoreConnection> coreConnection, PeerListMo
    coreConnection(coreConnection),
    peerListModel(peerListModel),
    taskbar(taskbar),
-   downloadsWidget(nullptr),
-   uploadsWidget(nullptr),
    networkWidget(nullptr),
-   downloadsBusyIndicator(nullptr),
    sharedEntryListModel(sharedEntryListModel)
 {
    this->setObjectName("mdiArea");
-   /*sizePolicy.setHeightForWidth(mdiArea->sizePolicy().hasHeightForWidth());
-   mdiArea->setSizePolicy(sizePolicy);*/
    this->setActivationOrder(QMdiArea::ActivationHistoryOrder);
    this->setViewMode(QMdiArea::TabbedView);
    this->setDocumentMode(true);
@@ -58,8 +54,6 @@ MdiArea::MdiArea(QSharedPointer<RCC::ICoreConnection> coreConnection, PeerListMo
    this->mdiAreaTabBar->installEventFilter(this);
    connect(this->mdiAreaTabBar, SIGNAL(tabMoved(int, int)), this, SLOT(tabMoved(int, int)));
 
-   this->addDownloadsWindow();
-
    this->networkWidget = new NetworkWidget(this->coreConnection, this->peerListModel, this->sharedEntryListModel);
    this->addSubWindow(this->networkWidget, Qt::CustomizeWindowHint);
    this->networkWidget->setWindowState(Qt::WindowMaximized);
@@ -68,7 +62,7 @@ MdiArea::MdiArea(QSharedPointer<RCC::ICoreConnection> coreConnection, PeerListMo
    connect(this->coreConnection.data(), SIGNAL(connected()), this, SLOT(coreConnected()));
    connect(this->coreConnection.data(), SIGNAL(disconnected(bool)), this, SLOT(coreDisconnected(bool)));
 
-   this->coreDisconnected(false); // Initial state.
+   this->coreDisconnected(false);
 }
 
 MdiArea::~MdiArea()
@@ -105,24 +99,8 @@ void MdiArea::openSearchWindow(const Protos::Common::FindPattern& findPattern, b
    this->addSearchWindow(findPattern, local);
 }
 
-void MdiArea::showDownloads()
-{
-   this->setActiveSubWindow(static_cast<QMdiSubWindow*>(this->downloadsWidget->parent()));
-}
-
-void MdiArea::showUploads()
-{
-   this->setActiveSubWindow(static_cast<QMdiSubWindow*>(this->uploadsWidget->parent()));
-}
-
 void MdiArea::changeEvent(QEvent* event)
 {
-   if (event->type() == QEvent::LanguageChange)
-   {
-      if (this->downloadsBusyIndicator)
-         this->downloadsBusyIndicator->setToolTip(this->getBusyIndicatorToolTip());
-   }
-
    QMdiArea::changeEvent(event);
 }
 
@@ -143,47 +121,18 @@ bool MdiArea::eventFilter(QObject* obj, QEvent* event)
    return QMdiArea::eventFilter(obj, event);
 }
 
-void MdiArea::newState(const Protos::GUI::State& state)
+void MdiArea::newState(const Protos::GUI::State&)
 {
-   if (this->downloadsBusyIndicator)
-   {
-      if (state.stats().cache_status() == Protos::GUI::State::Stats::LOADING_CACHE_IN_PROGRESS)
-         this->downloadsBusyIndicator->show();
-      else
-         this->downloadsBusyIndicator->hide();
-   }
 }
 
 void MdiArea::coreConnected()
 {
-   QList<quint32> windowsOrder = SETTINGS.getRepeated<quint32>("windowOrder");
-   static const QList<quint32> windowsOrderDefault = QList<quint32>() <<
-      Protos::GUI::Settings_Window_WIN_UPLOAD;
-
-   if (!QSet<quint32>(windowsOrder.begin(), windowsOrder.end()).contains(QSet<quint32>(windowsOrderDefault.begin(), windowsOrderDefault.end())))
-      windowsOrder = windowsOrderDefault;
-
-   for (QListIterator<quint32> i(windowsOrder); i.hasNext();)
-   {
-      switch (i.next())
-      {
-         case Protos::GUI::Settings_Window_WIN_UPLOAD: this->addUploadsWindow(); break;
-      }
-   }
-
-   if (this->downloadsWidget)
-      this->setActiveSubWindow(dynamic_cast<QMdiSubWindow*>(this->downloadsWidget->parent()));
 }
 
 void MdiArea::coreDisconnected(bool)
 {
    this->taskbar.setStatus(TaskbarButtonStatus::BUTTON_STATUS_NOPROGRESS);
-
-   this->removeUploadsWindow();
    this->removeAllWindows();
-
-   if (this->downloadsBusyIndicator)
-      this->downloadsBusyIndicator->hide();
 }
 
 void MdiArea::tabMoved(int, int)
@@ -254,59 +203,6 @@ void MdiArea::onGlobalProgressChanged(quint64 completed, quint64 total)
    {
       this->taskbar.setStatus(TaskbarButtonStatus::BUTTON_STATUS_NORMAL);
       this->taskbar.setProgress(completed, total);
-   }
-}
-
-QString MdiArea::getBusyIndicatorToolTip() const
-{
-   return tr("Waiting the cache loading process is finished before loading the download queue");
-}
-
-void MdiArea::addDownloadsWindow()
-{
-   if (this->downloadsWidget)
-      return;
-
-   this->downloadsWidget = new DownloadsWidget(this->coreConnection, this->peerListModel, this->sharedEntryListModel);
-   this->addSubWindow(this->downloadsWidget, Qt::CustomizeWindowHint);
-   this->mdiAreaTabBar->setTabData(this->mdiAreaTabBar->count() - 1, Protos::GUI::Settings_Window_WIN_DOWNLOAD);
-   this->downloadsWidget->setWindowState(Qt::WindowMaximized);
-
-   connect(this->downloadsWidget, SIGNAL(globalProgressChanged(quint64, quint64)), this, SLOT(onGlobalProgressChanged(quint64, quint64)));
-
-   this->downloadsBusyIndicator = new BusyIndicator();
-   this->downloadsBusyIndicator->setObjectName("tabWidget");
-   this->downloadsBusyIndicator->setToolTip(this->getBusyIndicatorToolTip());
-   this->mdiAreaTabBar->setTabButton(this->mdiAreaTabBar->count() - 1, QTabBar::RightSide, this->downloadsBusyIndicator);
-}
-
-void MdiArea::removeDownloadsWindow()
-{
-   if (this->downloadsWidget)
-   {
-      this->removeWidget(this->downloadsWidget);
-      this->downloadsWidget = 0;
-      this->downloadsBusyIndicator = 0;
-   }
-}
-
-void MdiArea::addUploadsWindow()
-{
-   if (this->uploadsWidget)
-      return;
-
-   this->uploadsWidget = new UploadsWidget(this->coreConnection, this->peerListModel);
-   this->addSubWindow(this->uploadsWidget, Qt::CustomizeWindowHint);
-   this->mdiAreaTabBar->setTabData(this->mdiAreaTabBar->count() - 1, Protos::GUI::Settings_Window_WIN_UPLOAD);
-   this->uploadsWidget->setWindowState(Qt::WindowMaximized);
-}
-
-void MdiArea::removeUploadsWindow()
-{
-   if (this->uploadsWidget)
-   {
-      this->removeWidget(this->uploadsWidget);
-      this->uploadsWidget = 0;
    }
 }
 

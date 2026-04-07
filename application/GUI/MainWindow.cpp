@@ -53,7 +53,7 @@ MainWindow::MainWindow(QSharedPointer<RCC::ICoreConnection> coreConnection, QWid
    coreConnection(coreConnection),
    ui(new Ui::MainWindow),
    searchDock(new SearchDock(this->coreConnection, this)),
-   peersDock(new PeersDock(this->coreConnection, this)),
+   peerListModel(coreConnection),
    customStyleLoaded(false),
    logAutoScroll(true),
    logModel(coreConnection)
@@ -62,12 +62,7 @@ MainWindow::MainWindow(QSharedPointer<RCC::ICoreConnection> coreConnection, QWid
 
    this->taskbar.setStatus(TaskbarButtonStatus::BUTTON_STATUS_NOPROGRESS);
 
-   this->mdiArea = new MdiArea(this->coreConnection, this->peersDock->getModel(), this->sharedEntryListModel, this->taskbar, this->ui->centralWidget);
-   /*QSizePolicy sizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-   sizePolicy.setHorizontalStretch(0);
-   sizePolicy.setVerticalStretch(0);
-   sizePolicy.setHeightForWidth(this->mdiArea->sizePolicy().hasHeightForWidth());
-   this->mdiArea->setSizePolicy(sizePolicy);*/
+   this->mdiArea = new MdiArea(this->coreConnection, this->peerListModel, this->sharedEntryListModel, this->taskbar, this->ui->centralWidget);
    this->ui->verticalLayout->addWidget(this->mdiArea);
 
    this->updateNotification = new ScrollingNotification(this);
@@ -80,17 +75,34 @@ MainWindow::MainWindow(QSharedPointer<RCC::ICoreConnection> coreConnection, QWid
 
    this->initialWindowFlags = this->windowFlags();
 
+   // Downloads dock
+   this->downloadsWidget = new DownloadsWidget(this->coreConnection, this->peerListModel, this->sharedEntryListModel);
+   this->downloadsDock = new QDockWidget(tr("Downloads"), this);
+   this->downloadsDock->setObjectName("downloadsDock");
+   this->downloadsDock->setWidget(this->downloadsWidget);
+   this->downloadsDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+   this->addDockWidget(Qt::BottomDockWidgetArea, this->downloadsDock);
+   connect(this->downloadsWidget, SIGNAL(globalProgressChanged(quint64, quint64)), this->mdiArea, SLOT(onGlobalProgressChanged(quint64, quint64)));
+
+   // Uploads dock
+   this->uploadsWidget = new UploadsWidget(this->coreConnection, this->peerListModel);
+   this->uploadsDock = new QDockWidget(tr("Uploads"), this);
+   this->uploadsDock->setObjectName("uploadsDock");
+   this->uploadsDock->setWidget(this->uploadsWidget);
+   this->uploadsDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+   this->addDockWidget(Qt::BottomDockWidgetArea, this->uploadsDock);
+   this->tabifyDockWidget(this->downloadsDock, this->uploadsDock);
+   this->downloadsDock->raise();
+
    StatusBar* statusBar = new StatusBar(this->coreConnection);
    ui->statusBar->addWidget(statusBar, 1);
    connect(statusBar, SIGNAL(showDockLog(bool)), this->ui->dockLog, SLOT(setVisible(bool)));
-   connect(statusBar, SIGNAL(downloadClicked()), this->mdiArea, SLOT(showDownloads()));
-   connect(statusBar, SIGNAL(uploadClicked()), this->mdiArea, SLOT(showUploads()));
+   connect(statusBar, &StatusBar::downloadClicked, [this]() { this->downloadsDock->show(); this->downloadsDock->raise(); });
+   connect(statusBar, &StatusBar::uploadClicked, [this]() { this->uploadsDock->show(); this->uploadsDock->raise(); });
 
    ///// Dockable widgets
    this->addDockWidget(Qt::LeftDockWidgetArea, this->searchDock);
    connect(this->searchDock, SIGNAL(search(const Protos::Common::FindPattern&, bool)), this, SLOT(search(const Protos::Common::FindPattern&, bool)));
-   this->addDockWidget(Qt::LeftDockWidgetArea, this->peersDock);
-   connect(this->peersDock, SIGNAL(browsePeer(Common::Hash)), this, SLOT(browsePeer(Common::Hash)));
    /////
 
    this->ui->tblLog->setModel(&this->logModel);

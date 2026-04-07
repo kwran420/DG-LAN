@@ -30,11 +30,13 @@
 #include <Log/LogDelegate.h>
 
 // Dockable widgets.
-#include <Peers/PeersDock.h>
 #include <Search/SearchDock.h>
 
+#include <Peers/PeerListModel.h>
 #include <Settings/SettingsWidget.h>
 #include <Settings/SharedEntryListModel.h>
+#include <Downloads/DownloadsWidget.h>
+#include <Uploads/UploadsWidget.h>
 #include <ScrollingNotification.h>
 #include <Taskbar/Taskbar.h>
 #include <MDI/MdiArea.h>
@@ -104,9 +106,14 @@ namespace GUI
       Ui::MainWindow* ui;
 
       SearchDock* searchDock;
-      PeersDock* peersDock;
+      PeerListModel peerListModel;
 
       MdiArea* mdiArea;
+
+      QDockWidget* downloadsDock;
+      DownloadsWidget* downloadsWidget;
+      QDockWidget* uploadsDock;
+      UploadsWidget* uploadsWidget;
       SettingsWidget* settingsWidget;
       SharedEntryListModel sharedEntryListModel;
 

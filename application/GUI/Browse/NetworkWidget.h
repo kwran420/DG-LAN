@@ -1,12 +1,11 @@
 #pragma once
 
 #include <QWidget>
-#include <QTreeView>
 #include <QTableView>
 #include <QSplitter>
 #include <QStandardItemModel>
+#include <QSortFilterProxyModel>
 #include <QSet>
-#include <QMap>
 #include <QIdentityProxyModel>
 
 #include <Common/Hash.h>
@@ -28,6 +27,7 @@ namespace GUI
       QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
       QVariant data(const QModelIndex& proxyIndex, int role = Qt::DisplayRole) const override;
    };
+
    class NetworkWidget : public QWidget
    {
       Q_OBJECT
@@ -51,14 +51,15 @@ namespace GUI
 
    private:
       void browsePeer(const Common::Hash& peerID);
-      void browseDir(const Common::Hash& peerID, const Protos::Common::Entry& dirEntry, QStandardItem* parentItem);
-      QStandardItem* findOrCreateChild(QStandardItem* parent, const QString& name, bool isDir);
+      void browseDir(const Common::Hash& peerID, const Protos::Common::Entry& dirEntry);
+      QStandardItem* findOrAddFile(const QString& name, quint64 size);
       void updatePeerCount(QStandardItem* item);
+      void addFileEntry(const Protos::Common::Entry& entry, const Common::Hash& peerID);
 
       static const int ROLE_ENTRY = Qt::UserRole + 1;
       static const int ROLE_PEER_IDS = Qt::UserRole + 2;
-      static const int ROLE_IS_DIR = Qt::UserRole + 3;
-      static const int ROLE_PEER_ID = Qt::UserRole + 4;
+      static const int ROLE_PEER_ID = Qt::UserRole + 3;
+      static const int ROLE_SIZE = Qt::UserRole + 4;
 
       QSharedPointer<RCC::ICoreConnection> coreConnection;
       PeerListModel& peerListModel;
@@ -67,8 +68,9 @@ namespace GUI
       QSplitter* splitter;
       QTableView* peerTableView;
       PeerSpeedProxy peerProxy;
-      QTreeView* fileTreeView;
+      QTableView* fileTableView;
       QStandardItemModel fileModel;
+      QSortFilterProxyModel fileSortProxy;
       DownloadMenu downloadMenu;
 
       QSet<Common::Hash> browsedPeers;

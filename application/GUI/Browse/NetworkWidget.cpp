@@ -33,7 +33,16 @@ QVariant PeerSpeedProxy::data(const QModelIndex& proxyIndex, int role) const
          QModelIndex col0 = index(proxyIndex.row(), 0, proxyIndex.parent());
          auto ti = QIdentityProxyModel::data(col0, Qt::DisplayRole).value<PeerListModel::TransferInformation>();
          if (ti.lanSpeed > 0)
-            return QString(Common::Global::formatByteSize(ti.lanSpeed) + "/s");
+         {
+            quint64 bps = static_cast<quint64>(ti.lanSpeed) * 8;
+            if (bps >= 1000000000ULL)
+               return QString(QString::number(bps / 1000000000.0, 'f', 1) + " Gbps");
+            if (bps >= 1000000ULL)
+               return QString(QString::number(bps / 1000000.0, 'f', 0) + " Mbps");
+            if (bps >= 1000ULL)
+               return QString(QString::number(bps / 1000.0, 'f', 0) + " Kbps");
+            return QString(QString::number(bps) + " bps");
+         }
          return QString();
       }
       if (role == Qt::TextAlignmentRole)
@@ -72,24 +81,31 @@ NetworkWidget::NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection
    this->peerTableView->setMaximumWidth(300);
    this->splitter->addWidget(this->peerTableView);
 
-   // Right panel: unified file list
-   this->fileTreeView = new QTreeView();
-   this->fileTreeView->setSelectionBehavior(QAbstractItemView::SelectRows);
-   this->fileTreeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
-   this->fileTreeView->setContextMenuPolicy(Qt::CustomContextMenu);
-   this->fileTreeView->setAlternatingRowColors(true);
+   // Right panel: flat file list (database of all files across peers)
+   this->fileTableView = new QTableView();
+   this->fileTableView->setSelectionBehavior(QAbstractItemView::SelectRows);
+   this->fileTableView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+   this->fileTableView->setContextMenuPolicy(Qt::CustomContextMenu);
+   this->fileTableView->setAlternatingRowColors(true);
+   this->fileTableView->setShowGrid(false);
+   this->fileTableView->verticalHeader()->setVisible(false);
+   this->fileTableView->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+   this->fileTableView->verticalHeader()->setDefaultSectionSize(QApplication::fontMetrics().height() + 4);
+   this->fileTableView->setSortingEnabled(true);
 
    this->fileModel.setHorizontalHeaderLabels({ tr("Name"), tr("Size"), tr("Peers") });
-   this->fileTreeView->setModel(&this->fileModel);
-   this->fileTreeView->header()->setSectionResizeMode(0, QHeaderView::Stretch);
-   this->fileTreeView->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-   this->fileTreeView->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-   this->splitter->addWidget(this->fileTreeView);
+   this->fileSortProxy.setSourceModel(&this->fileModel);
+   this->fileTableView->setModel(&this->fileSortProxy);
+   this->fileTableView->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+   this->fileTableView->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+   this->fileTableView->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+   this->fileTableView->sortByColumn(0, Qt::AscendingOrder);
+   this->splitter->addWidget(this->fileTableView);
 
    this->splitter->setStretchFactor(0, 0);
    this->splitter->setStretchFactor(1, 1);
 
-   connect(this->fileTreeView, &QTreeView::customContextMenuRequested, this, &NetworkWidget::displayContextMenuDownload);
+   connect(this->fileTableView, &QTableView::customContextMenuRequested, this, &NetworkWidget::displayContextMenuDownload);
    connect(&this->downloadMenu, SIGNAL(download()), this, SLOT(download()));
    connect(&this->downloadMenu, SIGNAL(downloadTo()), this, SLOT(downloadTo()));
    connect(&this->downloadMenu, SIGNAL(downloadTo(const QString&, const Common::Hash&)), this, SLOT(downloadTo(const QString&, const Common::Hash&)));
@@ -145,7 +161,6 @@ void NetworkWidget::browsePeer(const Common::Hash& peerID)
    this->browsedPeers.insert(peerID);
    auto browseResult = this->coreConnection->browse(peerID);
 
-   // Store peerID in the result's property so we can retrieve it in the slot  
    QByteArray idData(peerID.getData(), Common::Hash::HASH_SIZE);
    browseResult->setProperty("peerID", idData);
 
@@ -164,7 +179,6 @@ void NetworkWidget::browseRootResult(const google::protobuf::RepeatedPtrField<Pr
    QByteArray idData = senderObj->property("peerID").toByteArray();
    Common::Hash peerID(idData.constData());
 
-   // Remove this result from active list
    for (int i = 0; i < this->activeBrowseResults.size(); ++i)
    {
       if (this->activeBrowseResults[i].data() == senderObj)
@@ -174,67 +188,26 @@ void NetworkWidget::browseRootResult(const google::protobuf::RepeatedPtrField<Pr
       }
    }
 
-   if (entries.size() == 0)
-      return;
-
-   // Root entries: each Entries message contains children of one shared directory
    for (int i = 0; i < entries.size(); ++i)
    {
       const auto& entryList = entries.Get(i);
       for (int j = 0; j < entryList.entry_size(); ++j)
       {
          const auto& entry = entryList.entry(j);
-         const QString name = Common::ProtoHelper::getStr(entry, &Protos::Common::Entry::name);
-         QStandardItem* item = this->findOrCreateChild(nullptr, name, entry.type() == Protos::Common::Entry::DIR);
-
-         // Store entry data
-         QVariant existingEntry = item->data(ROLE_ENTRY);
-         if (!existingEntry.isValid())
-         {
-            QByteArray entryData;
-            entryData.resize(entry.ByteSizeLong());
-            entry.SerializeToArray(entryData.data(), entryData.size());
-            item->setData(entryData, ROLE_ENTRY);
-         }
-
-         // Track which peers have this entry
-         QByteArray peerIdBytes(peerID.getData(), Common::Hash::HASH_SIZE);
-         item->setData(peerIdBytes, ROLE_PEER_ID);
-         QStringList peerIds = item->data(ROLE_PEER_IDS).toStringList();
-         QString peerIdStr = QString::fromLatin1(peerIdBytes.toHex());
-         if (!peerIds.contains(peerIdStr))
-            peerIds.append(peerIdStr);
-         item->setData(peerIds, ROLE_PEER_IDS);
-         this->updatePeerCount(item);
-
-         // Recursively browse directories
          if (entry.type() == Protos::Common::Entry::DIR)
-            this->browseDir(peerID, entry, item);
+            this->browseDir(peerID, entry);
+         else
+            this->addFileEntry(entry, peerID);
       }
    }
 }
 
-void NetworkWidget::browseDir(const Common::Hash& peerID, const Protos::Common::Entry& dirEntry, QStandardItem* parentItem)
+void NetworkWidget::browseDir(const Common::Hash& peerID, const Protos::Common::Entry& dirEntry)
 {
    auto browseResult = this->coreConnection->browse(peerID, dirEntry);
 
    QByteArray idData(peerID.getData(), Common::Hash::HASH_SIZE);
    browseResult->setProperty("peerID", idData);
-
-   // Store parent item path for later lookup
-   QModelIndex parentIndex = this->fileModel.indexFromItem(parentItem);
-   browseResult->setProperty("parentRow", parentIndex.row());
-   browseResult->setProperty("parentPath", parentItem->text());
-
-   // Build a persistent path from root to this item for re-lookup
-   QStringList pathParts;
-   QStandardItem* cur = parentItem;
-   while (cur)
-   {
-      pathParts.prepend(cur->text());
-      cur = cur->parent();
-   }
-   browseResult->setProperty("treePath", pathParts);
 
    connect(browseResult.data(), SIGNAL(result(const google::protobuf::RepeatedPtrField<Protos::Common::Entries>&)),
            this, SLOT(browseSubResult(const google::protobuf::RepeatedPtrField<Protos::Common::Entries>&)));
@@ -250,9 +223,7 @@ void NetworkWidget::browseSubResult(const google::protobuf::RepeatedPtrField<Pro
    auto* senderObj = sender();
    QByteArray idData = senderObj->property("peerID").toByteArray();
    Common::Hash peerID(idData.constData());
-   QStringList treePath = senderObj->property("treePath").toStringList();
 
-   // Remove this result from active list
    for (int i = 0; i < this->activeBrowseResults.size(); ++i)
    {
       if (this->activeBrowseResults[i].data() == senderObj)
@@ -262,126 +233,103 @@ void NetworkWidget::browseSubResult(const google::protobuf::RepeatedPtrField<Pro
       }
    }
 
-   if (entries.size() == 0 || treePath.isEmpty())
-      return;
-
-   // Re-find the parent item by traversing the tree path
-   QStandardItem* parentItem = nullptr;
-   for (const QString& part : treePath)
+   for (int i = 0; i < entries.size(); ++i)
    {
-      parentItem = this->findOrCreateChild(parentItem, part, true);
-   }
-
-   const auto& entryList = entries.Get(0);
-   for (int j = 0; j < entryList.entry_size(); ++j)
-   {
-      const auto& entry = entryList.entry(j);
-      const QString name = Common::ProtoHelper::getStr(entry, &Protos::Common::Entry::name);
-      bool isDir = entry.type() == Protos::Common::Entry::DIR;
-      QStandardItem* item = this->findOrCreateChild(parentItem, name, isDir);
-
-      // Store entry data
-      QVariant existingEntry = item->data(ROLE_ENTRY);
-      if (!existingEntry.isValid())
+      const auto& entryList = entries.Get(i);
+      for (int j = 0; j < entryList.entry_size(); ++j)
       {
-         QByteArray entryData;
-         entryData.resize(entry.ByteSizeLong());
-         entry.SerializeToArray(entryData.data(), entryData.size());
-         item->setData(entryData, ROLE_ENTRY);
+         const auto& entry = entryList.entry(j);
+         if (entry.type() == Protos::Common::Entry::DIR)
+            this->browseDir(peerID, entry);
+         else
+            this->addFileEntry(entry, peerID);
       }
-
-      // Track peers
-      QByteArray peerIdBytes(peerID.getData(), Common::Hash::HASH_SIZE);
-      item->setData(peerIdBytes, ROLE_PEER_ID);
-      QStringList peerIds = item->data(ROLE_PEER_IDS).toStringList();
-      QString peerIdStr = QString::fromLatin1(peerIdBytes.toHex());
-      if (!peerIds.contains(peerIdStr))
-         peerIds.append(peerIdStr);
-      item->setData(peerIds, ROLE_PEER_IDS);
-      this->updatePeerCount(item);
-
-      if (isDir)
-         this->browseDir(peerID, entry, item);
    }
 }
 
-QStandardItem* NetworkWidget::findOrCreateChild(QStandardItem* parent, const QString& name, bool isDir)
+void NetworkWidget::addFileEntry(const Protos::Common::Entry& entry, const Common::Hash& peerID)
 {
-   // Search existing children
-   const int rowCount = parent ? parent->rowCount() : this->fileModel.rowCount();
-   for (int i = 0; i < rowCount; ++i)
+   const QString name = Common::ProtoHelper::getStr(entry, &Protos::Common::Entry::name);
+   quint64 size = entry.size();
+
+   QStandardItem* item = this->findOrAddFile(name, size);
+
+   QVariant existingEntry = item->data(ROLE_ENTRY);
+   if (!existingEntry.isValid())
    {
-      QStandardItem* child = parent ? parent->child(i, 0) : this->fileModel.item(i, 0);
-      if (child && child->text() == name)
-         return child;
+      QByteArray entryData;
+      entryData.resize(entry.ByteSizeLong());
+      entry.SerializeToArray(entryData.data(), entryData.size());
+      item->setData(entryData, ROLE_ENTRY);
+      item->setData(static_cast<qulonglong>(size), ROLE_SIZE);
    }
 
-   // Create new row with 3 columns: Name, Size, Peers
+   QByteArray peerIdBytes(peerID.getData(), Common::Hash::HASH_SIZE);
+   item->setData(peerIdBytes, ROLE_PEER_ID);
+   QStringList peerIds = item->data(ROLE_PEER_IDS).toStringList();
+   QString peerIdStr = QString::fromLatin1(peerIdBytes.toHex());
+   if (!peerIds.contains(peerIdStr))
+      peerIds.append(peerIdStr);
+   item->setData(peerIds, ROLE_PEER_IDS);
+   this->updatePeerCount(item);
+}
+
+QStandardItem* NetworkWidget::findOrAddFile(const QString& name, quint64 size)
+{
+   const int rowCount = this->fileModel.rowCount();
+   for (int i = 0; i < rowCount; ++i)
+   {
+      QStandardItem* item = this->fileModel.item(i, 0);
+      if (item && item->text() == name && item->data(ROLE_SIZE).toULongLong() == size)
+         return item;
+   }
+
    QStandardItem* nameItem = new QStandardItem(name);
    nameItem->setEditable(false);
-   nameItem->setData(isDir, ROLE_IS_DIR);
 
    QStandardItem* sizeItem = new QStandardItem();
    sizeItem->setEditable(false);
    sizeItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+   if (size > 0)
+      sizeItem->setText(Common::Global::formatByteSize(size));
 
    QStandardItem* peersItem = new QStandardItem("1");
    peersItem->setEditable(false);
    peersItem->setTextAlignment(Qt::AlignCenter);
 
-   if (parent)
-      parent->appendRow({ nameItem, sizeItem, peersItem });
-   else
-      this->fileModel.appendRow({ nameItem, sizeItem, peersItem });
-
+   this->fileModel.appendRow({ nameItem, sizeItem, peersItem });
    return nameItem;
 }
 
 void NetworkWidget::updatePeerCount(QStandardItem* item)
 {
    QStringList peerIds = item->data(ROLE_PEER_IDS).toStringList();
-   int count = peerIds.size();
-
-   // Update peers column (column 2)
-   QStandardItem* parent = item->parent();
    int row = item->row();
-   QStandardItem* peersItem = parent ? parent->child(row, 2) : this->fileModel.item(row, 2);
+   QStandardItem* peersItem = this->fileModel.item(row, 2);
    if (peersItem)
-      peersItem->setText(QString::number(count));
-
-   // Update size column (column 1) from stored entry
-   QByteArray entryData = item->data(ROLE_ENTRY).toByteArray();
-   if (!entryData.isEmpty())
-   {
-      Protos::Common::Entry entry;
-      if (entry.ParseFromArray(entryData.constData(), entryData.size()) && entry.size() > 0)
-      {
-         QStandardItem* sizeItem = parent ? parent->child(row, 1) : this->fileModel.item(row, 1);
-         if (sizeItem)
-            sizeItem->setText(Common::Global::formatByteSize(entry.size()));
-      }
-   }
+      peersItem->setText(QString::number(peerIds.size()));
 }
 
 void NetworkWidget::displayContextMenuDownload(const QPoint& point)
 {
-   QModelIndexList selectedRows = this->fileTreeView->selectionModel()->selectedRows();
+   QModelIndexList selectedRows = this->fileTableView->selectionModel()->selectedRows();
    if (selectedRows.isEmpty())
       return;
 
-   QPoint globalPosition = this->fileTreeView->mapToGlobal(point);
+   QPoint globalPosition = this->fileTableView->mapToGlobal(point);
    this->downloadMenu.show(globalPosition);
 }
 
 void NetworkWidget::download()
 {
-   QModelIndexList selectedRows = this->fileTreeView->selectionModel()->selectedRows();
+   QModelIndexList selectedRows = this->fileTableView->selectionModel()->selectedRows();
    if (selectedRows.isEmpty())
       return;
 
-   for (const QModelIndex& index : selectedRows)
+   for (const QModelIndex& proxyIndex : selectedRows)
    {
-      QStandardItem* item = this->fileModel.itemFromIndex(index);
+      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
       if (!item)
          continue;
 
@@ -408,10 +356,11 @@ void NetworkWidget::downloadTo()
 
 void NetworkWidget::downloadTo(const QString& path, const Common::Hash& sharedDirID)
 {
-   QModelIndexList selectedRows = this->fileTreeView->selectionModel()->selectedRows();
-   for (const QModelIndex& index : selectedRows)
+   QModelIndexList selectedRows = this->fileTableView->selectionModel()->selectedRows();
+   for (const QModelIndex& proxyIndex : selectedRows)
    {
-      QStandardItem* item = this->fileModel.itemFromIndex(index);
+      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
       if (!item)
          continue;
 

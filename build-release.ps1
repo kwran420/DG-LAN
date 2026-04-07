@@ -179,6 +179,9 @@ if (-not $SkipPublish) {
     $title = "DG-LAN $Version $versionTag".Trim()
     $notes = "Version: $Version $versionTag`nBuild: $bt"
 
+    # Disable gh interactive prompts so script doesn't hang
+    $env:GH_PROMPT_DISABLED = "1"
+
     # Delete existing release if present (allows re-publish)
     gh release view $tag 2>$null
     if ($LASTEXITCODE -eq 0) {
