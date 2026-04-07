@@ -36,7 +36,7 @@ static QString apiUrl()
 bool UpdateChecker::isAutoCheckEnabled()
 {
    QSettings s("DGLan", "DG-LAN");
-   return s.value("update/check_on_launch", false).toBool();
+   return s.value("update/check_on_launch", true).toBool();
 }
 
 void UpdateChecker::setAutoCheckEnabled(bool enabled)

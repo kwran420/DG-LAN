@@ -30,7 +30,6 @@
 #include <Log/LogDelegate.h>
 
 // Dockable widgets.
-#include <Search/SearchDock.h>
 
 #include <Peers/PeerListModel.h>
 #include <Settings/SettingsWidget.h>
@@ -105,7 +104,6 @@ namespace GUI
 
       Ui::MainWindow* ui;
 
-      SearchDock* searchDock;
       PeerListModel peerListModel;
 
       MdiArea* mdiArea;

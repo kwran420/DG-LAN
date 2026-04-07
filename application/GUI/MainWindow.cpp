@@ -52,7 +52,6 @@ MainWindow::MainWindow(QSharedPointer<RCC::ICoreConnection> coreConnection, QWid
    QMainWindow(parent),
    coreConnection(coreConnection),
    ui(new Ui::MainWindow),
-   searchDock(new SearchDock(this->coreConnection, this)),
    peerListModel(coreConnection),
    customStyleLoaded(false),
    logAutoScroll(true),
@@ -62,12 +61,12 @@ MainWindow::MainWindow(QSharedPointer<RCC::ICoreConnection> coreConnection, QWid
 
    this->taskbar.setStatus(TaskbarButtonStatus::BUTTON_STATUS_NOPROGRESS);
 
-   this->mdiArea = new MdiArea(this->coreConnection, this->peerListModel, this->sharedEntryListModel, this->taskbar, this->ui->centralWidget);
-   this->ui->verticalLayout->addWidget(this->mdiArea);
-
    this->updateNotification = new ScrollingNotification(this);
    this->ui->verticalLayout->addWidget(this->updateNotification);
    connect(this->updateNotification, &ScrollingNotification::clicked, this, &MainWindow::checkForUpdatesRequested);
+
+   this->mdiArea = new MdiArea(this->coreConnection, this->peerListModel, this->sharedEntryListModel, this->taskbar, this->ui->centralWidget);
+   this->ui->verticalLayout->addWidget(this->mdiArea);
 
    this->settingsWidget = new SettingsWidget(this->coreConnection, this->sharedEntryListModel);
    connect(this->settingsWidget, SIGNAL(languageChanged(QString)), this, SIGNAL(languageChanged(QString)));
@@ -99,11 +98,6 @@ MainWindow::MainWindow(QSharedPointer<RCC::ICoreConnection> coreConnection, QWid
    connect(statusBar, SIGNAL(showDockLog(bool)), this->ui->dockLog, SLOT(setVisible(bool)));
    connect(statusBar, &StatusBar::downloadClicked, [this]() { this->downloadsDock->show(); this->downloadsDock->raise(); });
    connect(statusBar, &StatusBar::uploadClicked, [this]() { this->uploadsDock->show(); this->uploadsDock->raise(); });
-
-   ///// Dockable widgets
-   this->addDockWidget(Qt::LeftDockWidgetArea, this->searchDock);
-   connect(this->searchDock, SIGNAL(search(const Protos::Common::FindPattern&, bool)), this, SLOT(search(const Protos::Common::FindPattern&, bool)));
-   /////
 
    this->ui->tblLog->setModel(&this->logModel);
    this->ui->tblLog->setItemDelegate(&this->logDelegate);
@@ -342,13 +336,6 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
    {
       switch (event->key())
       {
-      // Search.
-      case 'f':
-      case 'F':
-         this->searchDock->setFocusToLineEdit();
-         event->accept();
-         return;
-
       // Close the current window.
       case 'w':
       case 'W':

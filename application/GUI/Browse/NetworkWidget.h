@@ -3,6 +3,7 @@
 #include <QWidget>
 #include <QTableView>
 #include <QSplitter>
+#include <QLineEdit>
 #include <QStandardItemModel>
 #include <QSortFilterProxyModel>
 #include <QSet>
@@ -42,6 +43,7 @@ namespace GUI
    private slots:
       void refreshPeers();
       void coreDisconnected();
+      void peersRemoved(const QList<Common::Hash>& peerIDs);
       void browseRootResult(const google::protobuf::RepeatedPtrField<Protos::Common::Entries>& entries);
       void browseSubResult(const google::protobuf::RepeatedPtrField<Protos::Common::Entries>& entries);
       void displayContextMenuDownload(const QPoint& point);
@@ -68,6 +70,7 @@ namespace GUI
       QSplitter* splitter;
       QTableView* peerTableView;
       PeerSpeedProxy peerProxy;
+      QLineEdit* filterEdit;
       QTableView* fileTableView;
       QStandardItemModel fileModel;
       QSortFilterProxyModel fileSortProxy;

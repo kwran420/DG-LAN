@@ -81,7 +81,17 @@ NetworkWidget::NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection
    this->peerTableView->setMaximumWidth(300);
    this->splitter->addWidget(this->peerTableView);
 
-   // Right panel: flat file list (database of all files across peers)
+   // Right panel: filter bar + flat file list
+   QWidget* filePanel = new QWidget();
+   QVBoxLayout* filePanelLayout = new QVBoxLayout(filePanel);
+   filePanelLayout->setContentsMargins(0, 0, 0, 0);
+   filePanelLayout->setSpacing(0);
+
+   this->filterEdit = new QLineEdit();
+   this->filterEdit->setPlaceholderText(tr("Filter files..."));
+   this->filterEdit->setClearButtonEnabled(true);
+   filePanelLayout->addWidget(this->filterEdit);
+
    this->fileTableView = new QTableView();
    this->fileTableView->setSelectionBehavior(QAbstractItemView::SelectRows);
    this->fileTableView->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -95,17 +105,22 @@ NetworkWidget::NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection
 
    this->fileModel.setHorizontalHeaderLabels({ tr("Name"), tr("Size"), tr("Peers") });
    this->fileSortProxy.setSourceModel(&this->fileModel);
+   this->fileSortProxy.setFilterCaseSensitivity(Qt::CaseInsensitive);
+   this->fileSortProxy.setFilterKeyColumn(0);
    this->fileTableView->setModel(&this->fileSortProxy);
    this->fileTableView->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
    this->fileTableView->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
    this->fileTableView->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
    this->fileTableView->sortByColumn(0, Qt::AscendingOrder);
-   this->splitter->addWidget(this->fileTableView);
+   filePanelLayout->addWidget(this->fileTableView);
+
+   this->splitter->addWidget(filePanel);
 
    this->splitter->setStretchFactor(0, 0);
    this->splitter->setStretchFactor(1, 1);
 
    connect(this->fileTableView, &QTableView::customContextMenuRequested, this, &NetworkWidget::displayContextMenuDownload);
+   connect(this->filterEdit, &QLineEdit::textChanged, &this->fileSortProxy, &QSortFilterProxyModel::setFilterFixedString);
    connect(&this->downloadMenu, SIGNAL(download()), this, SLOT(download()));
    connect(&this->downloadMenu, SIGNAL(downloadTo()), this, SLOT(downloadTo()));
    connect(&this->downloadMenu, SIGNAL(downloadTo(const QString&, const Common::Hash&)), this, SLOT(downloadTo(const QString&, const Common::Hash&)));
@@ -113,6 +128,7 @@ NetworkWidget::NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection
    // Auto-browse peers when the peer list changes
    connect(&this->peerListModel, &QAbstractItemModel::layoutChanged, this, &NetworkWidget::refreshPeers);
    connect(&this->peerListModel, &QAbstractItemModel::rowsInserted, this, &NetworkWidget::refreshPeers);
+   connect(&this->peerListModel, &PeerListModel::peersRemoved, this, &NetworkWidget::peersRemoved);
    connect(this->coreConnection.data(), SIGNAL(disconnected(bool)), this, SLOT(coreDisconnected()));
 
    this->setWindowTitle(tr("Network"));
@@ -154,6 +170,46 @@ void NetworkWidget::coreDisconnected()
    this->activeBrowseResults.clear();
    this->browsedPeers.clear();
    this->fileModel.removeRows(0, this->fileModel.rowCount());
+}
+
+void NetworkWidget::peersRemoved(const QList<Common::Hash>& peerIDs)
+{
+   for (const Common::Hash& peerID : peerIDs)
+      this->browsedPeers.remove(peerID);
+
+   QSet<QString> removedHexIds;
+   for (const Common::Hash& peerID : peerIDs)
+   {
+      QByteArray bytes(peerID.getData(), Common::Hash::HASH_SIZE);
+      removedHexIds.insert(QString::fromLatin1(bytes.toHex()));
+   }
+
+   for (int row = this->fileModel.rowCount() - 1; row >= 0; --row)
+   {
+      QStandardItem* item = this->fileModel.item(row, 0);
+      if (!item)
+         continue;
+
+      QStringList peerIds = item->data(ROLE_PEER_IDS).toStringList();
+      QStringList remaining;
+      for (const QString& id : peerIds)
+      {
+         if (!removedHexIds.contains(id))
+            remaining.append(id);
+      }
+
+      if (remaining.isEmpty())
+      {
+         this->fileModel.removeRow(row);
+      }
+      else if (remaining.size() != peerIds.size())
+      {
+         item->setData(remaining, ROLE_PEER_IDS);
+         QStandardItem* peersItem = this->fileModel.item(row, 2);
+         if (peersItem)
+            peersItem->setText(QString::number(remaining.size()));
+      }
+   }
 }
 
 void NetworkWidget::browsePeer(const Common::Hash& peerID)
