@@ -7,13 +7,13 @@
 #include <QStandardItemModel>
 #include <QSet>
 #include <QMap>
+#include <QIdentityProxyModel>
 
 #include <Common/Hash.h>
 #include <Common/RemoteCoreController/ICoreConnection.h>
 #include <Common/RemoteCoreController/IBrowseResult.h>
 
 #include <Peers/PeerListModel.h>
-#include <Peers/PeerListDelegate.h>
 #include <Settings/SharedEntryListModel.h>
 #include <DownloadMenu.h>
 
@@ -21,6 +21,13 @@
 
 namespace GUI
 {
+   class PeerSpeedProxy : public QIdentityProxyModel
+   {
+   public:
+      using QIdentityProxyModel::QIdentityProxyModel;
+      QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
+      QVariant data(const QModelIndex& proxyIndex, int role = Qt::DisplayRole) const override;
+   };
    class NetworkWidget : public QWidget
    {
       Q_OBJECT
@@ -59,7 +66,7 @@ namespace GUI
 
       QSplitter* splitter;
       QTableView* peerTableView;
-      PeerListDelegate peerListDelegate;
+      PeerSpeedProxy peerProxy;
       QTreeView* fileTreeView;
       QStandardItemModel fileModel;
       DownloadMenu downloadMenu;

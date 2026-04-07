@@ -16,6 +16,7 @@
 - Group related functionality together; keep high cohesion within modules and low coupling between them
 
 ## Build & Test
+- always use the build-release.ps1 script for building and releasing — do not run build tools manually
 - Run the full test suite before committing — all tests must pass
 - Write tests alongside implementation (TDD encouraged)
 - Minimum 80% code coverage for production code

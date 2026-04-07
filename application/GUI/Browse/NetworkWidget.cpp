@@ -14,6 +14,34 @@ using namespace GUI;
 #include <Log.h>
 #include <Utils.h>
 
+QVariant PeerSpeedProxy::headerData(int section, Qt::Orientation orientation, int role) const
+{
+   if (orientation == Qt::Horizontal && role == Qt::DisplayRole)
+   {
+      if (section == 1) return QString("Peer");
+      if (section == 2) return QString("Speed");
+   }
+   return QIdentityProxyModel::headerData(section, orientation, role);
+}
+
+QVariant PeerSpeedProxy::data(const QModelIndex& proxyIndex, int role) const
+{
+   if (proxyIndex.column() == 2)
+   {
+      if (role == Qt::DisplayRole)
+      {
+         QModelIndex col0 = index(proxyIndex.row(), 0, proxyIndex.parent());
+         auto ti = QIdentityProxyModel::data(col0, Qt::DisplayRole).value<PeerListModel::TransferInformation>();
+         if (ti.lanSpeed > 0)
+            return QString(Common::Global::formatByteSize(ti.lanSpeed) + "/s");
+         return QString();
+      }
+      if (role == Qt::TextAlignmentRole)
+         return static_cast<int>(Qt::AlignRight | Qt::AlignVCenter);
+   }
+   return QIdentityProxyModel::data(proxyIndex, role);
+}
+
 NetworkWidget::NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection, PeerListModel& peerListModel, const SharedEntryListModel& sharedEntryListModel, QWidget* parent) :
    QWidget(parent),
    coreConnection(coreConnection),
@@ -27,14 +55,14 @@ NetworkWidget::NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection
    this->splitter = new QSplitter(Qt::Horizontal, this);
    mainLayout->addWidget(this->splitter);
 
-   // Left panel: peer list with speeds (reuse PeerListModel + PeerListDelegate)
+   // Left panel: peer list with names and LAN speed
    this->peerTableView = new QTableView();
-   this->peerTableView->setModel(&this->peerListModel);
-   this->peerTableView->setItemDelegate(&this->peerListDelegate);
-   this->peerTableView->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+   this->peerProxy.setSourceModel(&this->peerListModel);
+   this->peerTableView->setModel(&this->peerProxy);
+   this->peerTableView->setColumnHidden(0, true);
    this->peerTableView->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
    this->peerTableView->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-   this->peerTableView->horizontalHeader()->setVisible(false);
+   this->peerTableView->horizontalHeader()->setHighlightSections(false);
    this->peerTableView->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
    this->peerTableView->verticalHeader()->setDefaultSectionSize(QApplication::fontMetrics().height() + 4);
    this->peerTableView->verticalHeader()->setVisible(false);
@@ -97,7 +125,7 @@ void NetworkWidget::refreshPeers()
    for (int i = 0; i < count; ++i)
    {
       const Common::Hash peerID = this->peerListModel.getPeerID(i);
-      if (peerID.isNull() || this->peerListModel.isOurself(i))
+      if (peerID.isNull())
          continue;
       if (this->browsedPeers.contains(peerID))
          continue;
