@@ -14,19 +14,47 @@ using namespace GUI;
 #include <Log.h>
 #include <Utils.h>
 
+int PeerSpeedProxy::columnCount(const QModelIndex& parent) const
+{
+   if (!sourceModel())
+      return 0;
+   return sourceModel()->columnCount(mapToSource(parent)) + 1;
+}
+
+QModelIndex PeerSpeedProxy::index(int row, int column, const QModelIndex& parent) const
+{
+   if (!sourceModel())
+      return QModelIndex();
+   int srcCols = sourceModel()->columnCount(mapToSource(parent));
+   if (column >= srcCols)
+      return createIndex(row, column);
+   return QIdentityProxyModel::index(row, column, parent);
+}
+
+QModelIndex PeerSpeedProxy::mapToSource(const QModelIndex& proxyIndex) const
+{
+   if (!proxyIndex.isValid() || !sourceModel())
+      return QModelIndex();
+   int srcCols = sourceModel()->columnCount();
+   if (proxyIndex.column() >= srcCols)
+      return QModelIndex();
+   return QIdentityProxyModel::mapToSource(proxyIndex);
+}
+
 QVariant PeerSpeedProxy::headerData(int section, Qt::Orientation orientation, int role) const
 {
    if (orientation == Qt::Horizontal && role == Qt::DisplayRole)
    {
       if (section == 1) return QString("Peer");
-      if (section == 2) return QString("Speed");
+      if (section == 2) return QString("Shared");
+      if (section == 3) return QString("Speed");
    }
    return QIdentityProxyModel::headerData(section, orientation, role);
 }
 
 QVariant PeerSpeedProxy::data(const QModelIndex& proxyIndex, int role) const
 {
-   if (proxyIndex.column() == 2)
+   if (proxyIndex.column() == 3)
    {
       if (role == Qt::DisplayRole)
       {
@@ -71,6 +99,7 @@ NetworkWidget::NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection
    this->peerTableView->setColumnHidden(0, true);
    this->peerTableView->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
    this->peerTableView->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+   this->peerTableView->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
    this->peerTableView->horizontalHeader()->setHighlightSections(false);
    this->peerTableView->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
    this->peerTableView->verticalHeader()->setDefaultSectionSize(QApplication::fontMetrics().height() + 4);
@@ -78,7 +107,7 @@ NetworkWidget::NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection
    this->peerTableView->setSelectionBehavior(QAbstractItemView::SelectRows);
    this->peerTableView->setShowGrid(false);
    this->peerTableView->setAlternatingRowColors(false);
-   this->peerTableView->setMaximumWidth(300);
+   this->peerTableView->setMaximumWidth(400);
    this->splitter->addWidget(this->peerTableView);
 
    // Right panel: filter bar + flat file list

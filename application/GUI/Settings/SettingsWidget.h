@@ -55,6 +55,7 @@ namespace GUI
       void resetCoreAddress();
       void connectToCore();
       void disconnectFromTheCore();
+      void saveCoreSettings();
 
    signals:
       void languageChanged(const QString& filename);
@@ -77,8 +78,6 @@ namespace GUI
       void coreDisconnected();
 
       void refreshNetworkInterfaces();
-
-      void saveCoreSettings();
 
       void cmbLanguageChanged(int cmbIndex);
 

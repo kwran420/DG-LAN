@@ -7,6 +7,7 @@
 #pragma once
 
 #include <QDialog>
+#include <QString>
 
 namespace GUI
 {
@@ -19,7 +20,12 @@ namespace GUI
       static bool shouldShow();
       static void markShown();
 
+      QString selectedDirectory() const;
+
    protected:
       void paintEvent(QPaintEvent* event) override;
+
+   private:
+      QString chosenDir;
    };
 }

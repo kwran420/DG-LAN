@@ -1,9 +1,10 @@
 Add-Type -AssemblyName System.Drawing
 
-$logoPath = "C:\Users\kiera\OneDrive\Documents\DG-Lan\application\GUI\ressources\logo.png"
-$icoPath  = "C:\Users\kiera\OneDrive\Documents\DG-Lan\application\Common\ressources\icon.ico"
-$iconPng  = "C:\Users\kiera\OneDrive\Documents\DG-Lan\application\GUI\ressources\icon.png"
-$logPath  = "C:\Users\kiera\OneDrive\Documents\DG-Lan\gen_icons_log.txt"
+$root     = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$logoPath = Join-Path $root "application\GUI\ressources\logo.png"
+$icoPath  = Join-Path $root "application\Common\ressources\icon.ico"
+$iconPng  = Join-Path $root "application\GUI\ressources\icon.png"
+$logPath  = Join-Path $root "gen_icons_log.txt"
 
 Set-Content $logPath "Starting icon generation..."
 

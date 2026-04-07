@@ -61,6 +61,7 @@ namespace GUI
 
    public slots:
       void showUpdateNotification(const QString& version, const QString& url);
+      void addSharedDirectory(const QString& path);
 
    private slots:
       void coreConnectionError(RCC::ICoreConnection::ConnectionErrorCode errorCode);

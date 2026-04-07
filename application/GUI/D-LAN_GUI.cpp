@@ -206,6 +206,8 @@ void D_LAN_GUI::showMainWindow()
          QTimer::singleShot(200, this, [this]() {
             WelcomeDialog dlg(this->mainWindow);
             dlg.exec();
+            if (!dlg.selectedDirectory().isEmpty())
+               this->mainWindow->addSharedDirectory(dlg.selectedDirectory());
          });
       }
    }

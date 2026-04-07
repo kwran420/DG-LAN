@@ -256,6 +256,14 @@ void MainWindow::showUpdateNotification(const QString& version, const QString& u
    );
 }
 
+void MainWindow::addSharedDirectory(const QString& path)
+{
+   if (path.isEmpty())
+      return;
+   this->sharedEntryListModel.addEntries(QStringList{path});
+   this->settingsWidget->saveCoreSettings();
+}
+
 void MainWindow::logScrollChanged(int value)
 {
    this->logAutoScroll = value == this->ui->tblLog->verticalScrollBar()->maximum();

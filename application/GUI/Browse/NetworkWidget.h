@@ -25,6 +25,9 @@ namespace GUI
    {
    public:
       using QIdentityProxyModel::QIdentityProxyModel;
+      int columnCount(const QModelIndex& parent = QModelIndex()) const override;
+      QModelIndex index(int row, int column, const QModelIndex& parent = QModelIndex()) const override;
+      QModelIndex mapToSource(const QModelIndex& proxyIndex) const override;
       QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
       QVariant data(const QModelIndex& proxyIndex, int role = Qt::DisplayRole) const override;
    };
