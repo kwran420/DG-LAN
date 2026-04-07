@@ -91,7 +91,7 @@ namespace NL
 
    private:
       int writeMessageToBuffer(Common::MessageHeader::MessageType type, const google::protobuf::Message& message);
-      Common::MessageHeader readDatagramToBuffer(QUdpSocket& socket, QHostAddress& peerAddress);
+      Common::MessageHeader readDatagramToBuffer(QUdpSocket& socket, QHostAddress& peerAddress, bool& readError);
 
       Common::Hash getOwnID() const;
 

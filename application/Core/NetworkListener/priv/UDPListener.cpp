@@ -475,12 +475,19 @@ void UDPListener::sendUnicastIMAlive(const QHostAddress& addr, quint16 port)
 
 void UDPListener::processPendingMulticastDatagrams()
 {
-   while (this->multicastSocket.hasPendingDatagrams())
+   static const int MAX_DATAGRAMS_PER_CALL = 500;
+   int processed = 0;
+   while (this->multicastSocket.hasPendingDatagrams() && processed++ < MAX_DATAGRAMS_PER_CALL)
    {
       QHostAddress peerAddress;
-      const Common::MessageHeader& header = this->readDatagramToBuffer(this->multicastSocket, peerAddress);
+      bool readError = false;
+      const Common::MessageHeader& header = this->readDatagramToBuffer(this->multicastSocket, peerAddress, readError);
       if (header.isNull())
+      {
+         if (readError)
+            break;
          continue;
+      }
 
       try
       {
@@ -581,12 +588,19 @@ void UDPListener::processPendingMulticastDatagrams()
   */
 void UDPListener::processPendingUnicastDatagrams()
 {
-   while (this->unicastSocket.hasPendingDatagrams())
+   static const int MAX_DATAGRAMS_PER_CALL = 500;
+   int processed = 0;
+   while (this->unicastSocket.hasPendingDatagrams() && processed++ < MAX_DATAGRAMS_PER_CALL)
    {
       QHostAddress peerAddress;
-      const Common::MessageHeader& header =  UDPListener::readDatagramToBuffer(this->unicastSocket, peerAddress);
+      bool readError = false;
+      const Common::MessageHeader& header = this->readDatagramToBuffer(this->unicastSocket, peerAddress, readError);
       if (header.isNull())
+      {
+         if (readError)
+            break;
          continue;
+      }
 
       try
       {
@@ -797,13 +811,15 @@ int UDPListener::writeMessageToBuffer(Common::MessageHeader::MessageType type, c
 /**
   * @return A null header if error.
   */
-Common::MessageHeader UDPListener::readDatagramToBuffer(QUdpSocket& socket, QHostAddress& peerAddress)
+Common::MessageHeader UDPListener::readDatagramToBuffer(QUdpSocket& socket, QHostAddress& peerAddress, bool& readError)
 {
+   readError = false;
    quint16 port;
    const qint64 datagramSize = socket.readDatagram(this->buffer, BUFFER_SIZE, &peerAddress, &port);
    if (datagramSize == -1)
    {
-      L_WARN(QString("UDPListener::readDatagramToBuffer(..): Unable to read multicast datagram from address:port: %1:%2").arg(peerAddress.toString()).arg(port));
+      L_WARN(QString("UDPListener::readDatagramToBuffer: read failed from %1:%2 — %3").arg(peerAddress.toString()).arg(port).arg(socket.errorString()));
+      readError = true;
       return Common::MessageHeader();
    }
 
