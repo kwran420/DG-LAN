@@ -39,6 +39,7 @@ Download::Download(
 {
    // Special case when downloading the root of a drive like "C:/". In this case "C:" is the name of the entry and it becomes a part of the local entry path.
    std::replace(this->localEntry.mutable_path()->begin(), this->localEntry.mutable_path()->end(), ':', '_');
+   std::replace(this->localEntry.mutable_name()->begin(), this->localEntry.mutable_name()->end(), ':', '_');
 }
 
 Download::~Download()

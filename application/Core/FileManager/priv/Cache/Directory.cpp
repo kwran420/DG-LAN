@@ -238,6 +238,11 @@ Common::Path Directory::getPath() const
       dir = dir->parent;
       path.prependDir(dir->getName());
    }
+   // First-level children (direct child of root) must return "/" to distinguish
+   // from root entries which have path="". Without this, getDirectory() and
+   // getFile() can't tell first-level children apart from the root itself.
+   if (this->parent && path.isNull())
+      return Common::Path("/");
    return path;
 }
 

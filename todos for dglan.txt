@@ -1,0 +1,9 @@
+include number of peers that have this file
+make downloads visible
+hide settings in normal menus
+remove chat
+always show log
+make log more verbose - actually show what its doing.
+remove tab for clients and have it as one big giant list of files - no need to browse through multiple pc'
+maybe make it so that you can prioritse certain clients.
+clients should advertise connection upload speed (ethernet speed)

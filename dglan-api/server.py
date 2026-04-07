@@ -138,18 +138,24 @@ class CoreClient:
 
     async def disconnect(self):
         self._connected = False
+        self._state = None
+        self._pending_browse_future = None
+        self._browse_futures.clear()
         if self._listener_task:
             self._listener_task.cancel()
             try:
                 await self._listener_task
             except asyncio.CancelledError:
                 pass
+            self._listener_task = None
         if self.writer:
             self.writer.close()
             try:
                 await self.writer.wait_closed()
             except Exception:
                 pass
+            self.writer = None
+            self.reader = None
 
     # ── Background message listener ──────────────────────────
     async def _listen(self):
@@ -416,7 +422,8 @@ class APIServer:
             return self._cache
 
         if not self.core._connected:
-            return {"error": "Not connected to Core", "peer": "", "files": []}
+            self._cache = None  # Invalidate stale cache
+            return {"error": "Not connected to Core (reconnecting...)", "peer": "", "files": []}
 
         try:
             files = await self.core.get_all_files()
@@ -486,22 +493,37 @@ class APIServer:
 
 # ── Main ──────────────────────────────────────────────────────
 
+async def _core_connection_loop(core: CoreClient):
+    """Background task: keep the Core connection alive, reconnecting as needed."""
+    while True:
+        if not core._connected:
+            try:
+                await core.connect()
+                await core.wait_for_state()
+                log.info("Core connected. Peer ID: %s", core.peer_hex)
+            except Exception:
+                log.exception("Connection failed, retrying in 5s...")
+                await core.disconnect()
+                await asyncio.sleep(5)
+                continue
+        # Poll connection status every 2s
+        await asyncio.sleep(2)
+
+
 async def main(args):
     core = CoreClient(args.core_host, args.core_port, args.password or "")
     api = APIServer(core, args.http_host, args.http_port, args.cors_origins)
 
-    while True:
-        try:
-            await core.connect()
-            await core.wait_for_state()
-            log.info("Core connected. Peer ID: %s", core.peer_hex)
-            await api.start()
-        except KeyboardInterrupt:
-            break
-        except Exception:
-            log.exception("Connection failed, retrying in 5s...")
-            await core.disconnect()
-            await asyncio.sleep(5)
+    # Start the connection manager as a background task
+    conn_task = asyncio.create_task(_core_connection_loop(core))
+
+    try:
+        await api.start()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        conn_task.cancel()
+        await core.disconnect()
 
 
 if __name__ == "__main__":

@@ -135,7 +135,6 @@ Protos::Common::Entries Cache::getProtoEntries(const Protos::Common::Entry& dir,
   */
 Directory* Cache::getDirectory(const Protos::Common::Entry& dir) const
 {
-   // If we can't find the shared directory . . .
    if (!dir.has_shared_entry())
       return nullptr;
 
@@ -145,12 +144,21 @@ Directory* Cache::getDirectory(const Protos::Common::Entry& dir) const
    {
       if (sharedDir->getId() == dir.shared_entry().id().hash())
       {
-         QStringList folders = QDir::cleanPath(Common::ProtoHelper::getStr(dir, &Protos::Common::Entry::path)).split('/', QString::SkipEmptyParts);
+         Directory* rootDir = static_cast<Directory*>(sharedDir->getRootEntry());
 
-         if (!dir.path().empty()) // An empty path means the dir is the root (a SharedDirectory).
-            folders << Common::ProtoHelper::getStr(dir, &Protos::Common::Entry::name);
+         // Empty path means this IS the root shared entry itself.
+         if (dir.path().empty())
+            return rootDir;
 
-         Directory* currentDir = static_cast<Directory*>(sharedDir->getRootEntry());
+         // Build the folder list from the path, avoiding QDir::cleanPath("")->"."
+         QString pathStr = Common::ProtoHelper::getStr(dir, &Protos::Common::Entry::path);
+         QString cleaned = QDir::cleanPath(pathStr);
+         QStringList folders;
+         if (cleaned != ".")
+            folders = cleaned.split('/', QString::SkipEmptyParts);
+         folders << Common::ProtoHelper::getStr(dir, &Protos::Common::Entry::name);
+
+         Directory* currentDir = rootDir;
          foreach (QString folder, folders)
          {
             currentDir = currentDir->getSubDir(folder);
