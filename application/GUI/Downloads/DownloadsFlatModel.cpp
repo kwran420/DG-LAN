@@ -140,6 +140,25 @@ QVariant DownloadsFlatModel::data(const QModelIndex& index, int role) const
    if (!index.isValid() || index.row() >= this->downloads.size())
       return QVariant();
 
+   // In the flat view, show the relative path before the name so entries
+   // that share the same parent directory can be distinguished.
+   if (role == Qt::DisplayRole && index.column() == 0)
+   {
+      const Protos::GUI::State::Download& download = this->downloads[index.row()];
+      const QString& path = Common::ProtoHelper::getStr(download.local_entry(), &Protos::Common::Entry::path);
+      const QString& name = Common::ProtoHelper::getStr(download.local_entry(), &Protos::Common::Entry::name);
+      if (path.size() > 1)
+      {
+         QString display = path;
+         if (!display.endsWith('/'))
+            display.append('/');
+         if (display.startsWith('/'))
+            display.remove(0, 1);
+         return display.append(name);
+      }
+      return name;
+   }
+
    return DownloadsModel::getData(this->downloads[index.row()], index, role);
 }
 

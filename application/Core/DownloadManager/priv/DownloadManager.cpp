@@ -301,12 +301,25 @@ void DownloadManager::newEntries(const Protos::Common::Entries& remoteEntries)
    const Protos::Common::Entry& localEntry = dirDownload->getLocalEntry();
    const QString relativePath = Common::ProtoHelper::getStr(localEntry, &Protos::Common::Entry::path).append(Common::ProtoHelper::getStr(localEntry, &Protos::Common::Entry::name)).append("/");
 
+   L_WARN(QString("DM::newEntries: expanding DirDownload name='%1' path='%2' → relativePath='%3', %4 children")
+      .arg(Common::ProtoHelper::getStr(localEntry, &Protos::Common::Entry::name))
+      .arg(Common::ProtoHelper::getStr(localEntry, &Protos::Common::Entry::path))
+      .arg(relativePath)
+      .arg(remoteEntries.entry_size()));
+
    // Add files first then directories.
    for (auto type : QList<Protos::Common::Entry::Type> { Protos::Common::Entry::FILE, Protos::Common::Entry::DIR })
    {
       for (int n = 0; n < remoteEntries.entry_size(); n++)
          if (remoteEntries.entry(n).type() == type)
          {
+            const Protos::Common::Entry& childEntry = remoteEntries.entry(n);
+            L_WARN(QString("DM::newEntries: child[%1] name='%2' path='%3' type=%4")
+               .arg(n)
+               .arg(Common::ProtoHelper::getStr(childEntry, &Protos::Common::Entry::name))
+               .arg(Common::ProtoHelper::getStr(childEntry, &Protos::Common::Entry::path))
+               .arg(childEntry.type() == Protos::Common::Entry::FILE ? "FILE" : "DIR"));
+
             this->addDownload(
                remoteEntries.entry(n),
                dirDownload->getPeerSource(),
