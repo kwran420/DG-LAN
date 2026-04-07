@@ -59,7 +59,7 @@ QVariant LogModel::data(const QModelIndex& index, int role) const
    switch (index.column())
    {
    case 0:
-      return entry->getDateStr(false);
+      return entry->getDateStr(true);
 
    case 1:
       {
@@ -71,6 +71,15 @@ QVariant LogModel::data(const QModelIndex& index, int role) const
             break;
          case LM::SV_ERROR:
             message.append("[Error] ");
+            break;
+         case LM::SV_WARNING:
+            message.append("[Warning] ");
+            break;
+         case LM::SV_DEBUG:
+            message.append("[Debug] ");
+            break;
+         case LM::SV_END_USER:
+            message.append("[Info] ");
             break;
          default:;
          }
@@ -99,21 +108,11 @@ void LogModel::newLogEntries(const QList<QSharedPointer<LM::IEntry>>& entries)
 {
    QList<QSharedPointer<LM::IEntry>> filteredEntries;
 
-   // Report Warnings only in DEBUG mode and do not repeat several same messages.
    for (QListIterator<QSharedPointer<LM::IEntry>> i(entries); i.hasNext();)
    {
       const QSharedPointer<LM::IEntry>& entry = i.next();
-#ifndef DEBUG
-      if (entry->getSeverity() != LM::SV_WARNING)
-#endif
-      {
-         if (filteredEntries.isEmpty() || entry->getMessage() != filteredEntries.last()->getMessage())
-            filteredEntries << entry;
-      }
+      filteredEntries << entry;
    }
-
-   if (!filteredEntries.isEmpty() && !this->entries.isEmpty() && filteredEntries.last()->getMessage() == this->entries.last()->getMessage())
-      filteredEntries.removeLast();
 
    if (filteredEntries.isEmpty())
       return;

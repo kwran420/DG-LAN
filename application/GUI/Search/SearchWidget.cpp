@@ -201,7 +201,7 @@ SearchWidget::SearchWidget(QSharedPointer<RCC::ICoreConnection> coreConnection, 
 
    QList<quint32> columnSizes = SETTINGS.getRepeated<quint32>("search_column_size");
    if (columnSizes.size() != this->ui->treeView->header()->count())
-      columnSizes = QList<quint32>() << 275 << 200 << 60 << 80 << 80;
+      columnSizes = QList<quint32>() << 275 << 200 << 60 << 80 << 80 << 50;
    SETTINGS.set("search_column_size", columnSizes);
    SETTINGS.save();
    for (int i = 0; i < this->ui->treeView->header()->count(); i++)

@@ -22,6 +22,7 @@ using namespace GUI;
 #include <QMdiSubWindow>
 #include <QCoreApplication>
 #include <QStringBuilder>
+#include <QHBoxLayout>
 
 #include <Common/Settings.h>
 
@@ -31,17 +32,16 @@ using namespace GUI;
 #include <MDI/MdiWidget.h>
 #include <MDI/TabButtons.h>
 
-MdiArea::MdiArea(QSharedPointer<RCC::ICoreConnection> coreConnection, PeerListModel& peerListModel, Taskbar taskbar, QWidget* parent) :
+MdiArea::MdiArea(QSharedPointer<RCC::ICoreConnection> coreConnection, PeerListModel& peerListModel, SharedEntryListModel& sharedEntryListModel, Taskbar taskbar, QWidget* parent) :
    QMdiArea(parent),
-   emoticon(Utils::emoticonsDirectoryPath(), Constants::DEFAULT_EMOTICON_THEME),
    coreConnection(coreConnection),
    peerListModel(peerListModel),
    taskbar(taskbar),
-   settingsWidget(nullptr),
-   chatWidget(nullptr),
    downloadsWidget(nullptr),
    uploadsWidget(nullptr),
-   downloadsBusyIndicator(nullptr)
+   networkWidget(nullptr),
+   downloadsBusyIndicator(nullptr),
+   sharedEntryListModel(sharedEntryListModel)
 {
    this->setObjectName("mdiArea");
    /*sizePolicy.setHeightForWidth(mdiArea->sizePolicy().hasHeightForWidth());
@@ -58,7 +58,11 @@ MdiArea::MdiArea(QSharedPointer<RCC::ICoreConnection> coreConnection, PeerListMo
    this->mdiAreaTabBar->installEventFilter(this);
    connect(this->mdiAreaTabBar, SIGNAL(tabMoved(int, int)), this, SLOT(tabMoved(int, int)));
 
-   this->addSettingsWindow();
+   this->addDownloadsWindow();
+
+   this->networkWidget = new NetworkWidget(this->coreConnection, this->peerListModel, this->sharedEntryListModel);
+   this->addSubWindow(this->networkWidget, Qt::CustomizeWindowHint);
+   this->networkWidget->setWindowState(Qt::WindowMaximized);
 
    connect(this->coreConnection.data(), SIGNAL(newState(const Protos::GUI::State&)), this, SLOT(newState(const Protos::GUI::State&)));
    connect(this->coreConnection.data(), SIGNAL(connected()), this, SLOT(coreConnected()));
@@ -69,7 +73,6 @@ MdiArea::MdiArea(QSharedPointer<RCC::ICoreConnection> coreConnection, PeerListMo
 
 MdiArea::~MdiArea()
 {
-   this->removeSettingsWindow();
 }
 
 void MdiArea::focusNthWindow(int num)
@@ -89,8 +92,6 @@ void MdiArea::closeCurrentWindow()
 
       if (dynamic_cast<BrowseWidget*>(widget) || dynamic_cast<SearchWidget*>(widget))
          this->removeWidget(widget);
-      else if (dynamic_cast<ChatWidget*>(widget) && !dynamic_cast<ChatWidget*>(widget)->isGeneral())
-         this->leaveRoom(widget);
    }
 }
 
@@ -102,15 +103,6 @@ void MdiArea::openBrowseWindow(const Common::Hash& peerID)
 void MdiArea::openSearchWindow(const Protos::Common::FindPattern& findPattern, bool local)
 {
    this->addSearchWindow(findPattern, local);
-}
-
-void MdiArea::openChatWindow(const QString& roomName)
-{
-   if (!roomName.isEmpty())
-   {
-      this->addChatWindow(roomName);
-      this->newOpenedChatRoom = roomName;
-   }
 }
 
 void MdiArea::showDownloads()
@@ -153,24 +145,6 @@ bool MdiArea::eventFilter(QObject* obj, QEvent* event)
 
 void MdiArea::newState(const Protos::GUI::State& state)
 {
-   // Synchronize the joined chat rooms with the opened windows.
-   // There is two reasons for doing that:
-   //  1) The joined room may be persisted by the core.
-   //  2) Another GUI connected to the same core may open or close a chat room.
-   QSet<QString> joinedRooms;
-   for (int i = 0; i < state.room_size(); i++)
-      if (state.room(i).joined())
-         joinedRooms.insert(Common::ProtoHelper::getStr(state.room(i), &Protos::GUI::State::Room::name));
-
-   foreach (ChatWidget* chatWidget, this->chatRooms)
-      if (!joinedRooms.remove(chatWidget->getRoomName()) && chatWidget->getRoomName() != this->newOpenedChatRoom)
-         this->removeWidget(chatWidget);
-
-   foreach (QString roomName, joinedRooms)
-      this->addChatWindow(roomName, false);
-
-   this->newOpenedChatRoom.clear();
-
    if (this->downloadsBusyIndicator)
    {
       if (state.stats().cache_status() == Protos::GUI::State::Stats::LOADING_CACHE_IN_PROGRESS)
@@ -184,9 +158,6 @@ void MdiArea::coreConnected()
 {
    QList<quint32> windowsOrder = SETTINGS.getRepeated<quint32>("windowOrder");
    static const QList<quint32> windowsOrderDefault = QList<quint32>() <<
-      Protos::GUI::Settings_Window_WIN_SETTINGS <<
-      Protos::GUI::Settings_Window_WIN_CHAT <<
-      Protos::GUI::Settings_Window_WIN_DOWNLOAD <<
       Protos::GUI::Settings_Window_WIN_UPLOAD;
 
    if (!QSet<quint32>(windowsOrder.begin(), windowsOrder.end()).contains(QSet<quint32>(windowsOrderDefault.begin(), windowsOrderDefault.end())))
@@ -196,14 +167,12 @@ void MdiArea::coreConnected()
    {
       switch (i.next())
       {
-         case Protos::GUI::Settings_Window_WIN_SETTINGS: this->mdiAreaTabBar->moveTab(0, this->mdiAreaTabBar->count() - 1); break;
-         case Protos::GUI::Settings_Window_WIN_CHAT: this->addChatWindow(); break;
-         case Protos::GUI::Settings_Window_WIN_DOWNLOAD: this->addDownloadsWindow(); break;
          case Protos::GUI::Settings_Window_WIN_UPLOAD: this->addUploadsWindow(); break;
       }
    }
 
-   this->setActiveSubWindow(dynamic_cast<QMdiSubWindow*>(this->chatWidget->parent()));
+   if (this->downloadsWidget)
+      this->setActiveSubWindow(dynamic_cast<QMdiSubWindow*>(this->downloadsWidget->parent()));
 }
 
 void MdiArea::coreDisconnected(bool)
@@ -211,8 +180,6 @@ void MdiArea::coreDisconnected(bool)
    this->taskbar.setStatus(TaskbarButtonStatus::BUTTON_STATUS_NOPROGRESS);
 
    this->removeUploadsWindow();
-   this->removeDownloadsWindow();
-   this->removeChatWindow();
    this->removeAllWindows();
 
    if (this->downloadsBusyIndicator)
@@ -252,8 +219,6 @@ void MdiArea::removeWidget(QWidget* widget)
       this->browseWidgets.removeOne(browseWindow);
    else if (SearchWidget* searchWindow = dynamic_cast<SearchWidget*>(widget))
       this->searchWidgets.removeOne(searchWindow);
-   else if (ChatWidget* chatWindow = dynamic_cast<ChatWidget*>(widget))
-      this->chatRooms.removeOne(chatWindow);
 
    // Set a another sub window as active. If we don't do that the windows are all minimised (bug?).
    if (this->currentSubWindow() && widget == this->currentSubWindow()->widget())
@@ -279,13 +244,6 @@ void MdiArea::removeWidget(QWidget* widget)
    delete widget;
 }
 
-void MdiArea::leaveRoom(QWidget* widget)
-{
-   ChatWidget* room = static_cast<ChatWidget*>(widget);
-   this->coreConnection->leaveRoom(room->getRoomName());
-   this->removeWidget(widget);
-}
-
 void MdiArea::onGlobalProgressChanged(quint64 completed, quint64 total)
 {
    if (total == 0 || completed == total)
@@ -302,46 +260,6 @@ void MdiArea::onGlobalProgressChanged(quint64 completed, quint64 total)
 QString MdiArea::getBusyIndicatorToolTip() const
 {
    return tr("Waiting the cache loading process is finished before loading the download queue");
-}
-
-void MdiArea::addSettingsWindow()
-{
-   this->settingsWidget = new SettingsWidget(this->coreConnection, this->sharedEntryListModel);
-   connect(this->settingsWidget, SIGNAL(languageChanged(QString)), this, SIGNAL(languageChanged(QString)));
-   connect(this->settingsWidget, SIGNAL(styleChanged(QString)), this, SIGNAL(styleChanged(QString)));
-   this->addSubWindow(this->settingsWidget, Qt::CustomizeWindowHint);
-   this->mdiAreaTabBar->setTabData(this->mdiAreaTabBar->count() - 1, Protos::GUI::Settings_Window_WIN_SETTINGS);
-   this->settingsWidget->setWindowState(Qt::WindowMaximized);
-}
-
-void MdiArea::removeSettingsWindow()
-{
-   if (this->settingsWidget)
-   {
-      this->removeWidget(this->settingsWidget);
-      this->settingsWidget = nullptr;
-   }
-}
-
-void MdiArea::addChatWindow()
-{
-   if (this->chatWidget)
-      return;
-
-   this->chatWidget = new ChatWidget(this->coreConnection, this->emoticon);
-   connect(this->chatWidget, SIGNAL(browsePeer(Common::Hash)), this, SLOT(openBrowseWindow(Common::Hash)));
-   this->addSubWindow(this->chatWidget, Qt::CustomizeWindowHint);
-   this->mdiAreaTabBar->setTabData(this->mdiAreaTabBar->count() - 1, Protos::GUI::Settings_Window_WIN_CHAT);
-   this->chatWidget->setWindowState(Qt::WindowMaximized);
-}
-
-void MdiArea::removeChatWindow()
-{
-   if (this->chatWidget)
-   {
-      this->removeWidget(this->chatWidget);
-      this->chatWidget = 0;
-   }
 }
 
 void MdiArea::addDownloadsWindow()
@@ -453,47 +371,11 @@ SearchWidget* MdiArea::addSearchWindow(const Protos::Common::FindPattern& findPa
    return searchWindow;
 }
 
-ChatWidget* MdiArea::addChatWindow(const QString& roomName, bool switchTo)
-{
-   // If the chat room is already open.
-   for (QListIterator<ChatWidget*> i(this->chatRooms); i.hasNext();)
-   {
-      ChatWidget* chatWidget = i.next();
-      if (chatWidget->getRoomName() == roomName)
-      {
-         if (switchTo)
-            this->setActiveSubWindow(dynamic_cast<QMdiSubWindow*>(chatWidget->parent()));
-         return chatWidget;
-      }
-   }
-
-   QMdiSubWindow* currentWindow = this->currentSubWindow();
-
-   ChatWidget* chatWindow = new ChatWidget(this->coreConnection, this->emoticon, roomName);
-   connect(chatWindow, SIGNAL(browsePeer(Common::Hash)), this, SLOT(openBrowseWindow(Common::Hash)));
-   this->addSubWindow(chatWindow, Qt::CustomizeWindowHint);
-   chatWindow->setWindowState(Qt::WindowMaximized);
-   this->chatRooms << chatWindow;
-
-   TabCloseButton* closeButton = new TabCloseButton(chatWindow, nullptr, false, [](){ return tr("Leave room"); });
-   closeButton->setObjectName("tabWidget");
-   connect(closeButton, SIGNAL(clicked(QWidget*)), this, SLOT(leaveRoom(QWidget*)));
-   this->mdiAreaTabBar->setTabButton(this->mdiAreaTabBar->count() - 1, QTabBar::RightSide, closeButton);
-
-   if (!switchTo && currentWindow)
-      this->setActiveSubWindow(currentWindow);
-
-   return chatWindow;
-}
-
 void MdiArea::removeAllWindows()
 {
    foreach (BrowseWidget* widget, this->browseWidgets)
       this->removeWidget(widget);
 
    foreach (SearchWidget* widget, this->searchWidgets)
-      this->removeWidget(widget);
-
-   foreach (ChatWidget* widget, this->chatRooms)
       this->removeWidget(widget);
 }

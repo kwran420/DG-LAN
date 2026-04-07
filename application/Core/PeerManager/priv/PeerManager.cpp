@@ -128,7 +128,8 @@ void PeerManager::updatePeer(
    const QString& coreVersion,
    quint32 downloadRate,
    quint32 uploadRate,
-   quint32 protocolVersion
+   quint32 protocolVersion,
+   quint32 lanSpeed
 )
 {
    if (ID.isNull() || ID == this->self->getID())
@@ -146,7 +147,7 @@ void PeerManager::updatePeer(
 
    const bool wasDead = !peer->isAlive();
 
-   peer->update(IP, port, nick, sharingAmount, coreVersion, downloadRate, uploadRate, protocolVersion);
+   peer->update(IP, port, nick, sharingAmount, coreVersion, downloadRate, uploadRate, protocolVersion, lanSpeed);
 
    if (wasDead && peer->isAvailable())
       emit peerBecomesAvailable(peer);
@@ -283,38 +284,6 @@ QList<QPair<QHostAddress, quint16>> PeerManager::takeGossipCandidates()
    QList<QPair<QHostAddress, quint16>> result;
    result.swap(this->gossipCandidates);
    return result;
-}
-
-// DG-LAN: Probe known hosts (core seeders) at startup.
-// Adds them to the gossip candidate list so UDPListener sends unicast IMAlive
-// probes before the full subnet scan starts.
-void PeerManager::initKnownPeers()
-{
-   const Protos::Core::Settings* coreSettings =
-      dynamic_cast<const Protos::Core::Settings*>(SETTINGS.getSettingsMessage());
-
-   if (!coreSettings)
-   {
-      L_DEBU("DG-LAN: initKnownPeers — settings not available");
-      return;
-   }
-
-   L_DEBU(QString("DG-LAN: initKnownPeers — %1 known host(s)").arg(coreSettings->known_host_size()));
-
-   for (int i = 0; i < coreSettings->known_host_size(); ++i)
-   {
-      const Protos::Core::Settings_KnownHost& kh = coreSettings->known_host(i);
-      const QHostAddress addr(QString::fromStdString(kh.address()));
-      const quint16 port = kh.port() > 0
-         ? static_cast<quint16>(kh.port())
-         : static_cast<quint16>(SETTINGS.get<quint32>("unicast_base_port"));
-
-      if (!addr.isNull())
-      {
-         L_DEBU(QString("DG-LAN: Probing known host %1:%2").arg(addr.toString()).arg(port));
-         this->addGossipCandidate(addr, port);
-      }
-   }
 }
 
 void PeerManager::removeFromPending(QTcpSocket* socket)

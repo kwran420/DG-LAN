@@ -62,9 +62,12 @@ QVariant DownloadsModel::getData(const Protos::GUI::State::Download& download, c
          return Common::ProtoHelper::getStr(download, &Protos::GUI::State::Download::peer_source_nick);
 
       case 4:
-         if (download.peer_id_size() > 1)
-            return QString("+").append(QString::number(download.peer_id_size() - 1));
-         return QString();
+         {
+            int peerCount = download.peer_id_size();
+            if (peerCount > 0)
+               return QString::number(peerCount).append(peerCount == 1 ? tr(" peer") : tr(" peers"));
+            return QString();
+         }
 
       default: return QVariant();
       }
@@ -174,8 +177,6 @@ QVariant DownloadsModel::getData(const Protos::GUI::State::Download& download, c
    case Qt::SizeHintRole:
       if (index.column() == 2)
          return QSize(120, 0);
-      else if (index.column() == 4 && download.peer_id_size() <= 1)
-         return QSize(0, 0);
       else
          return QVariant();
    }

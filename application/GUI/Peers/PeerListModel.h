@@ -71,9 +71,10 @@ namespace GUI
       {
          quint32 downloadRate;
          quint32 uploadRate;
+         quint32 lanSpeed;
          bool isDownloadingOurData;
 
-         bool operator==(const TransferInformation& ti) const { return ti.downloadRate == this->downloadRate && ti.uploadRate == this->uploadRate && ti.isDownloadingOurData == this->isDownloadingOurData; }
+         bool operator==(const TransferInformation& ti) const { return ti.downloadRate == this->downloadRate && ti.uploadRate == this->uploadRate && ti.lanSpeed == this->lanSpeed && ti.isDownloadingOurData == this->isDownloadingOurData; }
          bool operator!=(const TransferInformation& ti) const { return !(ti == *this); }
       };
 

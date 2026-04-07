@@ -30,6 +30,7 @@ message IMAlive {
    uint64 amount = 4; // [byte] Amount of sharing.
    uint32 download_rate = 7; // [byte/s]
    uint32 upload_rate = 8; // [byte/s]
+   uint32 lan_speed = 11; // [byte/s] Configured network link speed.
 
    uint64 tag = 5; // A random number, all responds ('ChunkOwned' message) must repeat this number.
    repeated Common.Hash chunk = 6; // The chunks the core wants to download. May be empty.
@@ -221,7 +222,6 @@ message PeerInfo {
    string nick = 3;       // Display name
    bytes id = 4;          // Peer ID hash (20 bytes). May be empty if not known.
    uint64 last_seen = 5;  // Unix timestamp (seconds) when sender last received a live IMAlive from this peer.
-   bool is_core_seeder = 6; // True if the peer has advertised core_seeder_mode.
 }
 
 // Response to GetPeerList.

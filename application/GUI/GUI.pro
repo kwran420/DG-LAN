@@ -57,11 +57,11 @@ SOURCES += main.cpp\
     ../Protos/core_settings.pb.cc \
     Settings/SharedEntryListModel.cpp \
     StatusBar.cpp \
+    ScrollingNotification.cpp \
     DialogAbout.cpp \
     Log.cpp \
     CheckBoxList.cpp \
     Browse/BrowseModel.cpp \
-    Chat/ChatModel.cpp \
     Downloads/DownloadsFlatModel.cpp \
     Log/LogModel.cpp \
     Search/SearchModel.cpp \
@@ -77,33 +77,24 @@ SOURCES += main.cpp\
     Downloads/DownloadsModel.cpp \
     BusyIndicator.cpp \
     Log/LogDelegate.cpp \
-    Chat/RoomsModel.cpp \
-    Chat/RoomsDelegate.cpp \
     Peers/PeersDock.cpp \
     Peers/PeerListModel.cpp \
     Peers/PeerListDelegate.cpp \
-    Chat/RoomsDock.cpp \
     Search/SearchDock.cpp \
     MDI/TabButtons.cpp \
     MDI/MdiArea.cpp \
     Browse/BrowseWidget.cpp \
+    Browse/NetworkWidget.cpp \
     WelcomeDialog.cpp \
     UpdateChecker.cpp \
     UpdateDialog.cpp \
-    Chat/ChatWidget.cpp \
     Downloads/DownloadsWidget.cpp \
     Search/SearchWidget.cpp \
     Settings/SettingsWidget.cpp \
     Uploads/UploadsWidget.cpp \
     MDI/MdiWidget.cpp \
     ColorBox.cpp \
-    Chat/ChatTextEdit.cpp \
     Constants.cpp \
-    Emoticons/EmoticonsWidget.cpp \
-    Emoticons/Emoticons.cpp \
-    Emoticons/SingleEmoticonWidget.cpp \
-    AutoComplete/AutoComplete.cpp \
-    AutoComplete/AutoCompleteModel.cpp \
     Search/SearchUtils.cpp
 
 HEADERS  += MainWindow.h \
@@ -113,13 +104,13 @@ HEADERS  += MainWindow.h \
     ../Protos/core_settings.pb.h \
     Settings/SharedEntryListModel.h \
     StatusBar.h \
+    ScrollingNotification.h \
     Log.h \
     DialogAbout.h \
     CheckBoxList.h \
     CheckBoxModel.h \
     IFilter.h \
     Browse/BrowseModel.h \
-    Chat/ChatModel.h \
     Downloads/DownloadFilterStatus.h \
     Log/LogModel.h \
     Search/SearchModel.h \
@@ -139,33 +130,24 @@ HEADERS  += MainWindow.h \
     Taskbar/ITaskbarImpl.h \
     Taskbar/TaskbarTypes.h \
     Log/LogDelegate.h \
-    Chat/RoomsModel.h \
-    Chat/RoomsDelegate.h \
     Peers/PeersDock.h \
     Peers/PeerListModel.h \
     Peers/PeerListDelegate.h \
-    Chat/RoomsDock.h \
     Search/SearchDock.h \
     MDI/TabButtons.h \
     MDI/MdiArea.h \
     MDI/MdiWidget.h \
     Browse/BrowseWidget.h \
+    Browse/NetworkWidget.h \
     WelcomeDialog.h \
     UpdateChecker.h \
     UpdateDialog.h \
-    Chat/ChatWidget.h \
     Downloads/DownloadsWidget.h \
     Search/SearchWidget.h \
     Settings/SettingsWidget.h \
     Uploads/UploadsWidget.h \
     ColorBox.h \
-    Chat/ChatTextEdit.h \
     Constants.h \
-    Emoticons/EmoticonsWidget.h \
-    Emoticons/Emoticons.h \
-    Emoticons/SingleEmoticonWidget.h \
-    AutoComplete/AutoComplete.h \
-    AutoComplete/AutoCompleteModel.h \
     Search/SearchUtils.h
 
 FORMS    += MainWindow.ui \
@@ -174,16 +156,12 @@ FORMS    += MainWindow.ui \
     Settings/RemoteFileDialog.ui \
     Settings/AskNewPasswordDialog.ui \
     Peers/PeersDock.ui \
-    Chat/RoomsDock.ui \
     Search/SearchDock.ui \
     Browse/BrowseWidget.ui \
-    Chat/ChatWidget.ui \
     Downloads/DownloadsWidget.ui \
     Search/SearchWidget.ui \
     Settings/SettingsWidget.ui \
-    Uploads/UploadsWidget.ui \
-    Emoticons/SingleEmoticonWidget.ui \
-    AutoComplete/AutoComplete.ui
+    Uploads/UploadsWidget.ui
 
 RESOURCES += \
     ressources.qrc

@@ -61,6 +61,7 @@ namespace PM
       virtual quint64 getSharingAmount() const;
       virtual quint32 getDownloadRate() const;
       virtual quint32 getUploadRate() const;
+      virtual quint32 getLanSpeed() const;
 
       virtual quint32 getSpeed();
       virtual void setSpeed(quint32 newSpeed);
@@ -78,7 +79,8 @@ namespace PM
          const QString& coreVersion,
          quint32 downloadRate,
          quint32 uploadRate,
-         quint32 protocolVersion
+         quint32 protocolVersion,
+         quint32 lanSpeed = 0
       );
       virtual void setAsDead();
 
@@ -110,6 +112,7 @@ namespace PM
       quint64 sharingAmount;
       quint32 downloadRate;
       quint32 uploadRate;
+      quint32 lanSpeed;
 
       QElapsedTimer speedTimer;
       quint32 speed; // [bytes/s]

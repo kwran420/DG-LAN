@@ -60,6 +60,8 @@ namespace GUI
       void colorizeSelectedPeer();
       void uncolorizeSelectedPeer();
 
+      void setPeerPriority();
+
       void coreConnected();
       void coreDisconnected(bool force);
 

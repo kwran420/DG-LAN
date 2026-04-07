@@ -248,6 +248,8 @@ QVariant PeerListModel::data(const QModelIndex& index, int role) const
          toolTip +=
             tr("Download rate: ") % Common::Global::formatByteSize(peer->transferInformation.downloadRate) % "/s\n" %
             tr("Upload rate: ") % Common::Global::formatByteSize(peer->transferInformation.uploadRate) % "/s";
+         if (peer->transferInformation.lanSpeed > 0)
+            toolTip += "\n" % tr("LAN speed: ") % Common::Global::formatByteSize(peer->transferInformation.lanSpeed) % "/s";
          return toolTip;
       }
       else
@@ -346,7 +348,7 @@ void PeerListModel::updatePeers(const google::protobuf::RepeatedPtrField<Protos:
       const QString& nick = Common::ProtoHelper::getStr(peers.Get(i), &Protos::GUI::State::Peer::nick);
       const QString& coreVersion = Common::ProtoHelper::getStr(peers.Get(i), &Protos::GUI::State::Peer::core_version);
       const quint64 sharingAmount = peers.Get(i).sharing_amount();
-      const TransferInformation transferInformation { peers.Get(i).download_rate(), peers.Get(i).upload_rate(),  peersDownloadingOurData.contains(peerID) };
+      const TransferInformation transferInformation { peers.Get(i).download_rate(), peers.Get(i).upload_rate(), peers.Get(i).lan_speed(), peersDownloadingOurData.contains(peerID) };
       const Protos::GUI::State::Peer::PeerStatus status = peers.Get(i).status();
       const QHostAddress ip =
          peers.Get(i).has_ip() ?

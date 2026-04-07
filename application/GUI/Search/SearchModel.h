@@ -40,7 +40,8 @@ namespace GUI
       DIRECTORY = 1,
       RELEVANCE = 2,
       PEER = 3,
-      SIZE = 4
+      SIZE = 4,
+      PEERS = 5
    };
 
    class SearchModel : public BrowseModel

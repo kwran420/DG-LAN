@@ -31,9 +31,11 @@
 
 // Dockable widgets.
 #include <Peers/PeersDock.h>
-#include <Chat/RoomsDock.h>
 #include <Search/SearchDock.h>
 
+#include <Settings/SettingsWidget.h>
+#include <Settings/SharedEntryListModel.h>
+#include <ScrollingNotification.h>
 #include <Taskbar/Taskbar.h>
 #include <MDI/MdiArea.h>
 
@@ -56,6 +58,9 @@ namespace GUI
       void languageChanged(const QString& filename);
       void checkForUpdatesRequested();
 
+   public slots:
+      void showUpdateNotification(const QString& version, const QString& url);
+
    private slots:
       void coreConnectionError(RCC::ICoreConnection::ConnectionErrorCode errorCode);
       void coreConnected();
@@ -65,7 +70,7 @@ namespace GUI
 
       void search(const Protos::Common::FindPattern& findPattern, bool local);
 
-      void roomJoined(const QString& name);
+      void showSettings();
 
       void logScrollChanged(int value);
       void newLogMessage();
@@ -100,9 +105,10 @@ namespace GUI
 
       SearchDock* searchDock;
       PeersDock* peersDock;
-      RoomsDock* roomsDock;
 
       MdiArea* mdiArea;
+      SettingsWidget* settingsWidget;
+      SharedEntryListModel sharedEntryListModel;
 
       QPoint dragPosition; // Used by custom styles.
       bool customStyleLoaded;
@@ -113,5 +119,8 @@ namespace GUI
       LogDelegate logDelegate;
 
       Taskbar taskbar;
+
+      ScrollingNotification* updateNotification;
+      QString updateUrl;
    };
 }

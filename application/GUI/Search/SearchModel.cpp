@@ -135,6 +135,7 @@ QVariant SearchModel::headerData(int section, Qt::Orientation orientation, int r
       case 2: return tr("Relevance");
       case 3: return tr("Peer");
       case 4: return tr("Size");
+      case 5: return tr("Peers");
       default: return QAbstractItemModel::headerData(section, orientation, role);
       }
 
@@ -142,6 +143,7 @@ QVariant SearchModel::headerData(int section, Qt::Orientation orientation, int r
       switch (section)
       {
       case 4: return Qt::AlignRight;
+      case 5: return Qt::AlignRight;
       default: return QAbstractItemModel::headerData(section, orientation, role);
       }
    }
@@ -151,7 +153,7 @@ QVariant SearchModel::headerData(int section, Qt::Orientation orientation, int r
 
 int SearchModel::columnCount(const QModelIndex&) const
 {
-   return 5;
+   return 6;
 }
 
 int SearchModel::getNbFolders() const
@@ -499,6 +501,14 @@ QVariant SearchModel::SearchTree::data(int column) const
 
    case 4:
       return Common::Global::formatByteSize(this->getItem().size());
+
+   case 5:
+      if (this->getItem().type() == Protos::Common::Entry_Type_FILE)
+      {
+         int count = this->getNbChildren() > 0 ? this->getNbChildren() + 1 : 1;
+         return count;
+      }
+      return QVariant();
 
    default:
       return QVariant();

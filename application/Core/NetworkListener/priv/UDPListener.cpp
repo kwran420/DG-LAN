@@ -94,9 +94,6 @@ UDPListener::UDPListener(
    // DG-LAN: subnet scan timer — fires once per probe slot, stopped when not scanning
    connect(&this->timerSubnetScan, &QTimer::timeout, this, &UDPListener::sendNextSubnetScanProbe);
 
-   // DG-LAN: probe known hosts immediately at startup (fast-path before subnet scan)
-   this->peerManager->initKnownPeers();
-
    this->sendIMAliveMessage();
 }
 
@@ -188,6 +185,7 @@ void UDPListener::sendIMAliveMessage()
    IMAliveMessage.set_amount(this->fileManager->getAmount());
    IMAliveMessage.set_download_rate(this->downloadManager->getDownloadRate());
    IMAliveMessage.set_upload_rate(this->uploadManager->getUploadRate());
+   IMAliveMessage.set_lan_speed(SETTINGS.get<quint32>("lan_speed"));
 
    this->currentIMAliveTag = QRandomGenerator64::global()->generate64();
    IMAliveMessage.set_tag(this->currentIMAliveTag);
@@ -503,7 +501,8 @@ void UDPListener::processPendingMulticastDatagrams()
                   Common::ProtoHelper::getStr(IMAliveMessage, &Protos::Core::IMAlive::core_version),
                   IMAliveMessage.download_rate(),
                   IMAliveMessage.upload_rate(),
-                  IMAliveMessage.version()
+                  IMAliveMessage.version(),
+                  IMAliveMessage.lan_speed()
                );
 
                if (IMAliveMessage.chunk_size() > 0)
@@ -608,7 +607,8 @@ void UDPListener::processPendingUnicastDatagrams()
                Common::ProtoHelper::getStr(IMAliveMessage, &Protos::Core::IMAlive::core_version),
                IMAliveMessage.download_rate(),
                IMAliveMessage.upload_rate(),
-               IMAliveMessage.version()
+               IMAliveMessage.version(),
+               IMAliveMessage.lan_speed()
             );
 
             if (IMAliveMessage.chunk_size() > 0)

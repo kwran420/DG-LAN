@@ -146,6 +146,7 @@ void RemoteConnection::refresh()
    self->set_sharing_amount(this->fileManager->getAmount());
    self->set_download_rate(downloadRate);
    self->set_upload_rate(uploadRate);
+   self->set_lan_speed(SETTINGS.get<quint32>("lan_speed"));
    Common::ProtoHelper::setStr(*self, &Protos::GUI::State::Peer::mutable_nick, this->peerManager->getSelf()->getNick());
    Common::ProtoHelper::setStr(*self, &Protos::GUI::State::Peer::mutable_core_version, Common::Global::getVersionFull());
 
@@ -165,6 +166,7 @@ void RemoteConnection::refresh()
       protoPeer->set_sharing_amount(peer->getSharingAmount());
       protoPeer->set_download_rate(peer->getDownloadRate());
       protoPeer->set_upload_rate(peer->getUploadRate());
+      protoPeer->set_lan_speed(peer->getLanSpeed());
 
       const auto& peerIP = peer->getIP();
       if (!peerIP.isNull())
@@ -515,31 +517,12 @@ void RemoteConnection::onNewMessage(const Common::Message& message)
          if (currentAddressToListenTo != newAddressToListenTo || currentProtocol != newProtocol)
             this->networkListener->rebindSockets();
 
-         // DG-LAN: network / core-seeder settings.
+         // DG-LAN: network settings.
          if (!coreSettingsMessage.network_interface_name().empty())
             SETTINGS.set("network_interface_name", QString::fromStdString(coreSettingsMessage.network_interface_name()));
          SETTINGS.set("force_ipv4", coreSettingsMessage.force_ipv4());
          if (coreSettingsMessage.multicast_ttl_override() > 0)
             SETTINGS.set("multicast_ttl_override", static_cast<quint32>(coreSettingsMessage.multicast_ttl_override()));
-         SETTINGS.set("core_seeder_mode", coreSettingsMessage.core_seeder_mode());
-
-         // DG-LAN: rebuild known_host list.
-         {
-            Protos::Core::Settings* cs = dynamic_cast<Protos::Core::Settings*>(
-               const_cast<google::protobuf::Message*>(SETTINGS.getSettingsMessage()));
-            if (cs)
-            {
-               cs->clear_known_host();
-               for (int i = 0; i < coreSettingsMessage.known_host_size(); ++i)
-               {
-                  const auto& src = coreSettingsMessage.known_host(i);
-                  auto* dst = cs->add_known_host();
-                  dst->set_address(src.address());
-                  dst->set_port(src.port());
-                  dst->set_nick(src.nick());
-               }
-            }
-         }
 
          SETTINGS.save();
          this->refresh();

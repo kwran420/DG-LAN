@@ -128,6 +128,13 @@ void PeersDock::displayContextMenuPeers(const QPoint& point)
    menu.addAction(QIcon(":/icons/ressources/marble_green.png"), tr("Colorize in green"), this, SLOT(colorizeSelectedPeer()))->setData(QColor(0, 128, 0));
    menu.addAction(tr("Uncolorize"), this, SLOT(uncolorizeSelectedPeer()));
 
+   menu.addSeparator();
+
+   QMenu* priorityMenu = menu.addMenu(tr("Set Priority"));
+   priorityMenu->addAction(tr("High"), this, SLOT(setPeerPriority()))->setData(static_cast<int>(Protos::GUI::Settings::PRIORITY_HIGH));
+   priorityMenu->addAction(tr("Normal"), this, SLOT(setPeerPriority()))->setData(static_cast<int>(Protos::GUI::Settings::PRIORITY_NORMAL));
+   priorityMenu->addAction(tr("Low"), this, SLOT(setPeerPriority()))->setData(static_cast<int>(Protos::GUI::Settings::PRIORITY_LOW));
+
    menu.exec(this->ui->tblPeers->mapToGlobal(point));
 }
 
@@ -261,6 +268,44 @@ void PeersDock::uncolorizeSelectedPeer()
          highlightedPeers.mutable_peer()->RemoveLast();
          i--;
       }
+   }
+
+   SETTINGS.set("highlighted_peers", highlightedPeers);
+   SETTINGS.save();
+
+   this->ui->tblPeers->clearSelection();
+}
+
+void PeersDock::setPeerPriority()
+{
+   QAction* action = dynamic_cast<QAction*>(this->sender());
+   if (!action)
+      return;
+
+   Protos::GUI::Settings::PeerPriority priority = static_cast<Protos::GUI::Settings::PeerPriority>(action->data().toInt());
+
+   QSet<Common::Hash> peerIDs;
+   foreach (QModelIndex i, this->ui->tblPeers->selectionModel()->selectedIndexes())
+      peerIDs << this->peerListModel.getPeerID(i.row());
+
+   Protos::GUI::Settings::HighlightedPeers highlightedPeers = SETTINGS.get<Protos::GUI::Settings::HighlightedPeers>("highlighted_peers");
+
+   QSet<Common::Hash> found;
+   for (int i = 0; i < highlightedPeers.peer_size(); i++)
+   {
+      const Common::Hash peerID(highlightedPeers.peer(i).id().hash());
+      if (peerIDs.contains(peerID))
+      {
+         found << peerID;
+         highlightedPeers.mutable_peer(i)->set_priority(priority);
+      }
+   }
+
+   foreach (Common::Hash peerID, peerIDs - found)
+   {
+      Protos::GUI::Settings::HighlightedPeers::Peer* peer = highlightedPeers.add_peer();
+      peer->mutable_id()->set_hash(peerID.getData(), Common::Hash::HASH_SIZE);
+      peer->set_priority(priority);
    }
 
    SETTINGS.set("highlighted_peers", highlightedPeers);

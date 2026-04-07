@@ -89,7 +89,6 @@ Protos::GUI::Settings* createDefaultValuesSettings()
    settings->set_core_address("localhost");
    settings->set_core_port(59485);
 
-   settings->set_max_chat_message_displayed(500);
    settings->set_max_log_message_displayed(500);
    settings->set_search_time(3000);
    settings->set_socket_timeout(7000);
@@ -115,8 +114,6 @@ Protos::GUI::Settings* createDefaultValuesSettings()
    settings->set_search_max_size_value(0);
    settings->set_search_max_size_unit(Protos::GUI::Settings::MIB);
    settings->set_search_local(false);
-
-   settings->set_room_sort_type(Protos::GUI::Settings::BY_NAME);
 
    return settings;
 

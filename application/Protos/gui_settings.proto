@@ -15,7 +15,6 @@ message Settings {
 
    Common.Language language = 20;
 
-   uint32 max_chat_message_displayed = 4; // [default = 500].
    uint32 max_log_message_displayed = 5; // [default = 500]
    uint32 search_time = 7; // [default = 3000] [ms].
    uint32 socket_timeout = 8; // [default = 7000] [ms].
@@ -29,7 +28,6 @@ message Settings {
 
    enum Window {
       WIN_SETTINGS = 0;
-      WIN_CHAT = 1;
       WIN_DOWNLOAD = 2;
       WIN_UPLOAD = 3;
    }
@@ -47,10 +45,17 @@ message Settings {
    }
    PeerSortType peer_sort_type = 22; // [default = BY_SHARING_AMOUNT].
 
+   enum PeerPriority {
+      PRIORITY_NORMAL = 0;
+      PRIORITY_HIGH = 1;
+      PRIORITY_LOW = 2;
+   }
+
    message HighlightedPeers {
       message Peer {
          uint32 color = 1; // RGB.
          Common.Hash id = 2;
+         PeerPriority priority = 3;
       }
       repeated Peer peer = 1;
    }
@@ -82,22 +87,8 @@ message Settings {
    SizeUnit search_max_size_unit = 31; // [default = MIB].
    bool search_local = 34; // [default = false] Search among our own files.
 
-   enum RoomSortType {
-     BY_NAME = 0;
-     BY_NB_PEERS = 1;
-   }
-   RoomSortType room_sort_type = 36; // [default = BY_NAME].
-
    // DG-LAN network settings (stored locally, pushed to core on connect).
    string network_interface_name = 40; // e.g. "zt0" for ZeroTier. Empty = auto.
    bool force_ipv4 = 41;              // Force IPv4 (useful for ZeroTier).
    uint32 multicast_ttl_override = 42;// 0 = use core default; 1 recommended for ZeroTier.
-   bool core_seeder_mode = 43;        // This machine acts as always-on seeder.
-
-   message KnownHost {
-      string address = 1;
-      uint32 port    = 2;
-      string nick    = 3;
-   }
-   repeated KnownHost known_host = 44; // Pre-configured reliable peers probed at startup.
 }

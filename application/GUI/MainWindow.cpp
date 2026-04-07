@@ -35,6 +35,8 @@ using namespace GUI;
 #include <QMessageBox>
 #include <QColor>
 #include <QPen>
+#include <QDialog>
+#include <QVBoxLayout>
 
 #include <Protos/gui_settings.pb.h>
 
@@ -52,7 +54,6 @@ MainWindow::MainWindow(QSharedPointer<RCC::ICoreConnection> coreConnection, QWid
    ui(new Ui::MainWindow),
    searchDock(new SearchDock(this->coreConnection, this)),
    peersDock(new PeersDock(this->coreConnection, this)),
-   roomsDock(new RoomsDock(this->coreConnection, this)),
    customStyleLoaded(false),
    logAutoScroll(true),
    logModel(coreConnection)
@@ -61,15 +62,21 @@ MainWindow::MainWindow(QSharedPointer<RCC::ICoreConnection> coreConnection, QWid
 
    this->taskbar.setStatus(TaskbarButtonStatus::BUTTON_STATUS_NOPROGRESS);
 
-   this->mdiArea = new MdiArea(this->coreConnection, this->peersDock->getModel(), this->taskbar, this->ui->centralWidget);
+   this->mdiArea = new MdiArea(this->coreConnection, this->peersDock->getModel(), this->sharedEntryListModel, this->taskbar, this->ui->centralWidget);
    /*QSizePolicy sizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
    sizePolicy.setHorizontalStretch(0);
    sizePolicy.setVerticalStretch(0);
    sizePolicy.setHeightForWidth(this->mdiArea->sizePolicy().hasHeightForWidth());
    this->mdiArea->setSizePolicy(sizePolicy);*/
    this->ui->verticalLayout->addWidget(this->mdiArea);
-   connect(this->mdiArea, SIGNAL(languageChanged(QString)), this, SIGNAL(languageChanged(QString)));
-   connect(this->mdiArea, SIGNAL(styleChanged(QString)), this, SLOT(loadCustomStyle(QString)));
+
+   this->updateNotification = new ScrollingNotification(this);
+   this->ui->verticalLayout->addWidget(this->updateNotification);
+   connect(this->updateNotification, &ScrollingNotification::clicked, this, &MainWindow::checkForUpdatesRequested);
+
+   this->settingsWidget = new SettingsWidget(this->coreConnection, this->sharedEntryListModel);
+   connect(this->settingsWidget, SIGNAL(languageChanged(QString)), this, SIGNAL(languageChanged(QString)));
+   connect(this->settingsWidget, SIGNAL(styleChanged(QString)), this, SLOT(loadCustomStyle(QString)));
 
    this->initialWindowFlags = this->windowFlags();
 
@@ -84,8 +91,6 @@ MainWindow::MainWindow(QSharedPointer<RCC::ICoreConnection> coreConnection, QWid
    connect(this->searchDock, SIGNAL(search(const Protos::Common::FindPattern&, bool)), this, SLOT(search(const Protos::Common::FindPattern&, bool)));
    this->addDockWidget(Qt::LeftDockWidgetArea, this->peersDock);
    connect(this->peersDock, SIGNAL(browsePeer(Common::Hash)), this, SLOT(browsePeer(Common::Hash)));
-   this->addDockWidget(Qt::LeftDockWidgetArea, this->roomsDock);
-   connect(this->roomsDock, SIGNAL(roomJoined(QString)), this, SLOT(roomJoined(QString)));
    /////
 
    this->ui->tblLog->setModel(&this->logModel);
@@ -113,7 +118,11 @@ MainWindow::MainWindow(QSharedPointer<RCC::ICoreConnection> coreConnection, QWid
    connect(this->ui->butMinimize, SIGNAL(clicked()), this, SLOT(showMinimized()));
    connect(this->ui->butMaximize, SIGNAL(clicked()), this, SLOT(maximize()));
 
-   // ── Help menu bar ─────────────────────────────────────────────────────────
+   // ── Menu bar ──────────────────────────────────────────────────────────────
+   QMenu* settingsMenu = menuBar()->addMenu(tr("Settings"));
+   QAction* actOpenSettings = settingsMenu->addAction(tr("Preferences..."));
+   connect(actOpenSettings, &QAction::triggered, this, &MainWindow::showSettings);
+
    QMenu* helpMenu = menuBar()->addMenu(tr("Help"));
    QAction* actCheckUpdate = helpMenu->addAction(tr("Check for Updates..."));
    connect(actCheckUpdate, &QAction::triggered, this, &MainWindow::checkForUpdatesRequested);
@@ -144,6 +153,7 @@ MainWindow::~MainWindow()
    this->coreConnection->disconnect(this); // Disconnect all signals.
    this->logModel.disconnect(this);
 
+   delete this->settingsWidget;
    delete this->ui;
 }
 
@@ -213,9 +223,31 @@ void MainWindow::search(const Protos::Common::FindPattern& findPattern, bool loc
    this->mdiArea->openSearchWindow(findPattern, local);
 }
 
-void MainWindow::roomJoined(const QString& name)
+void MainWindow::showSettings()
 {
-   this->mdiArea->openChatWindow(name);
+   QDialog dialog(this);
+   dialog.setWindowTitle(tr("Settings"));
+   dialog.setMinimumSize(700, 500);
+
+   QVBoxLayout* layout = new QVBoxLayout(&dialog);
+   layout->setContentsMargins(0, 0, 0, 0);
+
+   this->settingsWidget->setParent(&dialog);
+   layout->addWidget(this->settingsWidget);
+   this->settingsWidget->show();
+
+   dialog.exec();
+
+   this->settingsWidget->setParent(nullptr);
+   this->settingsWidget->hide();
+}
+
+void MainWindow::showUpdateNotification(const QString& version, const QString& url)
+{
+   this->updateUrl = url;
+   this->updateNotification->showMessage(
+      tr("Update available: version %1 — click here to download").arg(version)
+   );
 }
 
 void MainWindow::logScrollChanged(int value)

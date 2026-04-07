@@ -120,20 +120,4 @@ message Settings {
 
    // [default = 50] Maximum number of peer entries to share in a single gossip exchange.
    uint32 gossip_max_peers = 115;
-
-   ///// DG-LAN: Core Seeders /////
-
-   // A known host is a static peer probed at startup before the full subnet scan.
-   // Typically a Core Seeder: always-on machine with files.
-   message KnownHost {
-      string address = 1;  // IP address (ZeroTier IP or LAN IP)
-      uint32 port = 2;     // [default = 59487] Unicast port
-      string nick = 3;     // Display name (optional)
-   }
-
-   repeated KnownHost known_host = 120;
-
-   // [default = false] Mark this instance as a Core Seeder.
-   // Affects only GUI labelling and download peer priority — no relay logic.
-   bool core_seeder_mode = 121;
 }

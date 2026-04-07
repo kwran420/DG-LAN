@@ -103,6 +103,11 @@ quint32 Peer::getUploadRate() const
    return this->uploadRate;
 }
 
+quint32 Peer::getLanSpeed() const
+{
+   return this->lanSpeed;
+}
+
 quint32 Peer::getSpeed()
 {
    QMutexLocker locker(&this->mutex);
@@ -163,7 +168,8 @@ void Peer::update(
    const QString& coreVersion,
    quint32 downloadRate,
    quint32 uploadRate,
-   quint32 protocolVersion
+   quint32 protocolVersion,
+   quint32 lanSpeed
 )
 {
    this->alive = true;
@@ -176,6 +182,7 @@ void Peer::update(
    this->sharingAmount = sharingAmount;
    this->downloadRate = downloadRate;
    this->uploadRate = uploadRate;
+   this->lanSpeed = lanSpeed;
    this->protocolVersion = protocolVersion;
 
    this->connectionPool.setIP(this->IP, this->port);

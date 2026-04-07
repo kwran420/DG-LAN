@@ -80,7 +80,8 @@ namespace PM
          const QString& coreVersion,
          quint32 downloadRate,
          quint32 uploadRate,
-         quint32 protocolVersion
+         quint32 protocolVersion,
+         quint32 lanSpeed = 0
       );
 
       void removePeer(const Common::Hash& ID, const QHostAddress& IP);
@@ -92,9 +93,6 @@ namespace PM
       // DG-LAN: Gossip / PEX support
       void addGossipCandidate(const QHostAddress& address, quint16 port);
       QList<QPair<QHostAddress, quint16>> takeGossipCandidates(); // drain and return the current list
-
-      // DG-LAN: Core Seeder — probe known hosts at startup
-      void initKnownPeers();
 
    private slots:
       void dataReceived(QTcpSocket* tcpSocket = nullptr);

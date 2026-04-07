@@ -87,7 +87,8 @@ namespace PM
          const QString& coreVersion,
          quint32 downloadRate,
          quint32 uploadRate,
-         quint32 protocolVersion
+         quint32 protocolVersion,
+         quint32 lanSpeed = 0
       ) = 0;
 
       /**
@@ -108,9 +109,6 @@ namespace PM
       // DG-LAN: Gossip / PEX
       virtual void addGossipCandidate(const QHostAddress& address, quint16 port) = 0;
       virtual QList<QPair<QHostAddress, quint16>> takeGossipCandidates() = 0;
-
-      // DG-LAN: probe known hosts (core seeders) at startup
-      virtual void initKnownPeers() = 0;
 
    signals:
       /**

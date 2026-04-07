@@ -101,10 +101,6 @@ namespace GUI
 
       void buttonAddressToggled(bool checked);
 
-      // DG-LAN: Core Seeders tab.
-      void addKnownHost();
-      void removeKnownHost();
-
    protected:
       bool eventFilter(QObject* obj, QEvent* event);
       void changeEvent(QEvent* event);
