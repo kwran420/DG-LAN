@@ -160,6 +160,13 @@ NetworkWidget::NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection
    connect(&this->peerListModel, &PeerListModel::peersRemoved, this, &NetworkWidget::peersRemoved);
    connect(this->coreConnection.data(), SIGNAL(disconnected(bool)), this, SLOT(coreDisconnected()));
 
+   // Periodically re-browse all peers to pick up newly downloaded/added files.
+   connect(&this->rebrowseTimer, &QTimer::timeout, this, [this]() {
+      this->browsedPeers.clear();
+      this->refreshPeers();
+   });
+   this->rebrowseTimer.start(30000);
+
    this->setWindowTitle(tr("Network"));
 }
 

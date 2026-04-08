@@ -8,6 +8,7 @@
 #include <QSortFilterProxyModel>
 #include <QSet>
 #include <QIdentityProxyModel>
+#include <QTimer>
 
 #include <Common/Hash.h>
 #include <Common/RemoteCoreController/ICoreConnection.h>
@@ -81,5 +82,6 @@ namespace GUI
 
       QSet<Common::Hash> browsedPeers;
       QList<QSharedPointer<RCC::IBrowseResult>> activeBrowseResults;
+      QTimer rebrowseTimer;
    };
 }
