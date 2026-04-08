@@ -115,14 +115,14 @@ Protos::Common::Entries Cache::getProtoEntries(const Protos::Common::Entry& dir,
       for (auto it = subDirs.begin(); it != subDirs.end(); ++it)
       {
          if (!*it) continue;
-         (*it)->populateEntry(result.add_entry());
+         (*it)->populateEntry(result.add_entry(), true);
       }
 
       for (auto it = files.begin(); it != files.end(); ++it)
       {
          if (!*it) continue;
          if ((*it)->isComplete())
-            (*it)->populateEntry(result.add_entry(), false, maxNbHashesPerEntry);
+            (*it)->populateEntry(result.add_entry(), true, maxNbHashesPerEntry);
       }
    }
 
@@ -342,7 +342,14 @@ QList<QSharedPointer<IChunk>> Cache::newFile(Protos::Common::Entry& fileEntry)
    }
 
    fileEntry.set_exists(true); // File has been physically created.
-   dir->populateEntry(&fileEntry); // We set the shared directory.
+
+   // Set the shared directory reference, but do NOT overwrite name/path/size.
+   SharedEntry* root = dir->getRoot();
+   if (root)
+   {
+      fileEntry.mutable_shared_entry()->mutable_id()->set_hash(root->getId().getData(), Common::Hash::HASH_SIZE);
+      Common::ProtoHelper::setStr(*fileEntry.mutable_shared_entry(), &Protos::Common::SharedEntry::mutable_shared_name, root->getUserName());
+   }
 
    // Is there a better way to up cast? An other method is shown below that uses 'reinterpret_cast'.
    QList<QSharedPointer<IChunk>> ichunks;

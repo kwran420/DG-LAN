@@ -114,7 +114,7 @@ void GetEntriesResult::buildResult()
             L_WARN("FM::GetEntriesResult::buildResult(): null subDir pointer — skipping");
             continue;
          }
-         subDir->populateEntry(this->res.mutable_entries()->add_entry());
+         subDir->populateEntry(this->res.mutable_entries()->add_entry(), true);
       }
 
       QLinkedList<File*> files = this->dir->getFiles();
@@ -128,7 +128,7 @@ void GetEntriesResult::buildResult()
             continue;
          }
          if (file->isComplete())
-            file->populateEntry(this->res.mutable_entries()->add_entry(), false, this->maxNbHashesPerEntry);
+            file->populateEntry(this->res.mutable_entries()->add_entry(), true, this->maxNbHashesPerEntry);
       }
 
       L_WARN(QString("FM::GetEntriesResult::buildResult(): DONE entries=%1").arg(this->res.entries().entry_size()));
