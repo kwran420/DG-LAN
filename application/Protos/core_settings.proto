@@ -115,6 +115,10 @@ message Settings {
    // When false (master mode), all files in shared directories are indexed and shared.
    bool client_mode = 116;
 
+   // Hash of the master key password. When set, becoming master (client_mode=false)
+   // requires entering the correct password. Any PC with the password can be master.
+   Common.Hash master_key_hash = 117;
+
    // [default = 3] Number of consecutive multicast send/receive failures before
    // escalating to the broadcast fallback. 0 = never escalate (multicast only).
    uint32 multicast_failure_threshold = 113;

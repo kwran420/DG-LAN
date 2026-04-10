@@ -139,6 +139,7 @@ void RemoteConnection::refresh()
 
    state.set_integrity_check_enabled(SETTINGS.get<bool>("check_received_data_integrity"));
    state.set_client_mode(SETTINGS.get<bool>("client_mode"));
+   state.set_master_key_defined(!SETTINGS.get<Common::Hash>("master_key_hash").isNull());
    state.set_password_defined(!SETTINGS.get<Common::Hash>("remote_password").isNull());
 
    // Ourself
@@ -526,7 +527,34 @@ void RemoteConnection::onNewMessage(const Common::Message& message)
             SETTINGS.set("multicast_ttl_override", static_cast<quint32>(coreSettingsMessage.multicast_ttl_override()));
 
          if (coreSettingsMessage.client_mode() != Protos::Common::TS_NO_CHANGE)
-            SETTINGS.set("client_mode", coreSettingsMessage.client_mode() == Protos::Common::TriState::TS_TRUE);
+         {
+            if (coreSettingsMessage.client_mode() == Protos::Common::TriState::TS_TRUE)
+            {
+               // Anyone can become a client — no password needed.
+               SETTINGS.set("client_mode", true);
+            }
+            else
+            {
+               // Becoming master requires the correct password.
+               const QString password = QString::fromStdString(coreSettingsMessage.master_key_password());
+               if (!password.isEmpty())
+               {
+                  Common::Hash attempt = Common::Hasher::hash(password);
+                  Common::Hash storedKey = SETTINGS.get<Common::Hash>("master_key_hash");
+                  if (storedKey.isNull())
+                  {
+                     // First time: set the master key and become master.
+                     SETTINGS.set("master_key_hash", attempt);
+                     SETTINGS.set("client_mode", false);
+                  }
+                  else if (attempt == storedKey)
+                  {
+                     SETTINGS.set("client_mode", false);
+                  }
+                  // Wrong password: silently ignore (State refresh will show unchanged mode).
+               }
+            }
+         }
 
          SETTINGS.save();
          this->refresh();

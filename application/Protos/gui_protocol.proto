@@ -118,6 +118,7 @@ message State {
    bool integrity_check_enabled = 7;
 
    bool client_mode = 12; // [default = false] When true, only rehost downloaded files.
+   bool master_key_defined = 13; // [default = false] True when a master password has been set.
 
    bool password_defined = 10; // [default = false].
 
@@ -244,6 +245,7 @@ message CoreSettings {
    bool force_ipv4 = 7;
    uint32 multicast_ttl_override = 8;  // 0 = use core default.
    Common.TriState client_mode = 9;    // TS_TRUE = client (rehost downloads only), TS_FALSE = master (share all).
+   string master_key_password = 10;     // Password attempt when trying to become master or set the initial key.
 }
 
 

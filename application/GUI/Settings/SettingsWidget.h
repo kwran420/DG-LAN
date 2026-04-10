@@ -23,6 +23,7 @@
 #include <QStyledItemDelegate>
 #include <QItemSelection>
 #include <QVBoxLayout>
+#include <QInputDialog>
 
 #include <Common/RemoteCoreController/ICoreConnection.h>
 
@@ -99,6 +100,7 @@ namespace GUI
       void openLocation();
 
       void buttonAddressToggled(bool checked);
+      void clientModeToggled();
 
    protected:
       bool eventFilter(QObject* obj, QEvent* event);
@@ -119,5 +121,7 @@ namespace GUI
       DirListDelegate dirListDelegate;
 
       bool corePasswordDefined;
+      bool masterKeyDefined;
+      QString pendingMasterKeyPassword;
    };
 }

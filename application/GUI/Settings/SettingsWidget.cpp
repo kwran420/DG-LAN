@@ -59,7 +59,8 @@ SettingsWidget::SettingsWidget(QSharedPointer<RCC::ICoreConnection> coreConnecti
    getAtLeastOneState(false),
    coreConnection(coreConnection),
    sharedEntryListModel(sharedEntryListModel),
-   corePasswordDefined(false)
+   corePasswordDefined(false),
+   masterKeyDefined(false)
 {
    this->ui->setupUi(this);
 
@@ -92,7 +93,7 @@ SettingsWidget::SettingsWidget(QSharedPointer<RCC::ICoreConnection> coreConnecti
    connect(this->ui->txtNick, SIGNAL(editingFinished()), this, SLOT(saveCoreSettings()));
 
    connect(this->ui->chkEnableIntegrityCheck, SIGNAL(clicked()), this, SLOT(saveCoreSettings()));
-   connect(this->ui->chkClientMode, SIGNAL(clicked()), this, SLOT(saveCoreSettings()));
+   connect(this->ui->chkClientMode, SIGNAL(clicked()), this, SLOT(clientModeToggled()));
    connect(this->ui->butRefreshInterfaces, SIGNAL(clicked()), this, SLOT(refreshNetworkInterfaces()));
 
    this->connectAllAddressButtons();
@@ -363,6 +364,8 @@ void SettingsWidget::newState(const Protos::GUI::State& state)
    if (!this->ui->chkClientMode->hasFocus())
       this->ui->chkClientMode->setChecked(state.client_mode());
 
+   this->masterKeyDefined = state.master_key_defined();
+
    if ((this->corePasswordDefined = state.password_defined()))
    {
       this->ui->txtPassword->setPlaceholderText("");
@@ -485,6 +488,11 @@ void SettingsWidget::saveCoreSettings()
    Common::ProtoHelper::setStr(settings, &Protos::GUI::CoreSettings::mutable_nick, this->ui->txtNick->text());
    settings.set_enable_integrity_check(this->ui->chkEnableIntegrityCheck->isChecked() ? Protos::Common::TS_TRUE : Protos::Common::TS_FALSE);
    settings.set_client_mode(this->ui->chkClientMode->isChecked() ? Protos::Common::TS_TRUE : Protos::Common::TS_FALSE);
+   if (!this->pendingMasterKeyPassword.isEmpty())
+   {
+      Common::ProtoHelper::setStr(settings, &Protos::GUI::CoreSettings::mutable_master_key_password, this->pendingMasterKeyPassword);
+      this->pendingMasterKeyPassword.clear();
+   }
 
    for (QListIterator<Common::SharedEntry> i(this->sharedEntryListModel.getSharedEntries()); i.hasNext();)
       Common::ProtoHelper::addRepeatedStr(*settings.mutable_shared_paths(), &Protos::GUI::CoreSettings::SharedPaths::add_path, i.next().path.getPath());
@@ -517,6 +525,34 @@ void SettingsWidget::saveCoreSettings()
    SETTINGS.set("multicast_ttl_override", static_cast<quint32>(this->ui->spnMulticastTTL->value()));
    SETTINGS.set("force_ipv4", this->ui->chkForceIPv4->isChecked());
    SETTINGS.save();
+}
+
+void SettingsWidget::clientModeToggled()
+{
+   if (!this->ui->chkClientMode->isChecked())
+   {
+      // Trying to become master — prompt for password.
+      bool ok = false;
+      const QString password = QInputDialog::getText(
+         this,
+         tr("Master Mode"),
+         this->masterKeyDefined ? tr("Enter the master password:") : tr("Set a master password:"),
+         QLineEdit::Password,
+         QString(),
+         &ok
+      );
+
+      if (!ok || password.isEmpty())
+      {
+         // Cancelled — revert checkbox.
+         this->ui->chkClientMode->setChecked(true);
+         return;
+      }
+
+      this->pendingMasterKeyPassword = password;
+   }
+
+   this->saveCoreSettings();
 }
 
 void SettingsWidget::cmbLanguageChanged(int cmbIndex)
