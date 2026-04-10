@@ -49,10 +49,10 @@
       <bool>true</bool>
      </property>
      <property name="toolTip">
-      <string>Download selected items to the first shared directory with enough free space</string>
+      <string>Download and rehost selected items (files are automatically shared with the network)</string>
      </property>
      <property name="text">
-      <string>Download selected items</string>
+      <string>Download &amp;&amp; Rehost</string>
      </property>
      <property name="icon">
       <iconset resource="../ressources.qrc">

@@ -49,35 +49,40 @@ void DownloadMenu::show(const QPoint& globalPosition)
    {
       QAction* actionDownload = new QAction(
          QIcon(":/icons/ressources/download.png"),
-         tr("Download selected items to the first directory folder with enough free space"),
+         tr("Download && rehost (auto-select folder)"),
          &menu
       );
+      actionDownload->setToolTip(tr("Downloads to the first shared folder with enough space. The file will be automatically shared with other peers."));
       connect(actionDownload, SIGNAL(triggered()), this, SIGNAL(download()));
       menu.addAction(actionDownload);
-   }
 
-   for (QListIterator<Common::SharedEntry> i(sharedDirs); i.hasNext();)
+      if (sharedDirs.size() > 1)
+      {
+         QMenu* subMenu = menu.addMenu(QIcon(":/icons/ressources/folder.png"), tr("Download && rehost to..."));
+         for (QListIterator<Common::SharedEntry> i(sharedDirs); i.hasNext();)
+         {
+            const auto& sharedDir = i.next();
+            QAction* action = new QAction(
+               QIcon(":/icons/ressources/download.png"),
+               sharedDir.path.getPath(),
+               subMenu
+            );
+            action->setData(QVariant::fromValue(sharedDir));
+            connect(action, SIGNAL(triggered()), this, SLOT(actionTriggered()));
+            subMenu->addAction(action);
+         }
+      }
+   }
+   else
    {
-      const auto& sharedDir = i.next();
-      QAction* action = new QAction(
-         QIcon(":/icons/ressources/download.png"),
-         QString(tr("Download selected items to %1")).arg(sharedDir.path.getPath()),
+      QAction* noShareWarning = new QAction(
+         QIcon(":/icons/ressources/error.png"),
+         tr("No shared folders configured — add one in Settings to download && rehost"),
          &menu
       );
-      // TODO: do something here.
-      // sharedDir.path = "/"; // A bit dirty, path semantic change, it's now the relative path (not the absolute path).
-      action->setData(QVariant::fromValue(sharedDir));
-      connect(action, SIGNAL(triggered()), this, SLOT(actionTriggered()));
-      menu.addAction(action);
+      noShareWarning->setEnabled(false);
+      menu.addAction(noShareWarning);
    }
-
-   QAction* actionChooseAndDownload = new QAction(
-      QIcon(":/icons/ressources/download.png"),
-      tr("Download selected items to . . ."),
-      &menu
-   );
-   connect(actionChooseAndDownload, SIGNAL(triggered()), this, SIGNAL(downloadTo()));
-   menu.addAction(actionChooseAndDownload);
 
    this->onShowMenu(menu);
 

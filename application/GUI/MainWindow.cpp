@@ -76,7 +76,7 @@ MainWindow::MainWindow(QSharedPointer<RCC::ICoreConnection> coreConnection, QWid
 
    // Downloads dock
    this->downloadsWidget = new DownloadsWidget(this->coreConnection, this->peerListModel, this->sharedEntryListModel);
-   this->downloadsDock = new QDockWidget(tr("Downloads"), this);
+   this->downloadsDock = new QDockWidget(tr("Downloads && Rehosting"), this);
    this->downloadsDock->setObjectName("downloadsDock");
    this->downloadsDock->setWidget(this->downloadsWidget);
    this->downloadsDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);

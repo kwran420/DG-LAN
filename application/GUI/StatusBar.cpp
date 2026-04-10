@@ -78,7 +78,7 @@ void StatusBar::coreDisconnected()
 {
    this->setDownloadRate(0);
    this->setUploadRate(0);
-   this->setTotalSharing(0, 0);
+   this->setTotalSharing(0, 0, 0);
    this->updateCoreStatus();
 }
 
@@ -90,7 +90,12 @@ void StatusBar::newState(const Protos::GUI::State& state)
    qint64 totalSharing = 0;
    for (int i = 0; i < state.peer_size(); i++)
       totalSharing += state.peer(i).sharing_amount();
-   this->setTotalSharing(state.peer_size(), totalSharing);
+
+   qint64 localSharing = 0;
+   for (int i = 0; i < state.shared_entry_size(); i++)
+      localSharing += state.shared_entry(i).size();
+
+   this->setTotalSharing(state.peer_size(), totalSharing, localSharing);
 
    this->updateCoreStatus(state.stats().cache_status(), state.stats().progress());
 }
@@ -111,9 +116,22 @@ void StatusBar::setUploadRate(qint64 rate)
    this->ui->lblUploadRate->setText(Common::Global::formatByteSize(rate).append("/s"));
 }
 
-void StatusBar::setTotalSharing(int nbPeer, qint64 amount)
+void StatusBar::setTotalSharing(int nbPeer, qint64 amount, qint64 localSharing)
 {
-   this->ui->lblTotalSharing->setText(QString::number(nbPeer).append(" ").append(nbPeer > 1 ? tr("peers") : tr("peer")).append(": ").append(Common::Global::formatByteSize(amount)));
+   const QString peerLabel = nbPeer > 1 ? tr("peers") : tr("peer");
+   const QString text = QString("You: %1 | %2 %3: %4")
+      .arg(Common::Global::formatByteSize(localSharing))
+      .arg(QString::number(nbPeer))
+      .arg(peerLabel)
+      .arg(Common::Global::formatByteSize(amount));
+   this->ui->lblTotalSharing->setText(text);
+   this->ui->lblTotalSharing->setToolTip(
+      tr("You are sharing %1 with the network.\n%2 %3 sharing %4 total.")
+         .arg(Common::Global::formatByteSize(localSharing))
+         .arg(QString::number(nbPeer))
+         .arg(peerLabel)
+         .arg(Common::Global::formatByteSize(amount))
+   );
 }
 
 void StatusBar::updateCoreStatus(Protos::GUI::State_Stats_CacheStatus status, int progress)

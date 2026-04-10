@@ -59,7 +59,7 @@ namespace GUI
    private:
       void setDownloadRate(qint64 rate);
       void setUploadRate(qint64 rate);
-      void setTotalSharing(int nbPeer, qint64 amount);
+      void setTotalSharing(int nbPeer, qint64 amount, qint64 localSharing);
       void updateCoreStatus(Protos::GUI::State_Stats_CacheStatus status = Protos::GUI::State_Stats_CacheStatus_UNKNOWN, int progress = 0);
 
       Ui::StatusBar* ui;
