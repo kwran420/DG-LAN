@@ -7,6 +7,12 @@ argument-hint: "Describe the problem or error..."
 
 Investigate and diagnose the reported problem using a structured analytical approach.
 
+## Guiding Principles
+- **Autonomous**: Just fix it — don't ask for hand-holding. Point at logs, errors, failing tests, then resolve them
+- **No Laziness**: Find the root cause, not a temporary workaround
+- **Verify before done**: Run tests, check logs, demonstrate correctness before marking resolved
+- **Zero context switching**: The user should not need to intervene — go fix failing tests without being told how
+
 ## Step 1: Collect Evidence
 Gather all available information:
 - **Error messages**: Exact text, stack traces, error codes

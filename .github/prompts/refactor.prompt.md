@@ -7,6 +7,12 @@ argument-hint: "Describe what to refactor and why..."
 
 Refactor the specified code safely while preserving all existing behavior.
 
+## Guiding Principles
+- **Demand Elegance**: Pause and ask "is there a more elegant way?" — but skip for simple, obvious changes
+- **Simplicity First**: The goal is simpler, clearer code — not more abstraction
+- **Verify before done**: Run the full test suite after every change — never mark complete without green tests
+- **Minimal Impact**: Only touch what's necessary — avoid introducing bugs
+
 ## Step 1: Identify Targets
 - Analyze the code to identify specific refactoring targets and the reason for each:
   - Code duplication (DRY)

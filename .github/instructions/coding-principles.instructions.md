@@ -55,6 +55,10 @@ description: "Use when implementing features, writing new code, refactoring, or 
 - **Verify behavior**: Run tests after every change
 - Delete unused code — retrieve from git history if needed later
 - Never comment out code as a way to "save" it
+- For non-trivial changes: pause and ask "is there a more elegant way?"
+- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
+- Skip this for simple, obvious fixes — don't over-engineer
+- Challenge your own work before presenting it
 
 ### Refactoring Triggers
 - Code duplication (DRY principle)

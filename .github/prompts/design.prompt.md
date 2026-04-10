@@ -8,6 +8,12 @@ tools: [read, search, web]
 
 Create a structured design proposal for the requested feature or system change.
 
+## Guiding Principles
+- **Plan First**: Use the todo list to plan — write detailed specs upfront to reduce ambiguity
+- **Simplicity First**: Propose the simplest architecture that meets the requirements
+- **Use subagents**: Offload parallel research and exploration to subagents (`.github/agents/`) to keep context clean
+- **If something goes sideways, STOP and re-plan** — don't keep pushing a bad direction
+
 ## Step 1: Analyze Current State
 - Examine the existing codebase architecture: layers, modules, data flow, dependencies
 - Identify relevant existing patterns and conventions

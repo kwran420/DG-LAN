@@ -7,6 +7,12 @@ argument-hint: "Describe the feature to implement..."
 
 Implement the requested feature using a structured, end-to-end workflow.
 
+## Guiding Principles
+- **Simplicity First**: Implement the simplest solution that meets the requirements
+- **Plan before building**: For 3+ step features, use the todo list to plan before touching code
+- **Demand Elegance**: For non-trivial work, pause and ask "is there a more elegant way?" — skip for simple, obvious changes
+- **Verify before done**: Never mark complete without proving it works — run tests, demonstrate correctness
+
 ## Step 1: Analyze Requirements
 - Parse the feature request to identify scope, acceptance criteria, and constraints
 - Determine complexity: simple (single file change), moderate (multiple files), or complex (cross-cutting)
