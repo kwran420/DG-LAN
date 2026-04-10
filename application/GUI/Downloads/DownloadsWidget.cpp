@@ -67,7 +67,7 @@ void DownloadsDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opt
             break;
          }
       case Protos::GUI::State::Download::COMPLETE:
-         progressBarOption.text = tr("Complete");
+         progressBarOption.text = tr("Complete \u2022 Sharing");
          break;
       case Protos::GUI::State::Download::PAUSED:
          progressBarOption.text = tr("Paused");
@@ -138,6 +138,9 @@ DownloadsWidget::DownloadsWidget(QSharedPointer<RCC::ICoreConnection> coreConnec
    this->ui->setupUi(this);
 
    this->switchView(static_cast<Protos::GUI::Settings::DownloadView>(SETTINGS.get<quint32>("download_view")));
+
+   this->ui->butSwitchView->setToolTipDuration(5000);
+   this->ui->butSwitchView->setMinimumWidth(28);
 
    this->ui->tblDownloads->setItemDelegate(&this->downloadsDelegate);
 
@@ -210,18 +213,38 @@ void DownloadsWidget::keyPressEvent(QKeyEvent* event)
 
 void DownloadsWidget::displayContextMenuDownloads(const QPoint& point)
 {
+   // Auto-select the row under the cursor if nothing is currently selected.
+   const QModelIndex index = this->ui->tblDownloads->indexAt(point);
+   if (index.isValid() && this->ui->tblDownloads->selectionModel()->selectedRows().isEmpty())
+      this->ui->tblDownloads->selectionModel()->select(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+
    const QModelIndexList& selectedRows = this->ui->tblDownloads->selectionModel()->selectedRows();
 
    QMenu menu;
 
-   // If the connection isn't remote and there is at least one complete or downloading file we show a menu action to open the file location.
    if (this->coreConnection->isLocal())
+   {
+      bool canOpenFile = false;
+      bool canOpenLocation = false;
+
       for (QListIterator<QModelIndex> i(selectedRows); i.hasNext();)
-         if (this->currentDownloadsModel->isFileLocationKnown(i.next()))
+      {
+         const QModelIndex& idx = i.next();
+         if (this->currentDownloadsModel->isFileLocationKnown(idx))
          {
-            menu.addAction(QIcon(":/icons/ressources/explore_folder.png"), tr("Open location"), this, SLOT(openLocationSelectedEntries()));
-            break;
+            canOpenLocation = true;
+            if (this->currentDownloadsModel->getType(idx) == Protos::Common::Entry::FILE)
+               canOpenFile = true;
          }
+         if (canOpenFile && canOpenLocation)
+            break;
+      }
+
+      if (canOpenFile)
+         menu.addAction(QIcon(":/icons/ressources/file.png"), tr("Open file"), this, SLOT(openSelectedFiles()));
+      if (canOpenLocation)
+         menu.addAction(QIcon(":/icons/ressources/explore_folder.png"), tr("Open location"), this, SLOT(openLocationSelectedEntries()));
+   }
 
    menu.addAction(QIcon(":/icons/ressources/arrow_up.png"), tr("Move to top"), this, SLOT(moveSelectedEntriesToTop()));
 
@@ -238,6 +261,13 @@ void DownloadsWidget::displayContextMenuDownloads(const QPoint& point)
 void DownloadsWidget::downloadDoubleClicked(const QModelIndex& index)
 {
    this->openFile(index);
+}
+
+void DownloadsWidget::openSelectedFiles()
+{
+   const QModelIndexList& selectedRows = this->ui->tblDownloads->selectionModel()->selectedRows();
+   for (QListIterator<QModelIndex> i(selectedRows); i.hasNext();)
+      this->openFile(i.next());
 }
 
 void DownloadsWidget::openLocationSelectedEntries()
@@ -292,6 +322,7 @@ void DownloadsWidget::switchView()
 void DownloadsWidget::removeCompletedFiles()
 {
    this->coreConnection->cancelDownloads(QList<quint64>(), true);
+   this->coreConnection->refresh();
 }
 
 void DownloadsWidget::removeSelectedEntries()
@@ -321,10 +352,16 @@ void DownloadsWidget::removeSelectedEntries()
          msgBox.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
          msgBox.setDefaultButton(QMessageBox::Ok);
          if (msgBox.exec() == QMessageBox::Ok)
+         {
             this->coreConnection->cancelDownloads(downloadIDs.values());
+            this->coreConnection->refresh();
+         }
       }
       else
+      {
          this->coreConnection->cancelDownloads(downloadIDs.values());
+         this->coreConnection->refresh();
+      }
    }
 }
 
