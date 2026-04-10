@@ -41,5 +41,8 @@ Thumbs.db
 /github_check.txt
 /logo.png
 
+# Copilot / GitHub config (local only)
+.github/
+
 # Inno Setup temp output
 application/Setups/Windows/iscc_*.txt
