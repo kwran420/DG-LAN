@@ -7,10 +7,12 @@ reads shared files with their hashes, and serves them as JSON.
 Your website fetches /api/files to build dglan:// download links.
 
 Usage:
-    python server.py                         # defaults: Core on 127.0.0.1:59485, HTTP on 0.0.0.0:8080
+    python server.py                         # defaults: Core on 127.0.0.1:59485, HTTP on 127.0.0.1:8080
     python server.py --core-host 10.0.0.5    # remote Core
     python server.py --http-port 9090        # different HTTP port
-    python server.py --password letmein      # if Core has a remote password set
+    python server.py --http-host 0.0.0.0     # listen on all interfaces (default: localhost only)
+    DGLAN_PASSWORD=secret python server.py   # auth via environment variable (preferred)
+    python server.py --password secret       # auth via CLI argument (visible in process list)
 """
 
 import argparse
@@ -18,6 +20,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import struct
 import time
 import urllib.parse
@@ -32,6 +35,19 @@ log = logging.getLogger("dglan-api")
 # ── Wire format constants ────────────────────────────────────
 HASH_SIZE = 28
 HEADER_SIZE = 4 + 4 + HASH_SIZE  # type(u32) + size(u32) + sender_id(28) = 36
+
+# ── Tuning constants ─────────────────────────────────────────
+MAX_BROWSE_DEPTH = 20
+STATE_TIMEOUT_S = 10.0
+BROWSE_TIMEOUT_S = 15.0
+CACHE_TTL_S = 30.0
+RECONNECT_DELAY_S = 5
+POLL_INTERVAL_S = 2
+CORS_MAX_AGE_S = "86400"
+MAX_HTTP_HEADER_SIZE = 8192
+MAX_HTTP_HEADERS = 100
+HTTP_READ_TIMEOUT_S = 10.0
+HTTP_HEADER_TIMEOUT_S = 5.0
 
 # Message type codes (from MessageHeader.h)
 GUI_STATE                  = 0x1001
@@ -185,13 +201,13 @@ class CoreClient:
 
             # Track shared entries
             self.shared_entries = []
-            for se in state.shared_entry:
+            for shared_entry in state.shared_entry:
                 self.shared_entries.append({
-                    "id": hash_to_hex(se.entry.id.hash),
-                    "name": se.entry.shared_name,
-                    "path": se.entry.path,
-                    "size": se.size,
-                    "free_space": se.free_space,
+                    "id": hash_to_hex(shared_entry.entry.id.hash),
+                    "name": shared_entry.entry.shared_name,
+                    "path": shared_entry.entry.path,
+                    "size": shared_entry.size,
+                    "free_space": shared_entry.free_space,
                 })
 
             # Acknowledge state so Core keeps sending updates
@@ -220,8 +236,16 @@ class CoreClient:
         else:
             log.debug("Ignoring message type 0x%04x (%d bytes)", msg_type, len(body))
 
+    @property
+    def is_connected(self) -> bool:
+        return self._connected
+
+    @property
+    def state(self) -> Optional[gui.State]:
+        return self._state
+
     # ── Wait for initial state ────────────────────────────────
-    async def wait_for_state(self, timeout: float = 10.0):
+    async def wait_for_state(self, timeout: float = STATE_TIMEOUT_S):
         deadline = time.monotonic() + timeout
         while self._state is None and time.monotonic() < deadline:
             await asyncio.sleep(0.1)
@@ -230,7 +254,7 @@ class CoreClient:
         log.info("Got state: peer_id=%s, %d shared entries", self.peer_hex, len(self.shared_entries))
 
     # ── Browse files ──────────────────────────────────────────
-    async def browse_entry(self, dir_entry=None, get_roots: bool = False, timeout: float = 15.0) -> gui.BrowseResult:
+    async def browse_entry(self, dir_entry=None, get_roots: bool = False, timeout: float = BROWSE_TIMEOUT_S) -> gui.BrowseResult:
         """Send a Browse request and wait for the result.
         If dir_entry is provided, it's a protobuf Entry to browse into."""
         browse = gui.Browse()
@@ -241,7 +265,7 @@ class CoreClient:
             browse.dirs.entry.add().CopyFrom(dir_entry)
 
         # Create a future BEFORE sending so we don't miss the tag/result
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         fut: asyncio.Future[gui.BrowseResult] = loop.create_future()
         self._pending_browse_future = fut
 
@@ -273,7 +297,7 @@ class CoreClient:
         return all_files
 
     async def _collect_files(self, entry, all_files: list, depth: int = 0, parent_se_hash: bytes = b""):
-        if depth > 20:  # safety limit
+        if depth > MAX_BROWSE_DEPTH:
             return
 
         # Use the entry's own shared_entry hash, or inherit from parent
@@ -302,16 +326,19 @@ class CoreClient:
             log.debug("  DIR:  %s%s (depth=%d)", entry.path, entry.name, depth)
             try:
                 sub_result = await self.browse_entry(dir_entry=entry)
-                for gi, entries_group in enumerate(sub_result.entries):
-                    log.debug("    Group %d: %d entries", gi, len(entries_group.entry))
-                    for sub_entry in entries_group.entry:
-                        log.debug("      -> type=%s name=%r path=%r se=%s",
-                                  "DIR" if sub_entry.type == common.Entry.DIR else "FILE",
-                                  sub_entry.name, sub_entry.path,
-                                  hash_to_hex(sub_entry.shared_entry.id.hash)[:16] if sub_entry.shared_entry.id.hash else "none")
-                        await self._collect_files(sub_entry, all_files, depth + 1, se_hash_raw)
+                for group_idx, entries_group in enumerate(sub_result.entries):
+                    log.debug("    Group %d: %d entries", group_idx, len(entries_group.entry))
+                    await self._process_browse_group(entries_group, all_files, depth, se_hash_raw)
             except TimeoutError:
                 log.warning("Timeout browsing dir: %s%s", entry.path, entry.name)
+
+    async def _process_browse_group(self, entries_group, all_files: list, depth: int, se_hash_raw: bytes):
+        for sub_entry in entries_group.entry:
+            log.debug("      -> type=%s name=%r path=%r se=%s",
+                      "DIR" if sub_entry.type == common.Entry.DIR else "FILE",
+                      sub_entry.name, sub_entry.path,
+                      hash_to_hex(sub_entry.shared_entry.id.hash)[:16] if sub_entry.shared_entry.id.hash else "none")
+            await self._collect_files(sub_entry, all_files, depth + 1, se_hash_raw)
 
     def _build_dglan_url(self, entry, se_hash_raw: bytes = b"") -> str:
         se_hash = hash_to_hex(se_hash_raw) if se_hash_raw else ""
@@ -340,7 +367,7 @@ class APIServer:
         self.allowed_origins = allowed_origins
         self._cache: Optional[dict] = None
         self._cache_time: float = 0
-        self._cache_ttl: float = 30.0  # seconds
+        self._cache_ttl: float = CACHE_TTL_S
 
     async def start(self):
         server = await asyncio.start_server(self._handle_request, self.http_host, self.http_port)
@@ -351,62 +378,25 @@ class APIServer:
 
     async def _handle_request(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         try:
-            request_line = await asyncio.wait_for(reader.readline(), timeout=10.0)
-            if not request_line:
+            method, path, headers = await self._parse_request(reader)
+            if method is None:
                 writer.close()
                 return
-
-            request_str = request_line.decode("utf-8", errors="replace").strip()
-            parts = request_str.split()
-            if len(parts) < 2:
-                writer.close()
-                return
-
-            method, path = parts[0], parts[1]
-
-            # Read headers
-            headers = {}
-            while True:
-                line = await asyncio.wait_for(reader.readline(), timeout=5.0)
-                line_str = line.decode("utf-8", errors="replace").strip()
-                if not line_str:
-                    break
-                if ":" in line_str:
-                    key, val = line_str.split(":", 1)
-                    headers[key.strip().lower()] = val.strip()
 
             origin = headers.get("origin", "")
             cors_headers = self._cors_headers(origin)
 
             if method == "OPTIONS":
                 await self._send_response(writer, HTTPStatus.NO_CONTENT, b"", cors_headers)
-                return
-
-            if method != "GET":
-                await self._send_json_response(writer, {"error": "Method not allowed"}, HTTPStatus.METHOD_NOT_ALLOWED, cors_headers)
-                return
-
-            # Route
-            url_path = path.split("?")[0]
-
-            if url_path == "/api/files":
-                data = await self._get_files()
-                await self._send_json_response(writer, data, HTTPStatus.OK, cors_headers)
-
-            elif url_path == "/api/status":
-                data = self._get_status()
-                await self._send_json_response(writer, data, HTTPStatus.OK, cors_headers)
-
-            elif url_path == "/api/health":
-                await self._send_json_response(writer, {"status": "ok"}, HTTPStatus.OK, cors_headers)
-
+            elif method != "GET":
+                await self._send_error(writer, "METHOD_NOT_ALLOWED", "Method not allowed", HTTPStatus.METHOD_NOT_ALLOWED, cors_headers)
             else:
-                await self._send_json_response(writer, {"error": "Not found"}, HTTPStatus.NOT_FOUND, cors_headers)
+                await self._route_request(path, writer, cors_headers)
 
         except Exception:
             log.exception("Request handling error")
             try:
-                await self._send_json_response(writer, {"error": "Internal server error"}, HTTPStatus.INTERNAL_SERVER_ERROR, {})
+                await self._send_error(writer, "INTERNAL_ERROR", "Internal server error", HTTPStatus.INTERNAL_SERVER_ERROR, {})
             except Exception:
                 pass
         finally:
@@ -416,14 +406,57 @@ class APIServer:
             except Exception:
                 pass
 
+    async def _parse_request(self, reader: asyncio.StreamReader) -> tuple[Optional[str], str, dict]:
+        """Parse HTTP request line and headers. Returns (method, path, headers) or (None, '', {}) on failure."""
+        request_line = await asyncio.wait_for(reader.readline(), timeout=HTTP_READ_TIMEOUT_S)
+        if not request_line or len(request_line) > MAX_HTTP_HEADER_SIZE:
+            return None, "", {}
+
+        request_str = request_line.decode("utf-8", errors="replace").strip()
+        parts = request_str.split()
+        if len(parts) < 2:
+            return None, "", {}
+
+        method, path = parts[0], parts[1]
+
+        headers = {}
+        header_count = 0
+        while header_count < MAX_HTTP_HEADERS:
+            line = await asyncio.wait_for(reader.readline(), timeout=HTTP_HEADER_TIMEOUT_S)
+            if len(line) > MAX_HTTP_HEADER_SIZE:
+                break
+            line_str = line.decode("utf-8", errors="replace").strip()
+            if not line_str:
+                break
+            if ":" in line_str:
+                key, val = line_str.split(":", 1)
+                headers[key.strip().lower()] = val.strip()
+            header_count += 1
+
+        return method, path, headers
+
+    async def _route_request(self, path: str, writer: asyncio.StreamWriter, cors_headers: dict):
+        url_path = path.split("?")[0]
+
+        if url_path == "/api/v1/files" or url_path == "/api/files":
+            data = await self._get_files()
+            await self._send_json_response(writer, data, HTTPStatus.OK, cors_headers)
+        elif url_path == "/api/v1/status" or url_path == "/api/status":
+            data = self._get_status()
+            await self._send_json_response(writer, data, HTTPStatus.OK, cors_headers)
+        elif url_path == "/api/v1/health" or url_path == "/api/health":
+            await self._send_json_response(writer, {"status": "ok"}, HTTPStatus.OK, cors_headers)
+        else:
+            await self._send_error(writer, "NOT_FOUND", "Not found", HTTPStatus.NOT_FOUND, cors_headers)
+
     async def _get_files(self) -> dict:
         now = time.monotonic()
         if self._cache and (now - self._cache_time) < self._cache_ttl:
             return self._cache
 
-        if not self.core._connected:
-            self._cache = None  # Invalidate stale cache
-            return {"error": "Not connected to Core (reconnecting...)", "peer": "", "files": []}
+        if not self.core.is_connected:
+            self._cache = None
+            return {"error": {"code": "CORE_DISCONNECTED", "message": "Not connected to Core"}, "peer": "", "files": []}
 
         try:
             files = await self.core.get_all_files()
@@ -436,17 +469,17 @@ class APIServer:
             self._cache = data
             self._cache_time = now
             return data
-        except Exception as e:
+        except Exception:
             log.exception("Error fetching files")
-            return {"error": str(e), "peer": self.core.peer_hex, "files": []}
+            return {"error": {"code": "FETCH_FAILED", "message": "Failed to retrieve files"}, "peer": self.core.peer_hex, "files": []}
 
     def _get_status(self) -> dict:
-        state = self.core._state
+        state = self.core.state
         if not state:
-            return {"connected": self.core._connected, "peer": "", "cache_status": "unknown"}
+            return {"connected": self.core.is_connected, "peer": "", "cache_status": "unknown"}
 
         return {
-            "connected": self.core._connected,
+            "connected": self.core.is_connected,
             "peer": self.core.peer_hex,
             "cache_status": gui.State.Stats.CacheStatus.Name(state.stats.cache_status),
             "cache_progress": state.stats.progress / 100.0,
@@ -469,8 +502,13 @@ class APIServer:
             "Access-Control-Allow-Origin": allowed,
             "Access-Control-Allow-Methods": "GET, OPTIONS",
             "Access-Control-Allow-Headers": "Content-Type",
-            "Access-Control-Max-Age": "86400",
+            "Access-Control-Max-Age": CORS_MAX_AGE_S,
         }
+
+    async def _send_error(self, writer: asyncio.StreamWriter, code: str, message: str,
+                          status: HTTPStatus, extra_headers: dict):
+        data = {"error": {"code": code, "message": message}}
+        await self._send_json_response(writer, data, status, extra_headers)
 
     async def _send_json_response(self, writer: asyncio.StreamWriter, data: dict,
                                    status: HTTPStatus, extra_headers: dict):
@@ -496,22 +534,22 @@ class APIServer:
 async def _core_connection_loop(core: CoreClient):
     """Background task: keep the Core connection alive, reconnecting as needed."""
     while True:
-        if not core._connected:
+        if not core.is_connected:
             try:
                 await core.connect()
                 await core.wait_for_state()
                 log.info("Core connected. Peer ID: %s", core.peer_hex)
             except Exception:
-                log.exception("Connection failed, retrying in 5s...")
+                log.exception("Connection failed, retrying in %ds...", RECONNECT_DELAY_S)
                 await core.disconnect()
-                await asyncio.sleep(5)
+                await asyncio.sleep(RECONNECT_DELAY_S)
                 continue
-        # Poll connection status every 2s
-        await asyncio.sleep(2)
+        await asyncio.sleep(POLL_INTERVAL_S)
 
 
 async def main(args):
-    core = CoreClient(args.core_host, args.core_port, args.password or "")
+    password = args.password or os.environ.get("DGLAN_PASSWORD", "")
+    core = CoreClient(args.core_host, args.core_port, password)
     api = APIServer(core, args.http_host, args.http_port, args.cors_origins)
 
     # Start the connection manager as a background task
@@ -530,10 +568,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="DG-LAN HTTP API Server")
     parser.add_argument("--core-host", default="127.0.0.1", help="Core daemon IP (default: 127.0.0.1)")
     parser.add_argument("--core-port", type=int, default=59485, help="Core remote control port (default: 59485)")
-    parser.add_argument("--password", default="", help="Core remote password (empty = no auth for local)")
-    parser.add_argument("--http-host", default="0.0.0.0", help="HTTP listen address (default: 0.0.0.0)")
+    parser.add_argument("--password", default="", help="Core remote password (prefer DGLAN_PASSWORD env var)")
+    parser.add_argument("--http-host", default="127.0.0.1", help="HTTP listen address (default: 127.0.0.1, use 0.0.0.0 for all interfaces)")
     parser.add_argument("--http-port", type=int, default=8080, help="HTTP listen port (default: 8080)")
-    parser.add_argument("--cors-origins", nargs="*", default=["*"], help="Allowed CORS origins (default: *)")
+    parser.add_argument("--cors-origins", nargs="*", default=[], help="Allowed CORS origins (default: none)")
     parser.add_argument("--verbose", "-v", action="store_true", help="Debug logging")
     args = parser.parse_args()
 

@@ -26,10 +26,13 @@ $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
 # ── Paths ─────────────────────────────────────────────────────
-$msys2  = "C:\msys64"
+$msys2  = $env:MSYS2_ROOT ?? "C:\msys64"
 $mingw  = "$msys2\mingw64"
 $bash   = "$msys2\usr\bin\bash.exe"
-$iscc   = "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+$iscc   = $env:ISCC_PATH
+if (-not $iscc -or -not (Test-Path $iscc)) {
+    $iscc = "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+}
 if (-not (Test-Path $iscc)) {
     $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 }
@@ -48,7 +51,12 @@ foreach ($tool in @($bash, "$mingw\bin\Qt5Core.dll")) {
 $versionFile = "application\Common\Version.h"
 $content = Get-Content $versionFile -Raw
 $bt   = [DateTime]::UtcNow.ToString("yyyy-MM-dd_HH-mm")
-$hash = (git rev-parse HEAD).Substring(0, 12)
+$gitHead = git rev-parse HEAD 2>$null
+if (-not $gitHead) {
+    Write-Error "Not a git repository or git not available"
+    exit 1
+}
+$hash = $gitHead.Substring(0, 12)
 
 if ($Version) {
     $content = $content -replace '#define VERSION "[^"]*"', "#define VERSION `"$Version`""
@@ -152,8 +160,8 @@ if (-not $SkipPublish) {
     $versionTag = ""
     if ($vhContent -match '#define VERSION_TAG "([^"]*)"') { $versionTag = $Matches[1] }
 
-    # Commit any pending changes (Version.h build time, etc.)
-    git add -A
+    # Commit only files changed by this script
+    git add $versionFile
     $commitMsg = "chore: release $tag"
     git diff --cached --quiet 2>$null
     if ($LASTEXITCODE -ne 0) {
@@ -195,8 +203,10 @@ if (-not $SkipPublish) {
         --latest
 
     if ($LASTEXITCODE -eq 0) {
+        $repoUrl = (gh repo view --json url -q '.url') 2>$null
+        if (-not $repoUrl) { $repoUrl = "(unable to determine repo URL)" }
         Write-Host "`n=== PUBLISHED ===" -ForegroundColor Green
-        Write-Host "https://github.com/kwran420/DG-LAN/releases/tag/$tag" -ForegroundColor Cyan
+        Write-Host "$repoUrl/releases/tag/$tag" -ForegroundColor Cyan
     } else {
         Write-Error "Failed to create GitHub release"
         exit 1

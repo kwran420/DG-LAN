@@ -28,15 +28,18 @@ pip install protobuf
 python server.py
 
 # Or with options
-python server.py --http-port 9090 --cors-origins https://mysite.com
-python server.py --core-host 10.0.0.5 --password mysecret  # remote Core
+python server.py --http-port 9090 --http-host 0.0.0.0 --cors-origins https://mysite.com
+
+# Remote Core — prefer environment variable for password
+DGLAN_PASSWORD=mysecret python server.py --core-host 10.0.0.5
 ```
 
 ## API Endpoints
 
-### `GET /api/files`
+### `GET /api/v1/files`
 
 Returns all shared files with `dglan://` link parameters.
+Also available at `/api/files` for backward compatibility.
 
 ```json
 {
@@ -65,9 +68,10 @@ Returns all shared files with `dglan://` link parameters.
 }
 ```
 
-### `GET /api/status`
+### `GET /api/v1/status`
 
 Core connection status and indexing progress.
+Also available at `/api/status`.
 
 ```json
 {
@@ -80,9 +84,10 @@ Core connection status and indexing progress.
 }
 ```
 
-### `GET /api/health`
+### `GET /api/v1/health`
 
 Simple health check: `{"status": "ok"}`
+Also available at `/api/health`.
 
 ## Website integration
 
@@ -95,15 +100,19 @@ Include `dglan-api.js` in your page:
   (async () => {
     const api = new DglanApi("https://your-server.com:8080");
     const data = await api.getFiles();
-    const el = document.getElementById("files");
+    const container = document.getElementById("files");
 
     for (const file of data.files) {
-      el.innerHTML += `
-        <div class="file-row">
-          <a href="${file.dglan_url}">📥 ${file.name}</a>
-          <span>${DglanApi.formatSize(file.size)}</span>
-        </div>
-      `;
+      const row = document.createElement("div");
+      row.className = "file-row";
+      const link = document.createElement("a");
+      link.href = file.dglan_url;
+      link.textContent = file.name;
+      const size = document.createElement("span");
+      size.textContent = DglanApi.formatSize(file.size);
+      row.appendChild(link);
+      row.appendChild(size);
+      container.appendChild(row);
     }
   })();
 </script>
@@ -115,10 +124,10 @@ Include `dglan-api.js` in your page:
 |------|---------|-------------|
 | `--core-host` | `127.0.0.1` | Core daemon IP |
 | `--core-port` | `59485` | Core remote control port |
-| `--password` | *(empty)* | Core remote password |
-| `--http-host` | `0.0.0.0` | HTTP listen address |
+| `--password` | *(empty)* | Core remote password (prefer `DGLAN_PASSWORD` env var) |
+| `--http-host` | `127.0.0.1` | HTTP listen address (use `0.0.0.0` for all interfaces) |
 | `--http-port` | `8080` | HTTP listen port |
-| `--cors-origins` | `*` | Allowed CORS origins |
+| `--cors-origins` | *(none)* | Allowed CORS origins (e.g., `https://mysite.com`) |
 | `--verbose` | off | Debug logging |
 
 ## Deployment
