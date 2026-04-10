@@ -47,14 +47,5 @@ namespace NL
       QTcpServer tcpServer;
 
       quint16 currentPort;
-
-        // TODO: count the number of connection per ip per second and
-        // blocked temporarily an ip with too much attempt.
-//      struct BlockedIPs
-//      {
-//         QHostAddress address;
-//         QDateTime time;
-//      };
-//      QList<BlockedIPs> blockedIPs;
    };
 }

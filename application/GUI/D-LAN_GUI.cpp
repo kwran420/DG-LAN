@@ -393,6 +393,6 @@ void D_LAN_GUI::handleUrl(const QUrl& url)
    entry.set_path(path.isEmpty() ? "/" : path.toStdString());
    entry.mutable_shared_entry()->mutable_id()->set_hash(entryHash.getData(), Common::Hash::HASH_SIZE);
 
-   qDebug() << "DG-LAN: URL download — peer=" << peerHex << "name=" << name << "size=" << size;
+   L_USER(QString("URL download — peer=%1 name=%2 size=%3").arg(peerHex, name).arg(size));
    this->coreConnection->download(peerID, entry);
 }

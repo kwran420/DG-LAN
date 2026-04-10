@@ -190,12 +190,6 @@ const QList<WatcherEvent> DirWatcherWin::waitEvent(int timeout, QList<WaitCondit
          QString path = dir->fullPath;
          path.append('/').append(filename);
 
-//         L_DEBU("---------");
-//         L_DEBU(QString("Action = %1").arg(notifyInformation->Action));
-//         L_DEBU(QString("path = %1").arg(path));
-//         L_DEBU(QString("offset = %1").arg(notifyInformation->NextEntryOffset));
-//         L_DEBU("---------");
-
          switch (notifyInformation->Action)
          {
          case FILE_ACTION_ADDED:

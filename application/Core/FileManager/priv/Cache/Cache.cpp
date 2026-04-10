@@ -358,10 +358,6 @@ QList<QSharedPointer<IChunk>> Cache::newFile(Protos::Common::Entry& fileEntry)
    for (QVectorIterator<QSharedPointer<Chunk>> i(chunks); i.hasNext();)
       ichunks << i.next();
    return ichunks;
-
-   // This method works but 'reinterpret_cast' is too dangerous. (only if 'File::getChunks()' return a QList).
-   // QList<QSharedPointer<Chunk>> chunks = file->getChunks();
-   // return *(reinterpret_cast<QList<QSharedPointer<IChunk>>*>(&chunks));
 }
 
 /**

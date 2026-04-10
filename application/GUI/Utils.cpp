@@ -36,7 +36,7 @@ using namespace GUI;
 
 /**
   * Ask the user to choose one or more directories/files.
-  * TODO: browse the remotes directories (Core) not the local ones.
+  * Note: currently only browses local directories, not remote Core directories.
   */
 QStringList Utils::askForDirectoriesOrFiles(QSharedPointer<RCC::ICoreConnection> coreConnection)
 {
@@ -75,14 +75,6 @@ QStringList Utils::askForDirectoriesOrFiles(QSharedPointer<RCC::ICoreConnection>
 
 QStringList Utils::askForDirectoriesToDownloadTo(QSharedPointer<RCC::ICoreConnection> coreConnection)
 {
-   //return Utils::askForDirectories(coreConnection, "<img src=\":/icons/ressources/information.png\" /> <strong>" + QObject::tr("The downloading file will be shared") + "</strong>");
-   //return Utils::askForDirectoriesOrFiles(coreConnection); // TODO: take the code from 'askForDirectoriesOrFiles',
-   /*
-   QGridLayout* layout = fileDialog.findChild<QGridLayout*>();
-   QLabel* label = new QLabel(message, &fileDialog);
-   layout->addWidget(label, layout->rowCount(), 0, 1, -1, Qt::AlignLeft | Qt::AlignVCenter);
-   */
-
    return QStringList();
 }
 

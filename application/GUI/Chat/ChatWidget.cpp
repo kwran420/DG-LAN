@@ -359,27 +359,10 @@ void ChatWidget::documentChanged(int position, int charsRemoved, int charsAdded)
    if (this->answers.getList().isEmpty())
       return;
 
-   const int delta = charsAdded - charsRemoved;
-
-   // TODO.....
-   /*for (const auto& answer: )
-
-   QMutableLinkedListIterator i<Answer>{this->answers.getList()};
-   i.toBack();
-
-   while (i.hasPrevious()) {
-      const auto& answer = e.previous();
-
-      if (
-          charsRemoved > 0 && position < answer.begin && position + charsRemoved >= answer.begin || // If there is one or more character removed into the answer or . . .
-          position >= answer.begin && position < answer.end // . . . if there is one or more character added or removed into the answer
-          )
-      {
-         // The answer is removed.
-         i.remove();
-      }
-
-   } while (i != this->answers.getList().begin());*/
+   Q_UNUSED(position);
+   Q_UNUSED(charsRemoved);
+   Q_UNUSED(charsAdded);
+}
 }
 
 void ChatWidget::setFocusTxtMessage()
