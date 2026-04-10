@@ -49,6 +49,7 @@ FileUpdater::FileUpdater(FileManager* fileManager) :
    toStop(false),
    progress(0),
    mutex(QMutex::Recursive),
+   currentScanIsFullScan(true),
    currentScanningEntry(nullptr),
    toStopHashing(false),
    remainingSizeToHash(0)
@@ -102,6 +103,7 @@ void FileUpdater::addRoot(SharedEntry* sharedEntry)
       watchable = this->dirWatcher->addPath(entryPath.getPath());
 
    this->entriesToScan << sharedEntry->getRootEntry();
+   this->fullScanEntries << sharedEntry->getRootEntry();
 
    if (!watchable)
    {
@@ -138,6 +140,7 @@ void FileUpdater::rmRoot(SharedEntry* sharedEntry, Directory* dir2)
 
       this->removeFromFilesWithoutHashes(sharedEntry->getRootEntry());
       this->removeFromEntriesToScan(sharedEntry->getRootEntry());
+      this->fullScanEntries.remove(sharedEntry->getRootEntry());
       this->unwatchableEntries.removeOne(sharedEntry->getRootEntry());
       this->entriesToRemove << sharedEntry->getRootEntry();
    }
@@ -255,15 +258,23 @@ void FileUpdater::run()
             this->mutex.unlock();
 
          Entry* addedDir = nullptr;
+         bool isFullScan = false;
          this->mutex.lock();
          if (!this->entriesToScan.isEmpty())
+         {
             addedDir = this->entriesToScan.takeLast();
+            isFullScan = this->fullScanEntries.remove(addedDir);
+         }
          this->mutex.unlock();
 
          // Synchronize the new directory.
+         // Full scan (new shared dir): index all files.
+         // Watcher scan (filesystem event): skip genuinely new files (only rehost what was already there or downloaded via DG-LAN).
          if (addedDir)
          {
+            this->currentScanIsFullScan = isFullScan;
             this->scan(addedDir);
+            this->currentScanIsFullScan = true;
          }
       }
       else // Wait for filesystem modifications.
@@ -288,11 +299,13 @@ void FileUpdater::run()
          QList<Entry*> unwatchableEntriesCopy = this->unwatchableEntries;
          this->mutex.unlock();
 
-         // Synchronize the new directory.
+         // Synchronize unwatchable directories (periodic rescan, not full scan).
          for (QListIterator<Entry*> i(unwatchableEntriesCopy); i.hasNext();)
          {
             Entry* dir = i.next();
-               this->scan(dir);
+            this->currentScanIsFullScan = false;
+            this->scan(dir);
+            this->currentScanIsFullScan = true;
          }
       }
 
@@ -450,6 +463,11 @@ void FileUpdater::scan(Entry* entry, bool addUnfinished)
 
          if (fileInfo.isDir())
          {
+            // During watcher-driven rescans, skip genuinely new directories
+            // (e.g., from file extraction). Only traverse directories already in cache.
+            if (!this->currentScanIsFullScan && !currentDir->getSubDir(fileInfo.fileName()))
+               continue;
+
             Directory* dir = currentDir->createSubDir(fileInfo.fileName());
             dir->setScanned(false);
             dirsToVisit << dir;
@@ -459,6 +477,7 @@ void FileUpdater::scan(Entry* entry, bool addUnfinished)
          else if (addUnfinished || !Global::isFileUnfinished(fileInfo.fileName()))
          {
             File* file = currentDir->getFile(fileInfo.fileName());
+            const bool wasExisting = (file != nullptr);
             QMutexLocker locker(&this->mutex);
 
             // Only used when loading the cache to compute the progress.
@@ -489,6 +508,12 @@ void FileUpdater::scan(Entry* entry, bool addUnfinished)
 
             if (!file)
             {
+               // During watcher-driven rescans, skip genuinely new files.
+               // Only files already present at scan time or downloaded via DG-LAN are rehosted.
+               // Replaced files (wasExisting) are re-created to keep the index consistent.
+               if (!wasExisting && !this->currentScanIsFullScan)
+                  continue;
+
                // Very special case : there is a file 'a' without File* in cache and a file 'a.unfinished'.
                // This case occurs when a file is redownloaded, the File* 'a' is renamed as 'a.unfinished' but the physical file 'a'
                // is not deleted.

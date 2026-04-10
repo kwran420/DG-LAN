@@ -23,6 +23,7 @@
 #include <QMutex>
 #include <QString>
 #include <QList>
+#include <QSet>
 #include <QElapsedTimer>
 
 #include <priv/FileUpdater/DirWatcher.h>
@@ -119,6 +120,8 @@ namespace FM
       QList<Entry*> unwatchableEntries;
       QElapsedTimer timerScanUnwatchable;
       QList<Entry*> entriesToScan; ///< When something change in a directory or in a file we put it in this list until it is scanned.
+      QSet<Entry*> fullScanEntries; ///< Entries from addRoot() that need a full scan (index all files). Watcher-driven rescans skip genuinely new files.
+      bool currentScanIsFullScan; ///< True during initial scan or new shared directory scan; false during watcher-triggered rescans.
       Entry* currentScanningEntry;
       QWaitCondition scanningStopped;
       mutable QMutex scanningMutex;
