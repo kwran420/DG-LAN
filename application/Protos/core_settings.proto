@@ -110,6 +110,11 @@ message Settings {
    // Useful for ZeroTier environments where IPv6 link-local causes address conflicts.
    bool force_ipv4 = 112;
 
+   // [default = false] When true, only rehost files downloaded via DG-LAN.
+   // New files appearing in shared directories (extractions, copies) are ignored.
+   // When false (master mode), all files in shared directories are indexed and shared.
+   bool client_mode = 116;
+
    // [default = 3] Number of consecutive multicast send/receive failures before
    // escalating to the broadcast fallback. 0 = never escalate (multicast only).
    uint32 multicast_failure_threshold = 113;

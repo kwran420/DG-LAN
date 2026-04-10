@@ -92,6 +92,7 @@ SettingsWidget::SettingsWidget(QSharedPointer<RCC::ICoreConnection> coreConnecti
    connect(this->ui->txtNick, SIGNAL(editingFinished()), this, SLOT(saveCoreSettings()));
 
    connect(this->ui->chkEnableIntegrityCheck, SIGNAL(clicked()), this, SLOT(saveCoreSettings()));
+   connect(this->ui->chkClientMode, SIGNAL(clicked()), this, SLOT(saveCoreSettings()));
    connect(this->ui->butRefreshInterfaces, SIGNAL(clicked()), this, SLOT(refreshNetworkInterfaces()));
 
    this->connectAllAddressButtons();
@@ -359,6 +360,9 @@ void SettingsWidget::newState(const Protos::GUI::State& state)
    if (!this->ui->chkEnableIntegrityCheck->hasFocus())
       this->ui->chkEnableIntegrityCheck->setChecked(state.integrity_check_enabled());
 
+   if (!this->ui->chkClientMode->hasFocus())
+      this->ui->chkClientMode->setChecked(state.client_mode());
+
    if ((this->corePasswordDefined = state.password_defined()))
    {
       this->ui->txtPassword->setPlaceholderText("");
@@ -480,6 +484,7 @@ void SettingsWidget::saveCoreSettings()
    Protos::GUI::CoreSettings settings;
    Common::ProtoHelper::setStr(settings, &Protos::GUI::CoreSettings::mutable_nick, this->ui->txtNick->text());
    settings.set_enable_integrity_check(this->ui->chkEnableIntegrityCheck->isChecked() ? Protos::Common::TS_TRUE : Protos::Common::TS_FALSE);
+   settings.set_client_mode(this->ui->chkClientMode->isChecked() ? Protos::Common::TS_TRUE : Protos::Common::TS_FALSE);
 
    for (QListIterator<Common::SharedEntry> i(this->sharedEntryListModel.getSharedEntries()); i.hasNext();)
       Common::ProtoHelper::addRepeatedStr(*settings.mutable_shared_paths(), &Protos::GUI::CoreSettings::SharedPaths::add_path, i.next().path.getPath());

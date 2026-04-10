@@ -138,6 +138,7 @@ void RemoteConnection::refresh()
    Protos::GUI::State state;
 
    state.set_integrity_check_enabled(SETTINGS.get<bool>("check_received_data_integrity"));
+   state.set_client_mode(SETTINGS.get<bool>("client_mode"));
    state.set_password_defined(!SETTINGS.get<Common::Hash>("remote_password").isNull());
 
    // Ourself
@@ -523,6 +524,9 @@ void RemoteConnection::onNewMessage(const Common::Message& message)
          SETTINGS.set("force_ipv4", coreSettingsMessage.force_ipv4());
          if (coreSettingsMessage.multicast_ttl_override() > 0)
             SETTINGS.set("multicast_ttl_override", static_cast<quint32>(coreSettingsMessage.multicast_ttl_override()));
+
+         if (coreSettingsMessage.client_mode() != Protos::Common::TS_NO_CHANGE)
+            SETTINGS.set("client_mode", coreSettingsMessage.client_mode() == Protos::Common::TriState::TS_TRUE);
 
          SETTINGS.save();
          this->refresh();

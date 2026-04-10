@@ -117,6 +117,8 @@ message State {
 
    bool integrity_check_enabled = 7;
 
+   bool client_mode = 12; // [default = false] When true, only rehost downloaded files.
+
    bool password_defined = 10; // [default = false].
 
    repeated Download download = 4;
@@ -241,6 +243,7 @@ message CoreSettings {
    string network_interface_name = 6;  // e.g. "zt0". Empty = auto.
    bool force_ipv4 = 7;
    uint32 multicast_ttl_override = 8;  // 0 = use core default.
+   Common.TriState client_mode = 9;    // TS_TRUE = client (rehost downloads only), TS_FALSE = master (share all).
 }
 
 

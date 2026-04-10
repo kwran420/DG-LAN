@@ -242,6 +242,16 @@
         </widget>
        </item>
        <item>
+        <widget class="QCheckBox" name="chkClientMode">
+         <property name="toolTip">
+          <string>When enabled, only files downloaded via DG-LAN are shared. New files placed in shared folders (extractions, copies) are ignored. Disable to share all files in shared folders (master mode).</string>
+         </property>
+         <property name="text">
+          <string>Client mode (only rehost downloads)</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <widget class="QCheckBox" name="chkEnableIntegrityCheck">
          <property name="toolTip">
           <string>When activated all received data will be verified against their hashes.  It may consume CPU resources.</string>

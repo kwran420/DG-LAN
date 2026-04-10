@@ -103,7 +103,11 @@ void FileUpdater::addRoot(SharedEntry* sharedEntry)
       watchable = this->dirWatcher->addPath(entryPath.getPath());
 
    this->entriesToScan << sharedEntry->getRootEntry();
-   this->fullScanEntries << sharedEntry->getRootEntry();
+
+   // In master mode, do a full scan (index all files).
+   // In client mode, skip — only files already in cache or downloaded via DG-LAN are rehosted.
+   if (!SETTINGS.get<bool>("client_mode"))
+      this->fullScanEntries << sharedEntry->getRootEntry();
 
    if (!watchable)
    {
