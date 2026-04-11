@@ -43,6 +43,12 @@ Thumbs.db
 
 # Copilot / GitHub config (local only)
 .github/
+!.github/workflows/
+!.github/ISSUE_TEMPLATE/
+!.github/CODE_OF_CONDUCT.md
+!.github/CONTRIBUTING.md
+!.github/SECURITY.md
+!.github/pull_request_template.md
 
 # Inno Setup temp output
 application/Setups/Windows/iscc_*.txt
