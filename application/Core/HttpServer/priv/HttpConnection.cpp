@@ -184,7 +184,6 @@ void HttpConnection::handleFileRequest(const QString& path)
    if (absolutePath.isEmpty())
    {
       // File not found locally. Try peer redirect.
-      const quint32 httpPort = SETTINGS.get<quint32>("http_server_port");
       const QList<PM::IPeer*> peers = this->peerManager->getPeers();
 
       for (PM::IPeer* peer : peers)
@@ -192,10 +191,14 @@ void HttpConnection::handleFileRequest(const QString& path)
          if (!peer->isMaster())
             continue;
 
+         const quint32 peerHttpPort = peer->getHttpPort();
+         if (peerHttpPort == 0)
+            continue;
+
          const QHostAddress peerIp = peer->getIP();
          const QString redirectUrl = QString("http://%1:%2/files/%3/%4")
             .arg(peerIp.toString())
-            .arg(httpPort)
+            .arg(peerHttpPort)
             .arg(seHashHex, relativePath);
 
          sendRedirect(redirectUrl);
@@ -274,7 +277,6 @@ void HttpConnection::handleFileRequest(const QString& path)
 void HttpConnection::handleApiFiles()
 {
    const Protos::Common::Entries rootEntries = this->fileManager->getEntries();
-   const quint32 httpPort = SETTINGS.get<quint32>("http_server_port");
 
    QJsonArray filesArray;
 
@@ -297,11 +299,11 @@ void HttpConnection::handleApiFiles()
       const QList<PM::IPeer*> peers = this->peerManager->getPeers();
       for (PM::IPeer* peer : peers)
       {
-         if (peer->isMaster())
+         if (peer->isMaster() && peer->getHttpPort() > 0)
          {
             peerUrls.append(QString("http://%1:%2/files/%3/")
                .arg(peer->getIP().toString())
-               .arg(httpPort)
+               .arg(peer->getHttpPort())
                .arg(seHashHex));
          }
       }

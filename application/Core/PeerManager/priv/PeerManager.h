@@ -82,7 +82,8 @@ namespace PM
          quint32 uploadRate,
          quint32 protocolVersion,
          quint32 lanSpeed = 0,
-         bool isMaster = false
+         bool isMaster = false,
+         quint32 httpPort = 0
       );
 
       void removePeer(const Common::Hash& ID, const QHostAddress& IP);

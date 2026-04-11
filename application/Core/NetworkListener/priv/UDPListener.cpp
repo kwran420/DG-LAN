@@ -194,6 +194,9 @@ void UDPListener::sendIMAliveMessage()
 
    IMAliveMessage.set_is_master(!SETTINGS.get<bool>("client_mode"));
 
+   if (SETTINGS.get<bool>("http_server_enabled"))
+      IMAliveMessage.set_http_port(SETTINGS.get<quint32>("http_server_port"));
+
    this->currentIMAliveTag = QRandomGenerator64::global()->generate64();
    IMAliveMessage.set_tag(this->currentIMAliveTag);
 
@@ -518,7 +521,8 @@ void UDPListener::processPendingMulticastDatagrams()
                   IMAliveMessage.upload_rate(),
                   IMAliveMessage.version(),
                   IMAliveMessage.lan_speed(),
-                  IMAliveMessage.is_master()
+                  IMAliveMessage.is_master(),
+                  IMAliveMessage.http_port()
                );
 
                // Adopt the master key hash from a peer if we don't have one yet
@@ -645,7 +649,8 @@ void UDPListener::processPendingUnicastDatagrams()
                IMAliveMessage.upload_rate(),
                IMAliveMessage.version(),
                IMAliveMessage.lan_speed(),
-               IMAliveMessage.is_master()
+               IMAliveMessage.is_master(),
+               IMAliveMessage.http_port()
             );
 
             // Adopt the master key hash from a peer if we don't have one yet

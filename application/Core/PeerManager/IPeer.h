@@ -72,6 +72,8 @@ namespace PM
 
       virtual bool isMaster() const = 0;
 
+      virtual quint32 getHttpPort() const = 0;
+
       /**
         * Return the average speed when downloading from this peer.
         * [bytes/s].

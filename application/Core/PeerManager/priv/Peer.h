@@ -65,6 +65,8 @@ namespace PM
 
       virtual bool isMaster() const;
 
+      virtual quint32 getHttpPort() const;
+
       virtual quint32 getSpeed();
       virtual void setSpeed(quint32 newSpeed);
 
@@ -83,7 +85,8 @@ namespace PM
          quint32 uploadRate,
          quint32 protocolVersion,
          quint32 lanSpeed = 0,
-         bool isMaster = false
+         bool isMaster = false,
+         quint32 httpPort = 0
       );
       virtual void setAsDead();
 
@@ -117,6 +120,7 @@ namespace PM
       quint32 uploadRate;
       quint32 lanSpeed;
       bool masterPeer;
+      quint32 httpPort;
 
       QElapsedTimer speedTimer;
       quint32 speed; // [bytes/s]
