@@ -40,24 +40,23 @@ DialogUserGuide::DialogUserGuide(QWidget* parent) :
    // ── Getting Started ──────────────────────────────────────────────────────
    html += QStringLiteral("<p>") + heading.arg("Getting Started") + QStringLiteral("</p>");
    html += QStringLiteral(
-      "<p>DG-LAN is a decentralised LAN file sharing tool built for LAN parties. "
-      "There is no central server &mdash; every machine on the network discovers "
-      "peers automatically via multicast and shares files at full switch speed.</p>"
+      "<p>DG-LAN decentralises a master file list across a network. One machine "
+      "curates the files (master); every other machine downloads and automatically "
+      "reshares them (clients) &mdash; distributing the load at full switch speed.</p>"
 
       "<p><b>First launch:</b> On starting DG-LAN for the first time you will be "
       "prompted to set a <b>nickname</b> and add at least one <b>shared folder</b>. "
-      "Your shared folders are the directories whose contents will be visible to "
-      "everyone else on the network.</p>");
+      "If you are the master, these folders define the file list for the network.</p>");
 
    // ── Network Panel ────────────────────────────────────────────────────────
    html += QStringLiteral("<p>") + heading.arg("Network Panel") + QStringLiteral("</p>");
    html += QStringLiteral(
       "<p>The main window is the <b>Network</b> panel. It has two areas:</p>"
       "<ul>"
-      "<li><b>Peer list</b> (left) &mdash; shows every DG-LAN user on the LAN, "
-      "along with their sharing amount.</li>"
-      "<li><b>File index</b> (centre) &mdash; shows the combined file tree of "
-      "all peers (or a single peer if you select one from the list).</li>"
+      "<li><b>Peer list</b> (left) &mdash; shows every DG-LAN peer on the "
+      "network, along with their sharing amount.</li>"
+      "<li><b>File index</b> (centre) &mdash; shows the master file list. "
+      "Browse everything available on the network in one view.</li>"
       "</ul>");
 
    html += QStringLiteral("<p>") + subheading.arg("File columns") + QStringLiteral("</p>");
@@ -108,7 +107,7 @@ DialogUserGuide::DialogUserGuide(QWidget* parent) :
       "<p>Type a search term into the <b>Search</b> bar (top of the window) and "
       "press Enter. Results are shown in a new tab. You can open multiple search "
       "tabs simultaneously.</p>"
-      "<p>Search matches file and folder names across all connected peers.</p>");
+      "<p>Search matches file and folder names across the master file list.</p>");
 
    // ── Settings ─────────────────────────────────────────────────────────────
    html += QStringLiteral("<p>") + heading.arg("Settings") + QStringLiteral("</p>");
@@ -121,27 +120,30 @@ DialogUserGuide::DialogUserGuide(QWidget* parent) :
 
    html += QStringLiteral("<p>") + subheading.arg("Shared folders") + QStringLiteral("</p>");
    html += QStringLiteral(
-      "<p>Manage the directories you share with the network:</p>"
+      "<p>Manage the directories that define your file list:</p>"
       "<ul>"
-      "<li><b>Add</b> &mdash; select a folder to share.</li>"
-      "<li><b>Remove</b> &mdash; stop sharing the selected folder.</li>"
+      "<li><b>Add</b> &mdash; select a folder to include in the list.</li>"
+      "<li><b>Remove</b> &mdash; remove a folder from the list.</li>"
       "<li><b>Move Up / Move Down</b> &mdash; reorder folders in the list.</li>"
       "<li><b>Open Folder</b> &mdash; open the selected folder in your file manager.</li>"
-      "</ul>");
+      "</ul>"
+      "<p><b>On the master:</b> these folders define what the entire network can access. "
+      "<b>On a client:</b> these folders hold your downloaded files for rehosting.</p>");
 
    // ── Master / Client Mode ─────────────────────────────────────────────────
    html += QStringLiteral("<p>") + heading.arg("Master / Client Mode") + QStringLiteral("</p>");
    html += QStringLiteral(
-      "<p>DG-LAN uses a <b>master/client</b> architecture for the network file index:</p>"
+      "<p>DG-LAN uses a <b>master/client</b> architecture:</p>"
       "<ul>"
-      "<li><b>Master mode</b> (default) &mdash; this machine maintains and serves "
-      "the combined file index for all peers. At least one machine on the network "
-      "must run as master.</li>"
-      "<li><b>Client mode</b> &mdash; this machine connects to a master for the "
-      "shared index. Enable this via <b>Settings &gt; Preferences &gt; Client mode</b>.</li>"
+      "<li><b>Master mode</b> &mdash; this machine curates the file list. It indexes "
+      "all files in its shared folders and serves the authoritative list to the "
+      "network. At least one machine must run as master.</li>"
+      "<li><b>Client mode</b> &mdash; this machine browses the master file list, "
+      "downloads files, and automatically reshares them to other clients. "
+      "Enable via <b>Settings &gt; Preferences &gt; Client mode</b>.</li>"
       "</ul>"
-      "<p>If multiple machines are set as master, one is automatically elected to "
-      "serve the canonical index.</p>");
+      "<p>The more clients download, the more sources become available &mdash; "
+      "the network becomes a distributed mirror of the master list.</p>");
 
    // ── Passwords ────────────────────────────────────────────────────────────
    html += QStringLiteral("<p>") + heading.arg("Passwords") + QStringLiteral("</p>");
@@ -150,9 +152,9 @@ DialogUserGuide::DialogUserGuide(QWidget* parent) :
       "<ul>"
       "<li><b>Remote password</b> &mdash; required to connect a remote GUI to "
       "the core. Set or change this in the password section of Settings.</li>"
-      "<li><b>Master password</b> &mdash; protects the master node so that only "
-      "authorised clients can join the network. Set via <b>Reset Master Key</b> "
-      "in Settings.</li>"
+      "<li><b>Master password</b> &mdash; restricts who can join the network. "
+      "Only clients with the correct password can see and download from the "
+      "master file list. Set via <b>Reset Master Key</b> in Settings.</li>"
       "</ul>"
       "<p>If you enter the wrong master password, a warning dialog will appear.</p>");
 
@@ -204,12 +206,13 @@ DialogUserGuide::DialogUserGuide(QWidget* parent) :
    html += QStringLiteral("<p>") + heading.arg("Tips") + QStringLiteral("</p>");
    html += QStringLiteral(
       "<ul>"
-      "<li>Share your game installers <i>before</i> the LAN party starts so "
-      "the file index is ready when everyone connects.</li>"
-      "<li>Use the peer list to check who is online and how much they are sharing.</li>"
+      "<li>Set up the master machine and populate its shared folders <i>before</i> "
+      "the LAN party starts so the file list is ready when clients connect.</li>"
+      "<li>The more clients that download a file, the more sources are available "
+      "&mdash; large files distribute faster as the swarm grows.</li>"
       "<li>If downloads are slow, check that both machines are on the same switch "
       "and not routing through Wi-Fi.</li>"
-      "<li>Set a master password if you want to restrict who can join the network.</li>"
+      "<li>Set a master password to restrict who can join the network.</li>"
       "</ul>");
 
    this->ui->txtGuide->setHtml(html);

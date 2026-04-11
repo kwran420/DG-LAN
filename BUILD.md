@@ -1,6 +1,6 @@
 # DG-LAN — Build Instructions
 
-DG-LAN is built with **MSYS2 MinGW64** on Windows (the primary platform). Linux and macOS builds are possible but untested.
+DG-LAN decentralises a master file list across a network. It is built with **MSYS2 MinGW64** on Windows (the primary platform). Linux and macOS builds are possible but untested.
 
 ---
 

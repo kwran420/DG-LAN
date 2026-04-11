@@ -4,7 +4,11 @@ Development reference for DG-LAN contributors and AI assistants.
 
 ## Overview
 
-DG-LAN is a decentralized LAN file-sharing application. Forked from [D-LAN](https://github.com/Ummon/D-LAN).  
+DG-LAN decentralises a master file list across a network. A master machine curates
+shared folders and indexes every file; clients browse the list, download what they
+need, and automatically rehost downloaded files — distributing the load across all peers.
+
+Forked from [D-LAN](https://github.com/Ummon/D-LAN).
 C++17 with Qt5, built with MSYS2 MinGW64 on Windows.
 
 - **GitHub**: https://github.com/kwran420/DG-LAN
@@ -143,15 +147,22 @@ Clients check for updates via the GitHub Releases API.
 - **Local browse**: `RemoteConnection` → `FileManager::getEntries()` (sync, mutex-protected)
 - **Remote browse**: GUI → `RemoteConnection` → `Peer::getEntries()` → `CORE_GET_ENTRIES` over network → remote `GetEntriesResult` waits for scan → sends `CORE_GET_ENTRIES_RESULT`
 
+### Master / Client Architecture
+- **Master mode** (`client_mode = false`): indexes ALL files in shared directories, serves the canonical file list
+- **Client mode** (`client_mode = true`): only indexes downloaded files and files already in shared folders (selective rehosting)
+- At least one machine must run as master; clients browse and rehost from that list
+- Multiple masters can coexist — the network elects one to serve the canonical index
+
 ### File Scanning & Caching
 - `FileUpdater` thread continuously scans shared directories
 - `Cache` stores the directory tree; `Directory*` raw pointers used throughout
 - `file_cache.bin`: protobuf binary saved every 60s via `timerPersistCache`
-- Selective rehosting: watcher-driven rescans skip genuinely new files; only downloads and existing files are indexed
+- **Master**: indexes everything in shared folders (full scan)
+- **Client**: selective rehosting — watcher-driven rescans skip genuinely new files; only downloads and existing files are indexed
 
 ### GUI Layout
 - **MainWindow**: Central MdiArea + Log dock (always visible) + StatusBar
-- **NetworkWidget**: Unified file index — all peers' files in one table with columns: Name, Size, Status, Queue #, Progress, DL Speed, UL Speed, Peers
+- **NetworkWidget**: Unified file index — browse the master file list with columns: Name, Size, Status, Queue #, Progress, DL Speed, UL Speed, Peers
 - **PeersDock**: Peer list with priority (High/Normal/Low) and connection speed
 - **Settings**: Menu bar → dialog (not tabs)
 - **ScrollingNotification**: Marquee banner when update available

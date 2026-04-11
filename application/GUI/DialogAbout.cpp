@@ -73,9 +73,10 @@ DialogAbout::DialogAbout(QWidget *parent) :
 
    QString body;
    body += QStringLiteral(
-      "<p>DG-LAN is a decentralised, zero-config file sharing tool purpose-built "
-      "for LAN parties. Drop in, share your game library, grab what everyone else "
-      "is hosting &mdash; all at full gigabit switch speeds with no internet required.</p>");
+      "<p>DG-LAN decentralises a master file list across a network. One machine "
+      "curates the files; every other machine downloads and automatically reshares "
+      "them &mdash; distributing the load at full gigabit switch speeds with no "
+      "internet required.</p>");
 
    // ── History ──
    body += QStringLiteral(
@@ -96,11 +97,12 @@ DialogAbout::DialogAbout(QWidget *parent) :
    body += QStringLiteral(
       "<p style=\"color:#80c8ff; font-weight:bold;\">What DG-LAN adds</p>"
       "<ul style=\"margin-top:0; margin-bottom:0;\">"
-      "<li>Master/client network architecture with password-protected master mode</li>"
-      "<li>Unified network file index with live download progress</li>"
-      "<li>Download queue management with drag-and-drop reordering</li>"
+      "<li>Master/client architecture &mdash; one machine curates the file list, clients distribute it</li>"
+      "<li>Auto-rehosting &mdash; downloaded files are reshared automatically</li>"
+      "<li>Unified file index with live download progress</li>"
+      "<li>Download queue management with reordering</li>"
       "<li>Built-in auto-updater (checks GitHub releases)</li>"
-      "<li>Configurable multicast TTL and network interface binding</li>"
+      "<li>Password-protected networks</li>"
       "<li>Modern MSYS2/MinGW64 build chain with Protobuf&nbsp;3</li>"
       "</ul>");
 

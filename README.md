@@ -1,24 +1,23 @@
 # DG-LAN
 
-**DG-LAN** is a decentralized LAN file-sharing application for Windows.  
-Drop it on every machine, launch it, and instantly see and download everyone's shared files — no server, no setup, no accounts.
+**DG-LAN** decentralises a master file list across a network.  
+One machine curates the files; every other machine helps distribute them — at full switch speed, with zero configuration.
 
-Forked from [D-LAN](https://github.com/Ummon/D-LAN) and rebuilt with a modern, streamlined UI and robust networking.
+Forked from [D-LAN](https://github.com/Ummon/D-LAN) and rebuilt with a modern UI, robust networking, and a master/client architecture.
 
-> **Built for:** LAN parties, home networks, office file sharing.  
+> **Built for:** LAN parties, lab environments, office deployments — anywhere you need a designated set of files available to everyone on a network.  
 > Optionally works across subnets via [ZeroTier](https://www.zerotier.com/).
 
 ---
 
-## What it does
+## How it works
 
-1. **Share** — point DG-LAN at folders on your machine.
-2. **Discover** — every peer on the LAN appears automatically (multicast → broadcast → subnet scan → gossip).
-3. **Browse** — a single unified file index shows every file from every peer, with search and filtering.
-4. **Download** — multi-source transfers pull from all peers that have the file, maximizing speed.
-5. **Rehost** — downloaded files are automatically shared back to the network (selective rehosting — only files you downloaded or already had in shared folders).
+1. **Master curates** — one machine runs in master mode, shares designated folders, and indexes every file in them.
+2. **Clients join** — other machines connect, browse the master file list, and download what they need.
+3. **Clients rehost** — every file a client downloads is automatically shared back to the network, distributing the load across all peers.
+4. **Discovery is automatic** — peers find each other via multicast, broadcast, subnet scan, and gossip. No manual IP entry.
 
-No central server. No configuration. Just plug in and go.
+The result: a single authoritative file list, distributed across every machine that participates. The more people download, the faster it gets for everyone.
 
 ---
 
@@ -26,17 +25,17 @@ No central server. No configuration. Just plug in and go.
 
 | Category | Feature |
 |----------|---------|
+| **Master List** | Master indexes all shared folders; clients see and download from this curated file list |
+| **Auto-Rehosting** | Downloaded files are automatically re-shared — the network becomes a distributed mirror |
 | **Discovery** | Multicast, directed broadcast, subnet scan (`/24`), gossip / peer exchange (PEX) — fully automatic fallback chain |
-| **File Browsing** | Unified file index across all peers in one table — no per-peer tabs |
-| **Downloads** | Multi-source distributed transfers, download queue with drag reorder (⏫ ▲ ▼ ⏬ toolbar buttons + right-click menu) |
-| **Rehosting** | Selective — only downloaded files and existing shared files are re-shared; externally added files are not auto-indexed |
-| **Peer Priority** | Right-click any peer to set High / Normal / Low priority |
-| **Connection Speed** | Peers advertise their LAN speed (displayed in peer tooltips) |
-| **Search** | Fast indexed search across all peers |
+| **File Browsing** | Unified file index in one table — browse the entire master list at a glance |
+| **Downloads** | Multi-source transfers pull from all peers that have the file, maximizing speed |
+| **Queue Management** | Download queue with reorder buttons (⏫ ▲ ▼ ⏬) and right-click menu |
+| **Search** | Fast indexed search across the file list |
+| **Master Password** | Password-protect the network so only authorised clients can join |
 | **Auto-Update** | Checks GitHub Releases on launch; downloads and installs updates in-app |
-| **Forced Update** | Network protocol version mismatch triggers a mandatory update dialog |
-| **Logging** | Real-time activity log: scanning, hashing, download start/complete/cancel, peer join/leave, network refresh |
-| **Scrolling Notification** | Marquee bar when an update is available |
+| **Forced Update** | Protocol version mismatch triggers a mandatory update dialog |
+| **Logging** | Real-time activity log: scanning, hashing, transfers, peer join/leave |
 | **`dglan://` URLs** | Custom URL scheme for one-click downloads from web pages |
 | **ZeroTier** | Bind to a ZeroTier interface for cross-subnet use |
 | **Remote Control** | GUI can connect to a Core running on another machine |
@@ -46,10 +45,17 @@ No central server. No configuration. Just plug in and go.
 
 ## Quick Start
 
-1. **Install** DG-LAN on every machine (download the installer from [GitHub Releases](https://github.com/kwran420/DG-LAN/releases)).
-2. **Launch** — peers find each other automatically on the same subnet.
-3. **Share** folders via Settings → Preferences.
-4. **Browse & download** from the unified file index.
+### Master (the machine with the files)
+1. **Install** DG-LAN (download from [GitHub Releases](https://github.com/kwran420/DG-LAN/releases)).
+2. **Add shared folders** in Settings → Preferences — these are the files everyone will download.
+3. **Set a master password** (optional) to restrict who can join.
+4. Leave it running — the master indexes your files and serves the list.
+
+### Clients (everyone else)
+1. **Install** DG-LAN and launch it.
+2. **Enable client mode** in Settings → Preferences → Client mode.
+3. **Browse & download** from the master file list.
+4. Files you download are automatically rehosted to other clients.
 
 For cross-subnet / ZeroTier setups, see [BUILD.md](BUILD.md#zerotier-setup).
 
