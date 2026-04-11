@@ -45,6 +45,7 @@ namespace GUI
       QString getNick(const Common::Hash& peerID, const QString& defaultNick = QString()) const;      
       QString getNick(int rowNum) const;
       bool isOurself(int rowNum) const;
+      bool getIsMaster() const;
       Common::Hash getPeerID(int rowNum) const;
       QHostAddress getPeerIP(int rowNum) const;
       Protos::GUI::State::Peer::PeerStatus getStatus(int rowNum) const;
@@ -100,6 +101,7 @@ namespace GUI
 
       bool displayOnlyPeersWithStatusOK;
       bool toolTipEnabled;
+      bool isMaster;
       QString room;
    };
 }

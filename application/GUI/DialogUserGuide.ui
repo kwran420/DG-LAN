@@ -1,7 +1,7 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>DialogAbout</class>
- <widget class="QDialog" name="DialogAbout">
+ <class>DialogUserGuide</class>
+ <widget class="QDialog" name="DialogUserGuide">
   <property name="windowModality">
    <enum>Qt::ApplicationModal</enum>
   </property>
@@ -9,8 +9,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>560</width>
-    <height>620</height>
+    <width>640</width>
+    <height>720</height>
    </rect>
   </property>
   <property name="palette">
@@ -51,17 +51,14 @@
    </palette>
   </property>
   <property name="windowTitle">
-   <string>About DG-LAN</string>
-  </property>
-  <property name="autoFillBackground">
-   <bool>false</bool>
+   <string>DG-LAN User Guide</string>
   </property>
   <property name="modal">
    <bool>true</bool>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <property name="spacing">
-    <number>4</number>
+    <number>6</number>
    </property>
    <property name="leftMargin">
     <number>0</number>
@@ -75,23 +72,6 @@
    <property name="bottomMargin">
     <number>10</number>
    </property>
-   <!-- Logo -->
-   <item>
-    <widget class="QLabel" name="lblLogo">
-     <property name="minimumSize">
-      <size>
-       <width>0</width>
-       <height>110</height>
-      </size>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignHCenter|Qt::AlignVCenter</set>
-     </property>
-    </widget>
-   </item>
    <!-- Title -->
    <item>
     <widget class="QLabel" name="lblTitle">
@@ -103,75 +83,49 @@
       </font>
      </property>
      <property name="text">
-      <string>DG-LAN</string>
+      <string>User Guide</string>
      </property>
      <property name="indent">
       <number>15</number>
      </property>
-    </widget>
-   </item>
-   <!-- Tagline -->
-   <item>
-    <widget class="QLabel" name="lblTagline">
-     <property name="font">
-      <font>
-       <italic>true</italic>
-       <pointsize>10</pointsize>
-      </font>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">color: #80c8ff;</string>
-     </property>
-     <property name="text">
-      <string>Plug in, game on!</string>
-     </property>
-     <property name="indent">
-      <number>15</number>
+     <property name="margin">
+      <number>10</number>
      </property>
     </widget>
    </item>
+   <!-- Scrollable content -->
    <item>
-    <spacer name="spacerAboveBody">
-     <property name="orientation">
-      <enum>Qt::Vertical</enum>
-     </property>
-     <property name="sizeType">
-      <enum>QSizePolicy::Fixed</enum>
-     </property>
-     <property name="sizeHint" stdset="0">
-      <size><width>0</width><height>6</height></size>
-     </property>
-    </spacer>
-   </item>
-   <!-- Rich-text body — set dynamically in C++ -->
-   <item>
-    <widget class="QLabel" name="lblBody">
-     <property name="textFormat">
-      <enum>Qt::RichText</enum>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-     <property name="wordWrap">
-      <bool>true</bool>
-     </property>
+    <widget class="QTextBrowser" name="txtGuide">
      <property name="openExternalLinks">
       <bool>true</bool>
      </property>
-     <property name="margin">
-      <number>15</number>
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">
+       QTextBrowser {
+        background: transparent;
+        border: none;
+        color: #e0e0e0;
+        padding: 10px 15px;
+       }
+       QScrollBar:vertical {
+        background: rgba(255,255,255,20);
+        width: 10px;
+        border-radius: 5px;
+       }
+       QScrollBar::handle:vertical {
+        background: rgba(128,200,255,80);
+        border-radius: 5px;
+        min-height: 30px;
+       }
+       QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+        height: 0;
+       }
+      </string>
      </property>
     </widget>
-   </item>
-   <item>
-    <spacer name="spacerBelowBody">
-     <property name="orientation">
-      <enum>Qt::Vertical</enum>
-     </property>
-     <property name="sizeHint" stdset="0">
-      <size><width>0</width><height>0</height></size>
-     </property>
-    </spacer>
    </item>
    <!-- Close button -->
    <item>
@@ -200,8 +154,11 @@
        <property name="text">
         <string>Close</string>
        </property>
-       <property name="default">
-        <bool>true</bool>
+       <property name="minimumSize">
+        <size>
+         <width>90</width>
+         <height>0</height>
+        </size>
        </property>
       </widget>
      </item>
@@ -214,11 +171,17 @@
   <connection>
    <sender>butClose</sender>
    <signal>clicked()</signal>
-   <receiver>DialogAbout</receiver>
-   <slot>close()</slot>
+   <receiver>DialogUserGuide</receiver>
+   <slot>accept()</slot>
    <hints>
-    <hint type="sourcelabel"><x>450</x><y>600</y></hint>
-    <hint type="destinationlabel"><x>280</x><y>310</y></hint>
+    <hint type="sourcelabel">
+     <x>320</x>
+     <y>700</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>320</x>
+     <y>360</y>
+    </hint>
    </hints>
   </connection>
  </connections>

@@ -21,6 +21,7 @@ using namespace RCM;
 
 #include <limits>
 
+#include <QBitArray>
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QNetworkInterface>
@@ -72,6 +73,7 @@ RemoteConnection::RemoteConnection(
    chatSystem(chatSystem),
    waitForStateResult(false),
    authenticated(false),
+   masterKeyAuthFailed(false),
    saltChallenge(0)
  #if DEBUG
    ,loggerRefreshState(LM::Builder::newLogger("RemoteConnection (State)"))
@@ -140,6 +142,11 @@ void RemoteConnection::refresh()
    state.set_integrity_check_enabled(SETTINGS.get<bool>("check_received_data_integrity"));
    state.set_client_mode(SETTINGS.get<bool>("client_mode"));
    state.set_master_key_defined(!SETTINGS.get<Common::Hash>("master_key_hash").isNull());
+   if (this->masterKeyAuthFailed)
+   {
+      state.set_master_key_auth_failed(true);
+      this->masterKeyAuthFailed = false;
+   }
    state.set_password_defined(!SETTINGS.get<Common::Hash>("remote_password").isNull());
 
    // Ourself
@@ -149,6 +156,7 @@ void RemoteConnection::refresh()
    self->set_download_rate(downloadRate);
    self->set_upload_rate(uploadRate);
    self->set_lan_speed(SETTINGS.get<quint32>("lan_speed"));
+   self->set_is_master(!SETTINGS.get<bool>("client_mode"));
    Common::ProtoHelper::setStr(*self, &Protos::GUI::State::Peer::mutable_nick, this->peerManager->getSelf()->getNick());
    Common::ProtoHelper::setStr(*self, &Protos::GUI::State::Peer::mutable_core_version, Common::Global::getVersionFull());
 
@@ -169,6 +177,7 @@ void RemoteConnection::refresh()
       protoPeer->set_download_rate(peer->getDownloadRate());
       protoPeer->set_upload_rate(peer->getUploadRate());
       protoPeer->set_lan_speed(peer->getLanSpeed());
+      protoPeer->set_is_master(peer->isMaster());
 
       const auto& peerIP = peer->getIP();
       if (!peerIP.isNull())
@@ -311,6 +320,39 @@ void RemoteConnection::searchFound(const Protos::Common::FindResult& result)
    this->send(Common::MessageHeader::GUI_SEARCH_RESULT, result);
 }
 
+/**
+  * For each FILE entry in the result, check if we locally own all its chunks.
+  * If so, mark the entry as owned_locally = true.
+  */
+void RemoteConnection::markOwnedEntries(Protos::GUI::BrowseResult& result)
+{
+   for (int i = 0; i < result.entries_size(); i++)
+   {
+      Protos::Common::Entries* entries = result.mutable_entries(i);
+      for (int j = 0; j < entries->entry_size(); j++)
+      {
+         Protos::Common::Entry* entry = entries->mutable_entry(j);
+         if (entry->type() != Protos::Common::Entry::FILE || entry->chunk_size() == 0)
+            continue;
+
+         QList<Common::Hash> hashes;
+         for (int k = 0; k < entry->chunk_size(); k++)
+         {
+            const std::string& hashBytes = entry->chunk(k).hash();
+            if (static_cast<int>(hashBytes.size()) == Common::Hash::HASH_SIZE)
+               hashes << Common::Hash(hashBytes);
+         }
+
+         if (hashes.isEmpty())
+            continue;
+
+         const QBitArray owned = this->fileManager->haveChunks(hashes);
+         if (!owned.isNull() && owned.count(true) == owned.size())
+            entry->set_owned_locally(true);
+      }
+   }
+}
+
 void RemoteConnection::getEntriesResult(const Protos::Core::GetEntriesResult& entries)
 {
    PM::IGetEntriesResult* getEntriesResult = static_cast<PM::IGetEntriesResult*>(this->sender());
@@ -322,6 +364,8 @@ void RemoteConnection::getEntriesResult(const Protos::Core::GetEntriesResult& en
       if (entries.result(i).has_entries())
          entriesResult->CopyFrom(entries.result(i).entries());
    }
+
+   this->markOwnedEntries(result);
 
    result.set_tag(getEntriesResult->property("tag").toULongLong());
    this->send(Common::MessageHeader::GUI_BROWSE_RESULT, result);
@@ -507,7 +551,7 @@ void RemoteConnection::onNewMessage(const Common::Message& message)
          catch (FM::ItemsNotFoundException& e)
          {
             foreach (QString path, e.paths)
-               L_WARN(QString("Path not found: %1").arg(path));
+               L_WARN(QString("Shared path not found (may have been removed): %1").arg(path));
          }
 
          QString currentAddressToListenTo = SETTINGS.get<QString>("listen_address");
@@ -526,6 +570,12 @@ void RemoteConnection::onNewMessage(const Common::Message& message)
          if (coreSettingsMessage.multicast_ttl_override() > 0)
             SETTINGS.set("multicast_ttl_override", static_cast<quint32>(coreSettingsMessage.multicast_ttl_override()));
 
+         if (coreSettingsMessage.reset_master_key())
+         {
+            SETTINGS.set("master_key_hash", Common::Hash());
+            SETTINGS.set("master_key_was_reset", true);
+         }
+
          if (coreSettingsMessage.client_mode() != Protos::Common::TS_NO_CHANGE)
          {
             if (coreSettingsMessage.client_mode() == Protos::Common::TriState::TS_TRUE)
@@ -543,15 +593,19 @@ void RemoteConnection::onNewMessage(const Common::Message& message)
                   Common::Hash storedKey = SETTINGS.get<Common::Hash>("master_key_hash");
                   if (storedKey.isNull())
                   {
-                     // First time: set the master key and become master.
+                     // First time (or after reset): set the master key and become master.
                      SETTINGS.set("master_key_hash", attempt);
+                     SETTINGS.set("master_key_was_reset", false);
                      SETTINGS.set("client_mode", false);
                   }
                   else if (attempt == storedKey)
                   {
                      SETTINGS.set("client_mode", false);
                   }
-                  // Wrong password: silently ignore (State refresh will show unchanged mode).
+                  else
+                  {
+                     this->masterKeyAuthFailed = true;
+                  }
                }
             }
          }
@@ -627,7 +681,7 @@ void RemoteConnection::onNewMessage(const Common::Message& message)
          Common::Hash peerID(browseMessage.peer_id().hash());
          PM::IPeer* peer = this->peerManager->getPeer(peerID);
 
-         L_WARN(QString("RCM::GUI_BROWSE: peerID=%1 peer=%2 isSelf=%3 dirs=%4 get_roots=%5")
+         L_DEBU(QString("GUI_BROWSE: peerID=%1 peer=%2 isSelf=%3 dirs=%4 get_roots=%5")
             .arg(peerID.toStr())
             .arg(peer ? "found" : "NULL")
             .arg(peer == this->peerManager->getSelf() ? "yes" : "no")
@@ -669,11 +723,11 @@ void RemoteConnection::onNewMessage(const Common::Message& message)
             {
                for (int i = 0; i < browseMessage.dirs().entry_size(); i++)
                {
-                  L_WARN(QString("RCM::GUI_BROWSE self: getEntries for dir entry %1").arg(i));
+                  L_DEBU(QString("GUI_BROWSE self: getEntries for dir entry %1").arg(i));
                   try
                   {
                      result.add_entries()->CopyFrom(this->fileManager->getEntries(browseMessage.dirs().entry(i)));
-                     L_WARN(QString("RCM::GUI_BROWSE self: getEntries[%1] OK").arg(i));
+                     L_DEBU(QString("GUI_BROWSE self: getEntries[%1] OK").arg(i));
                   }
                   catch (const std::exception& e)
                   {
@@ -689,6 +743,8 @@ void RemoteConnection::onNewMessage(const Common::Message& message)
                if (browseMessage.dirs().entry_size() == 0 || browseMessage.get_roots())
                   result.add_entries()->CopyFrom(this->fileManager->getEntries());
             }
+
+            this->markOwnedEntries(result);
 
             result.set_tag(tag);
             this->send(Common::MessageHeader::GUI_BROWSE_RESULT, result);

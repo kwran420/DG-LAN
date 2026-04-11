@@ -59,6 +59,7 @@ SOURCES += main.cpp\
     StatusBar.cpp \
     ScrollingNotification.cpp \
     DialogAbout.cpp \
+    DialogUserGuide.cpp \
     Log.cpp \
     CheckBoxList.cpp \
     Browse/BrowseModel.cpp \
@@ -107,6 +108,7 @@ HEADERS  += MainWindow.h \
     ScrollingNotification.h \
     Log.h \
     DialogAbout.h \
+    DialogUserGuide.h \
     CheckBoxList.h \
     CheckBoxModel.h \
     IFilter.h \
@@ -153,6 +155,7 @@ HEADERS  += MainWindow.h \
 FORMS    += MainWindow.ui \
     StatusBar.ui \
     DialogAbout.ui \
+    DialogUserGuide.ui \
     Settings/RemoteFileDialog.ui \
     Settings/AskNewPasswordDialog.ui \
     Peers/PeersDock.ui \

@@ -78,6 +78,9 @@ message Entry {
    // Only for FILE type:
    // optional string mime_type = 9; // The mime type of the file. TODO: uncomment when #243 is implemented.
    repeated Hash chunk = 8; // The number of chunk must always correspond to the size of the file. Unknown chunks are empty.
+
+   // Set by the Core during browse: true if we locally own all chunks of this file (hash-based match).
+   bool owned_locally = 10;
 }
 
 message Entries

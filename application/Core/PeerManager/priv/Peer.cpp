@@ -43,7 +43,8 @@ Peer::Peer(PeerManager* peerManager, QSharedPointer<FM::IFileManager> fileManage
    speed(MAX_SPEED),
    alive(false),
    blocked(false),
-   protocolVersion(0)
+   protocolVersion(0),
+   masterPeer(false)
 {
    this->speedTimer.invalidate();
 
@@ -108,6 +109,11 @@ quint32 Peer::getLanSpeed() const
    return this->lanSpeed;
 }
 
+bool Peer::isMaster() const
+{
+   return this->masterPeer;
+}
+
 quint32 Peer::getSpeed()
 {
    QMutexLocker locker(&this->mutex);
@@ -169,7 +175,8 @@ void Peer::update(
    quint32 downloadRate,
    quint32 uploadRate,
    quint32 protocolVersion,
-   quint32 lanSpeed
+   quint32 lanSpeed,
+   bool isMaster
 )
 {
    this->alive = true;
@@ -183,6 +190,7 @@ void Peer::update(
    this->downloadRate = downloadRate;
    this->uploadRate = uploadRate;
    this->lanSpeed = lanSpeed;
+   this->masterPeer = isMaster;
    this->protocolVersion = protocolVersion;
 
    this->connectionPool.setIP(this->IP, this->port);

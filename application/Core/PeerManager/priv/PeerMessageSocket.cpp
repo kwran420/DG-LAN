@@ -164,13 +164,13 @@ void PeerMessageSocket::finished(bool closeTheSocket)
 
    if (closeTheSocket)
    {
-      L_WARN("Socket forced to close");
+      L_WARN("Peer connection force-closed (peer may have disconnected)");
       this->close();
       return;
    }
    else if (!this->socket->isValid())
    {
-      L_WARN("Socket non-valid, closed");
+      L_WARN("Peer socket became invalid and was closed");
       this->close();
       return;
    }
@@ -260,16 +260,16 @@ void PeerMessageSocket::onNewMessage(const Common::Message& message)
       {
          if (!this->entriesResultsToReceive.isEmpty())
          {
-            L_WARN("PM::CORE_GET_ENTRIES: already have pending results — ignoring");
+            L_WARN("Browse request ignored: previous browse still in progress");
             return;
          }
 
          const Protos::Core::GetEntries& getEntries = message.getMessage<Protos::Core::GetEntries>();
-         L_WARN(QString("PM::CORE_GET_ENTRIES: entry_size=%1 get_roots=%2").arg(getEntries.dirs().entry_size()).arg(getEntries.get_roots()));
+         L_DEBU(QString("CORE_GET_ENTRIES: entry_size=%1 get_roots=%2").arg(getEntries.dirs().entry_size()).arg(getEntries.get_roots()));
 
          for (int i = 0; i < getEntries.dirs().entry_size(); i++)
          {
-            L_WARN(QString("PM::CORE_GET_ENTRIES: creating scanned entries for dir %1").arg(i));
+            L_DEBU(QString("CORE_GET_ENTRIES: creating scanned entries for dir %1").arg(i));
             QSharedPointer<FM::IGetEntriesResult> result = this->fileManager->getScannedEntries(getEntries.dirs().entry(i), getEntries.nb_max_hashes_per_entry() > 0 ? getEntries.nb_max_hashes_per_entry() : std::numeric_limits<int>::max());
             connect(result.data(), &FM::IGetEntriesResult::result, this, &PeerMessageSocket::entriesResult, Qt::DirectConnection);
             connect(result.data(), &FM::IGetEntriesResult::timeout, this, &PeerMessageSocket::entriesResultTimeout, Qt::DirectConnection);
@@ -332,7 +332,7 @@ void PeerMessageSocket::onNewMessage(const Common::Message& message)
 
          if (getChunksMessage.chunks_size() == 0)
          {
-            L_WARN("GET_CHUNKS: No chunks requested");
+            L_WARN("Download request received with no chunks specified");
             this->finished(true);
             break;
          }
@@ -342,7 +342,7 @@ void PeerMessageSocket::onNewMessage(const Common::Message& message)
          const Common::Hash hash(chunkReq.hash().hash());
          if (hash.isNull())
          {
-            L_WARN("GET_CHUNKS: Chunk null");
+            L_WARN("Download request contains a null chunk reference");
             this->finished(true);
             break;
          }
@@ -358,7 +358,7 @@ void PeerMessageSocket::onNewMessage(const Common::Message& message)
             this->send(Common::MessageHeader::CORE_GET_CHUNKS_RESULT, result);
             this->finished();
 
-            L_WARN(QString("GET_CHUNKS: Chunk unknown: %1").arg(hash.toStr()));
+            L_WARN(QString("Download request for unknown chunk (file may have changed): %1").arg(hash.toStr()));
          }
          else
          {

@@ -60,7 +60,8 @@ SettingsWidget::SettingsWidget(QSharedPointer<RCC::ICoreConnection> coreConnecti
    coreConnection(coreConnection),
    sharedEntryListModel(sharedEntryListModel),
    corePasswordDefined(false),
-   masterKeyDefined(false)
+   masterKeyDefined(false),
+   initialSetupPrompted(false)
 {
    this->ui->setupUi(this);
 
@@ -94,7 +95,10 @@ SettingsWidget::SettingsWidget(QSharedPointer<RCC::ICoreConnection> coreConnecti
 
    connect(this->ui->chkEnableIntegrityCheck, SIGNAL(clicked()), this, SLOT(saveCoreSettings()));
    connect(this->ui->chkClientMode, SIGNAL(clicked()), this, SLOT(clientModeToggled()));
+   connect(this->ui->butResetMasterKey, SIGNAL(clicked()), this, SLOT(resetMasterKey()));
    connect(this->ui->butRefreshInterfaces, SIGNAL(clicked()), this, SLOT(refreshNetworkInterfaces()));
+
+   this->ui->butResetMasterKey->setVisible(false);
 
    this->connectAllAddressButtons();
 
@@ -361,10 +365,13 @@ void SettingsWidget::newState(const Protos::GUI::State& state)
    if (!this->ui->chkEnableIntegrityCheck->hasFocus())
       this->ui->chkEnableIntegrityCheck->setChecked(state.integrity_check_enabled());
 
-   if (!this->ui->chkClientMode->hasFocus())
-      this->ui->chkClientMode->setChecked(state.client_mode());
+   this->ui->chkClientMode->setChecked(state.client_mode());
 
    this->masterKeyDefined = state.master_key_defined();
+   this->ui->butResetMasterKey->setVisible(this->masterKeyDefined && this->coreConnection->isLocal() && !state.client_mode());
+
+   if (state.master_key_auth_failed())
+      QMessageBox::warning(this, tr("Master Mode"), tr("Wrong master password."));
 
    if ((this->corePasswordDefined = state.password_defined()))
    {
@@ -395,26 +402,22 @@ void SettingsWidget::newState(const Protos::GUI::State& state)
 
    this->getAtLeastOneState = true;
 
-
-   // If this is the first message state received and there is no incoming folder defined we ask the user to choose one.
-   // Commented cuz the user can know choose a folder right before downloading a file.
-   /*if (this->initialState)
+   // First-run setup: prompt for a shared/download folder if none exist.
+   if (!this->initialSetupPrompted && this->sharedEntryListModel.rowCount() == 0)
    {
-      this->initialState = false;
-      if (this->sharedDirsModel.rowCount() == 0)
-      {
-         if (QMessageBox::question(
-               this,
-               "No directory folder",
-               "You don't have any shared directory, would you like to choose one?",
-               QMessageBox::Yes,
-               QMessageBox::No
-            ) == QMessageBox::Yes)
-         {
-            this->addShared();
-         }
-      }
-   }*/
+      this->initialSetupPrompted = true;
+      QMessageBox::StandardButton answer = QMessageBox::question(
+         this->parentWidget() ? this->parentWidget() : this,
+         tr("Initial Setup"),
+         tr("No shared folder is configured.\n\n"
+            "Choose a folder to use for sharing and downloads.\n"
+            "If this machine is the master, files in this folder will appear in the network index.\n"
+            "Downloads from other peers will also be saved here."),
+         QMessageBox::Yes | QMessageBox::No
+      );
+      if (answer == QMessageBox::Yes)
+         this->addShared();
+   }
 }
 
 void SettingsWidget::coreConnecting()
@@ -529,30 +532,84 @@ void SettingsWidget::saveCoreSettings()
 
 void SettingsWidget::clientModeToggled()
 {
-   if (!this->ui->chkClientMode->isChecked())
+   const bool wantsClient = this->ui->chkClientMode->isChecked();
+
+   if (!wantsClient)
    {
       // Trying to become master — prompt for password.
       bool ok = false;
-      const QString password = QInputDialog::getText(
-         this,
-         tr("Master Mode"),
-         this->masterKeyDefined ? tr("Enter the master password:") : tr("Set a master password:"),
-         QLineEdit::Password,
-         QString(),
-         &ok
-      );
+      QString password;
 
-      if (!ok || password.isEmpty())
+      if (!this->masterKeyDefined)
       {
-         // Cancelled — revert checkbox.
-         this->ui->chkClientMode->setChecked(true);
-         return;
+         // First time: require password confirmation.
+         const QString pw1 = QInputDialog::getText(
+            this, tr("Master Mode"),
+            tr("No master password exists yet.\nChoose a master password for the network:"),
+            QLineEdit::Password, QString(), &ok
+         );
+         if (!ok || pw1.isEmpty())
+         {
+            this->ui->chkClientMode->setChecked(true);
+            return;
+         }
+
+         const QString pw2 = QInputDialog::getText(
+            this, tr("Master Mode"),
+            tr("Confirm the master password:"),
+            QLineEdit::Password, QString(), &ok
+         );
+         if (!ok || pw2.isEmpty())
+         {
+            this->ui->chkClientMode->setChecked(true);
+            return;
+         }
+
+         if (pw1 != pw2)
+         {
+            QMessageBox::warning(this, tr("Master Mode"), tr("Passwords do not match. Try again."));
+            this->ui->chkClientMode->setChecked(true);
+            return;
+         }
+
+         password = pw1;
+      }
+      else
+      {
+         // Password already set — verify it.
+         password = QInputDialog::getText(
+            this, tr("Master Mode"),
+            tr("Enter the master password:"),
+            QLineEdit::Password, QString(), &ok
+         );
+         if (!ok || password.isEmpty())
+         {
+            this->ui->chkClientMode->setChecked(true);
+            return;
+         }
       }
 
       this->pendingMasterKeyPassword = password;
    }
 
+   // Restore intended checkbox state (a state refresh during the modal dialog may have overwritten it).
+   this->ui->chkClientMode->setChecked(wantsClient);
    this->saveCoreSettings();
+}
+
+void SettingsWidget::resetMasterKey()
+{
+   if (QMessageBox::question(
+         this, tr("Reset Master Password"),
+         tr("This will clear the master password so a new one can be set.\nAll machines will return to client mode.\n\nContinue?"),
+         QMessageBox::Yes | QMessageBox::No
+      ) != QMessageBox::Yes)
+      return;
+
+   Protos::GUI::CoreSettings settings;
+   settings.set_reset_master_key(true);
+   settings.set_client_mode(Protos::Common::TS_TRUE);
+   this->coreConnection->setCoreSettings(settings);
 }
 
 void SettingsWidget::cmbLanguageChanged(int cmbIndex)

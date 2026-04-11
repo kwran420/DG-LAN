@@ -252,6 +252,39 @@
         </widget>
        </item>
        <item>
+        <layout class="QHBoxLayout" name="layoutClientModeHelper">
+         <item>
+          <widget class="QLabel" name="lblClientModeHelper">
+           <property name="text">
+            <string>Clients only share files they download. Uncheck to become master and share all files. A master password is required.</string>
+           </property>
+           <property name="wordWrap">
+            <bool>true</bool>
+           </property>
+           <property name="styleSheet">
+            <string>color: gray; font-size: 11px; margin-left: 20px;</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="butResetMasterKey">
+           <property name="text">
+            <string>Reset Master Password</string>
+           </property>
+           <property name="toolTip">
+            <string>Clear the master password so a new one can be set. Only available when connected locally.</string>
+           </property>
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
         <widget class="QCheckBox" name="chkEnableIntegrityCheck">
          <property name="toolTip">
           <string>When activated all received data will be verified against their hashes.  It may consume CPU resources.</string>

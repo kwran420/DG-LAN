@@ -55,6 +55,7 @@ namespace GUI
 
       virtual bool isDir(const QModelIndex& index) const;
       virtual QString getPath(const QModelIndex& index, bool appendFilename = true) const;
+      QString getLocalPath(const QModelIndex& index) const;
 
       void refresh();
 

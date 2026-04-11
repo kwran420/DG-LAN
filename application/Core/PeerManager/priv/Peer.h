@@ -63,6 +63,8 @@ namespace PM
       virtual quint32 getUploadRate() const;
       virtual quint32 getLanSpeed() const;
 
+      virtual bool isMaster() const;
+
       virtual quint32 getSpeed();
       virtual void setSpeed(quint32 newSpeed);
 
@@ -80,7 +82,8 @@ namespace PM
          quint32 downloadRate,
          quint32 uploadRate,
          quint32 protocolVersion,
-         quint32 lanSpeed = 0
+         quint32 lanSpeed = 0,
+         bool isMaster = false
       );
       virtual void setAsDead();
 
@@ -113,6 +116,7 @@ namespace PM
       quint32 downloadRate;
       quint32 uploadRate;
       quint32 lanSpeed;
+      bool masterPeer;
 
       QElapsedTimer speedTimer;
       quint32 speed; // [bytes/s]

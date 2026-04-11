@@ -23,11 +23,13 @@ using namespace GUI;
 
 #include <Common/Settings.h>
 #include <Common/Global.h>
+#include <Common/ProtoHelper.h>
 #include <Common/LogManager/Builder.h>
 
 LogModel::LogModel(QSharedPointer<RCC::ICoreConnection> coreConnection) :
    coreConnection(coreConnection),
-   prevCacheStatus(-1)
+   prevCacheStatus(-1),
+   firstStateAfterConnect(true)
 {
    connect(this->coreConnection.data(), &RCC::ICoreConnection::newLogMessages, this, &LogModel::newLogEntries);
 
@@ -183,6 +185,43 @@ void LogModel::newState(const Protos::GUI::State& state)
       this->prevCacheStatus = cacheStatus;
    }
 
+   // ── Download state transitions ────────────────────────────────────────────
+   QHash<quint64, int> currDownloads;
+   for (int d = 0; d < state.download_size(); ++d)
+   {
+      const auto& dl = state.download(d);
+      const quint64 dlId = dl.id();
+      const int status = static_cast<int>(dl.status());
+      currDownloads.insert(dlId, status);
+
+      if (!this->firstStateAfterConnect)
+      {
+         if (!this->prevDownloadStatus.contains(dlId))
+         {
+            const QString name = Common::ProtoHelper::getStr(dl.local_entry(), &Protos::Common::Entry::name);
+            batch << LM::Builder::newEntry(now, LM::SV_END_USER,
+               QString("[Download] Started: %1").arg(name));
+         }
+         else if (this->prevDownloadStatus[dlId] != status)
+         {
+            const QString name = Common::ProtoHelper::getStr(dl.local_entry(), &Protos::Common::Entry::name);
+            if (dl.status() == Protos::GUI::State::Download::COMPLETE)
+               batch << LM::Builder::newEntry(now, LM::SV_END_USER,
+                  QString("[Download] Completed: %1").arg(name));
+         }
+      }
+   }
+   if (!this->firstStateAfterConnect)
+   {
+      for (auto it = this->prevDownloadStatus.cbegin(); it != this->prevDownloadStatus.cend(); ++it)
+      {
+         if (!currDownloads.contains(it.key()) && it.value() != static_cast<int>(Protos::GUI::State::Download::COMPLETE))
+            batch << LM::Builder::newEntry(now, LM::SV_END_USER, QString("[Download] Cancelled"));
+      }
+   }
+   this->prevDownloadStatus = currDownloads;
+   this->firstStateAfterConnect = false;
+
    if (!batch.isEmpty())
       this->newLogEntries(batch);
 }
@@ -191,10 +230,14 @@ void LogModel::coreConnected()
 {
    this->prevPeers.clear();
    this->prevCacheStatus = -1;
+   this->prevDownloadStatus.clear();
+   this->firstStateAfterConnect = true;
 }
 
 void LogModel::coreDisconnected(bool)
 {
    this->prevPeers.clear();
    this->prevCacheStatus = -1;
+   this->prevDownloadStatus.clear();
+   this->firstStateAfterConnect = true;
 }

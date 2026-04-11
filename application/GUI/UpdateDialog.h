@@ -28,7 +28,8 @@ namespace GUI
       explicit UpdateDialog(const QString& latestVersion,
                             const QString& releaseUrl,
                             const QString& downloadUrl,
-                            QWidget* parent = nullptr);
+                            QWidget* parent = nullptr,
+                            bool forced = false);
 
    protected:
       void paintEvent(QPaintEvent* event) override;

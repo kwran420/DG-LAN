@@ -120,7 +120,7 @@ INetworkListener::SendStatus UDPListener::send(Common::MessageHeader::MessageTyp
 
    if (this->unicastSocket.writeDatagram(this->buffer, messageSize, peer->getIP(), peer->getPort()) == -1)
    {
-      L_WARN(QString("Unable to send datagram (unicast): error: %1").arg(this->unicastSocket.errorString()));
+      L_DEBU(QString("Failed to send unicast packet: %1").arg(this->unicastSocket.errorString()));
       return INetworkListener::SendStatus::UNABLE_TO_SEND;
    }
 
@@ -150,7 +150,7 @@ INetworkListener::SendStatus UDPListener::send(Common::MessageHeader::MessageTyp
 
    if (this->multicastSocket.writeDatagram(this->buffer, messageSize, this->multicastGroup, MULTICAST_PORT) == -1)
    {
-      L_WARN(QString("Unable to send datagram (multicast): error: %1").arg(this->unicastSocket.errorString()));
+      L_WARN(QString("Failed to send multicast packet: %1").arg(this->unicastSocket.errorString()));
 
       // DG-LAN: track multicast failures and escalate to broadcast fallback
       const quint32 threshold = SETTINGS.get<quint32>("multicast_failure_threshold");
@@ -186,6 +186,13 @@ void UDPListener::sendIMAliveMessage()
    IMAliveMessage.set_download_rate(this->downloadManager->getDownloadRate());
    IMAliveMessage.set_upload_rate(this->uploadManager->getUploadRate());
    IMAliveMessage.set_lan_speed(SETTINGS.get<quint32>("lan_speed"));
+
+   // Propagate master key hash so all peers share the same password.
+   const Common::Hash localMasterKey = SETTINGS.get<Common::Hash>("master_key_hash");
+   if (!localMasterKey.isNull())
+      IMAliveMessage.mutable_master_key_hash()->set_hash(localMasterKey.getData(), Common::Hash::HASH_SIZE);
+
+   IMAliveMessage.set_is_master(!SETTINGS.get<bool>("client_mode"));
 
    this->currentIMAliveTag = QRandomGenerator64::global()->generate64();
    IMAliveMessage.set_tag(this->currentIMAliveTag);
@@ -238,10 +245,11 @@ void UDPListener::sendIMAliveMessage()
    this->send(Common::MessageHeader::CORE_IM_ALIVE, IMAliveMessage);
 
    // DG-LAN: periodic heartbeat log to GUI — every 12 sends (~1 min at default 5s period)
+   // numberOfPeers counts remote peers only; +1 to include ourselves.
    if (++this->imAliveCounter % 12 == 0)
       L_USER(QString("Network [%1]: heartbeat \u2014 %2 peer(s) online")
          .arg(QDateTime::currentDateTime().toString("HH:mm"))
-         .arg(numberOfPeers));
+         .arg(numberOfPeers + 1));
 
    // DG-LAN: always broadcast on ALL interfaces.
    // Multicast silently fails on ZeroTier (send succeeds but never arrives),
@@ -509,8 +517,22 @@ void UDPListener::processPendingMulticastDatagrams()
                   IMAliveMessage.download_rate(),
                   IMAliveMessage.upload_rate(),
                   IMAliveMessage.version(),
-                  IMAliveMessage.lan_speed()
+                  IMAliveMessage.lan_speed(),
+                  IMAliveMessage.is_master()
                );
+
+               // Adopt the master key hash from a peer if we don't have one yet
+               // and haven't deliberately cleared it via reset.
+               if (IMAliveMessage.has_master_key_hash() && IMAliveMessage.master_key_hash().hash().size() == Common::Hash::HASH_SIZE)
+               {
+                  Common::Hash peerKey(IMAliveMessage.master_key_hash().hash().data());
+                  Common::Hash localKey = SETTINGS.get<Common::Hash>("master_key_hash");
+                  if (!peerKey.isNull() && localKey.isNull() && !SETTINGS.get<bool>("master_key_was_reset"))
+                  {
+                     SETTINGS.set("master_key_hash", peerKey);
+                     SETTINGS.save();
+                  }
+               }
 
                if (IMAliveMessage.chunk_size() > 0)
                {
@@ -578,7 +600,7 @@ void UDPListener::processPendingMulticastDatagrams()
       }
       catch (Common::ReadErrorException&)
       {
-         L_WARN(QString("Unable to read a multicast message from peer %1 %2").arg(header.getSenderID().toStr()).arg(peerAddress.toString()));
+         L_WARN(QString("Received corrupted multicast message from peer %1 at %2").arg(header.getSenderID().toStr()).arg(peerAddress.toString()));
       }
    }
 }
@@ -622,8 +644,22 @@ void UDPListener::processPendingUnicastDatagrams()
                IMAliveMessage.download_rate(),
                IMAliveMessage.upload_rate(),
                IMAliveMessage.version(),
-               IMAliveMessage.lan_speed()
+               IMAliveMessage.lan_speed(),
+               IMAliveMessage.is_master()
             );
+
+            // Adopt the master key hash from a peer if we don't have one yet
+            // and haven't deliberately cleared it via reset.
+            if (IMAliveMessage.has_master_key_hash() && IMAliveMessage.master_key_hash().hash().size() == Common::Hash::HASH_SIZE)
+            {
+               Common::Hash peerKey(IMAliveMessage.master_key_hash().hash().data());
+               Common::Hash localKey = SETTINGS.get<Common::Hash>("master_key_hash");
+               if (!peerKey.isNull() && localKey.isNull() && !SETTINGS.get<bool>("master_key_was_reset"))
+               {
+                  SETTINGS.set("master_key_hash", peerKey);
+                  SETTINGS.save();
+               }
+            }
 
             if (IMAliveMessage.chunk_size() > 0)
             {
@@ -661,13 +697,13 @@ void UDPListener::processPendingUnicastDatagrams()
 
                if (chunksOwnedMessage.tag() != this->currentIMAliveTag)
                {
-                  L_WARN(QString("ChunksOwned: tag (%1) doesn't match current tag (%2)").arg(chunksOwnedMessage.tag()).arg(currentIMAliveTag));
+                  L_WARN(QString("ChunksOwned message tag mismatch: got %1, expected %2 (timing issue, safe to ignore)").arg(chunksOwnedMessage.tag()).arg(currentIMAliveTag));
                   continue;
                }
 
                if (chunksOwnedMessage.chunk_state_size() != this->currentChunkDownloaders.size())
                {
-                  L_WARN(QString("ChunksOwned: The size (%1) doesn't match the expected one (%2)").arg(chunksOwnedMessage.chunk_state_size()).arg(this->currentChunkDownloaders.size()));
+                  L_WARN(QString("ChunksOwned message size mismatch: got %1 entries, expected %2").arg(chunksOwnedMessage.chunk_state_size()).arg(this->currentChunkDownloaders.size()));
                   continue;
                }
 
@@ -694,7 +730,7 @@ void UDPListener::processPendingUnicastDatagrams()
       }
       catch (Common::ReadErrorException&)
       {
-         L_WARN(QString("Unable to read an unicast message from peer %1 %2").arg(header.getSenderID().toStr()).arg(peerAddress.toString()));
+         L_WARN(QString("Received corrupted unicast message from peer %1 at %2").arg(header.getSenderID().toStr()).arg(peerAddress.toString()));
       }
    }
 }
@@ -818,7 +854,7 @@ Common::MessageHeader UDPListener::readDatagramToBuffer(QUdpSocket& socket, QHos
    const qint64 datagramSize = socket.readDatagram(this->buffer, BUFFER_SIZE, &peerAddress, &port);
    if (datagramSize == -1)
    {
-      L_WARN(QString("UDPListener::readDatagramToBuffer: read failed from %1:%2 — %3").arg(peerAddress.toString()).arg(port).arg(socket.errorString()));
+      L_DEBU(QString("UDP read failed from %1:%2 — %3 (peer may have disconnected)").arg(peerAddress.toString()).arg(port).arg(socket.errorString()));
       readError = true;
       return Common::MessageHeader();
    }
@@ -844,14 +880,14 @@ Common::MessageHeader UDPListener::readDatagramToBuffer(QUdpSocket& socket, QHos
       PM::IPeer* peer = this->peerManager->getPeer(header.getSenderID());
       if (!peer)
       {
-          L_WARN(QString("We receive a datagram from an unknown peer (%1), skip").arg(peerAddress.toString()));
+          L_DEBU(QString("Ignored UDP packet from undiscovered peer at %1").arg(peerAddress.toString()));
          header.setNull();
          return header;
       }
 
       if (!peer->isAlive())
       {
-          L_WARN(QString("We receive a datagram from a dead peer (%1), skip").arg(peerAddress.toString()));
+          L_DEBU(QString("Ignored UDP packet from offline peer at %1").arg(peerAddress.toString()));
          header.setNull();
          return header;
       }

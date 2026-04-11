@@ -21,6 +21,7 @@ using namespace GUI;
 
 #include <QPixmap>
 #include <QFileInfo>
+#include <QBrush>
 #include <IconProvider.h>
 
 #include <Common/Global.h>
@@ -134,6 +135,28 @@ QVariant BrowseModel::data(const QModelIndex& index, int role) const
          return QVariant();
       }
 
+   case Qt::ForegroundRole:
+      {
+         if (this->coreConnection->getRemoteID() != this->peerID)
+         {
+            Tree* tree = static_cast<Tree*>(index.internalPointer());
+            if (tree->getItem().owned_locally())
+               return QBrush(QColor(0, 140, 0));
+         }
+         return QVariant();
+      }
+
+   case Qt::ToolTipRole:
+      {
+         if (this->coreConnection->getRemoteID() != this->peerID)
+         {
+            QString localPath = this->getLocalPath(index);
+            if (!localPath.isEmpty())
+               return QString("Local: %1").arg(localPath);
+         }
+         return QVariant();
+      }
+
    case Qt::TextAlignmentRole:
       return static_cast<int>((index.column() < this->columnCount() - 1 ? Qt::AlignLeft : Qt::AlignRight) | Qt::AlignVCenter);
 
@@ -176,6 +199,47 @@ QString BrowseModel::getPath(const QModelIndex& index, bool appendFilename) cons
 
       return path.append(Common::ProtoHelper::getPath(entry, Common::EntriesToAppend::DIR | (appendFilename ? Common::EntriesToAppend::FILE : Common::EntriesToAppend::NONE)));
    }
+}
+
+/**
+  * For a remote peer's entry, check if the same file/dir exists in any of our local shared directories.
+  * Returns the local path if found, empty string otherwise.
+  */
+QString BrowseModel::getLocalPath(const QModelIndex& index) const
+{
+   if (!index.isValid())
+      return QString();
+
+   // If browsing ourselves, use getPath() directly.
+   if (this->coreConnection->getRemoteID() == this->peerID)
+      return this->getPath(index);
+
+   const Protos::Common::Entry entry = this->getEntry(index);
+   const QString entryName = Common::ProtoHelper::getStr(entry, &Protos::Common::Entry::name);
+   const QString entryPath = Common::ProtoHelper::getStr(entry, &Protos::Common::Entry::path);
+
+   for (const Common::SharedEntry& localDir : this->sharedEntryListModel.getSharedDirectories())
+   {
+      QString candidatePath = localDir.path.getPath();
+      if (!candidatePath.endsWith('/'))
+         candidatePath.append('/');
+
+      // entryPath is relative to the shared root (e.g. "" for root-level, "/subdir/" for nested).
+      if (!entryPath.isEmpty())
+      {
+         QString rel = entryPath;
+         if (rel.startsWith('/'))
+            rel = rel.mid(1);
+         candidatePath.append(rel);
+      }
+
+      candidatePath.append(entryName);
+
+      if (QFileInfo::exists(candidatePath))
+         return candidatePath;
+   }
+
+   return QString();
 }
 
 void BrowseModel::refresh()
@@ -475,7 +539,8 @@ bool GUI::operator==(const Protos::Common::Entry& e1, const Protos::Common::Entr
    return Common::ProtoHelper::getStr(e1, &Protos::Common::Entry::name) == Common::ProtoHelper::getStr(e2, &Protos::Common::Entry::name) &&
       e1.type() == e2.type() &&
       e1.size() == e2.size() &&
-      e1.is_empty() == e2.is_empty();
+      e1.is_empty() == e2.is_empty() &&
+      e1.owned_locally() == e2.owned_locally();
 }
 
 bool GUI::operator!=(const Protos::Common::Entry& e1, const Protos::Common::Entry& e2)

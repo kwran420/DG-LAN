@@ -88,7 +88,8 @@ namespace PM
          quint32 downloadRate,
          quint32 uploadRate,
          quint32 protocolVersion,
-         quint32 lanSpeed = 0
+         quint32 lanSpeed = 0,
+         bool isMaster = false
       ) = 0;
 
       /**

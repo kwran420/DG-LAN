@@ -229,7 +229,8 @@ Protos::Core::Settings* Core::createDefaultValuesSettings()
    settings->set_delay_gui_connection_fail(200);
    settings->set_delay_before_sending_log_messages(250);
 
-   // DG-LAN discovery defaults.
+   // DG-LAN defaults.
+   settings->set_client_mode(true); // New installs start in client mode (rehost downloads only).
    settings->set_gossip_peer_ttl_minutes(30);
    settings->set_gossip_max_peers(50);
    settings->set_multicast_failure_threshold(3); // Activate broadcast fallback after 3 multicast failures.

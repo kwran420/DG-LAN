@@ -45,6 +45,8 @@ using namespace GUI;
 #include <Common/Global.h>
 #include <Common/RemoteCoreController/Builder.h>
 
+#include <DialogAbout.h>
+#include <DialogUserGuide.h>
 #include <StatusBar.h>
 #include <Log.h>
 
@@ -74,30 +76,9 @@ MainWindow::MainWindow(QSharedPointer<RCC::ICoreConnection> coreConnection, QWid
 
    this->initialWindowFlags = this->windowFlags();
 
-   // Downloads dock
-   this->downloadsWidget = new DownloadsWidget(this->coreConnection, this->peerListModel, this->sharedEntryListModel);
-   this->downloadsDock = new QDockWidget(tr("Downloads && Rehosting"), this);
-   this->downloadsDock->setObjectName("downloadsDock");
-   this->downloadsDock->setWidget(this->downloadsWidget);
-   this->downloadsDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-   this->addDockWidget(Qt::BottomDockWidgetArea, this->downloadsDock);
-   connect(this->downloadsWidget, SIGNAL(globalProgressChanged(quint64, quint64)), this->mdiArea, SLOT(onGlobalProgressChanged(quint64, quint64)));
-
-   // Uploads dock
-   this->uploadsWidget = new UploadsWidget(this->coreConnection, this->peerListModel);
-   this->uploadsDock = new QDockWidget(tr("Uploads"), this);
-   this->uploadsDock->setObjectName("uploadsDock");
-   this->uploadsDock->setWidget(this->uploadsWidget);
-   this->uploadsDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-   this->addDockWidget(Qt::BottomDockWidgetArea, this->uploadsDock);
-   this->tabifyDockWidget(this->downloadsDock, this->uploadsDock);
-   this->downloadsDock->raise();
-
    StatusBar* statusBar = new StatusBar(this->coreConnection);
    ui->statusBar->addWidget(statusBar, 1);
    connect(statusBar, SIGNAL(showDockLog(bool)), this->ui->dockLog, SLOT(setVisible(bool)));
-   connect(statusBar, &StatusBar::downloadClicked, [this]() { this->downloadsDock->show(); this->downloadsDock->raise(); });
-   connect(statusBar, &StatusBar::uploadClicked, [this]() { this->uploadsDock->show(); this->uploadsDock->raise(); });
 
    this->ui->tblLog->setModel(&this->logModel);
    this->ui->tblLog->setItemDelegate(&this->logDelegate);
@@ -130,8 +111,19 @@ MainWindow::MainWindow(QSharedPointer<RCC::ICoreConnection> coreConnection, QWid
    connect(actOpenSettings, &QAction::triggered, this, &MainWindow::showSettings);
 
    QMenu* helpMenu = menuBar()->addMenu(tr("Help"));
+   QAction* actUserGuide = helpMenu->addAction(tr("User Guide..."));
+   connect(actUserGuide, &QAction::triggered, this, [this] {
+      DialogUserGuide dlg(this);
+      dlg.exec();
+   });
    QAction* actCheckUpdate = helpMenu->addAction(tr("Check for Updates..."));
    connect(actCheckUpdate, &QAction::triggered, this, &MainWindow::checkForUpdatesRequested);
+   helpMenu->addSeparator();
+   QAction* actAbout = helpMenu->addAction(tr("About DG-LAN..."));
+   connect(actAbout, &QAction::triggered, this, [this] {
+      DialogAbout dlg(this);
+      dlg.exec();
+   });
    // ─────────────────────────────────────────────────────────────────────────
    if (!SETTINGS.get<QString>("style").isEmpty())
       this->loadCustomStyle(QCoreApplication::applicationDirPath() % "/" % Common::Constants::STYLE_DIRECTORY % "/" % SETTINGS.get<QString>("style") % "/" % Common::Constants::STYLE_FILE_NAME);

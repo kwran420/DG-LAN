@@ -48,7 +48,7 @@ No central server. No configuration. Just plug in and go.
 
 1. **Install** DG-LAN on every machine (download the installer from [GitHub Releases](https://github.com/kwran420/DG-LAN/releases)).
 2. **Launch** — peers find each other automatically on the same subnet.
-3. **Share** folders via Settings → Sharing.
+3. **Share** folders via Settings → Preferences.
 4. **Browse & download** from the unified file index.
 
 For cross-subnet / ZeroTier setups, see [BUILD.md](BUILD.md#zerotier-setup).

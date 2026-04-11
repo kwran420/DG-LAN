@@ -53,7 +53,7 @@ QVariant UploadsModel::data(const QModelIndex& index, int role) const
          switch (index.column())
          {
          case 0: return Common::ProtoHelper::getStr(currentUpload.file(), &Protos::Common::Entry::name);
-         case 1: return QString("%1/%2").arg(currentUpload.current_part()).arg(currentUpload.nb_part());
+         case 1: return Common::Global::formatByteSize(currentUpload.file().size());
          case 2: return currentUpload.progress();
          case 3: return this->peerListModel.getNick(currentUpload.peer_id().hash(), tr("<unknown>"));
          default: return QVariant();
@@ -110,6 +110,8 @@ bool GUI::operator==(const Protos::GUI::State_Upload& u1, const Protos::GUI::Sta
       u1.file().path() == u2.file().path() &&
       u1.file().name() == u2.file().name() &&
       u1.file().size() == u2.file().size() &&
+      u1.current_part() == u2.current_part() &&
+      u1.nb_part() == u2.nb_part() &&
       u1.progress() == u2.progress() &&
       u1.peer_id().hash() == u2.peer_id().hash();
 }

@@ -34,8 +34,6 @@
 #include <Peers/PeerListModel.h>
 #include <Settings/SettingsWidget.h>
 #include <Settings/SharedEntryListModel.h>
-#include <Downloads/DownloadsWidget.h>
-#include <Uploads/UploadsWidget.h>
 #include <ScrollingNotification.h>
 #include <Taskbar/Taskbar.h>
 #include <MDI/MdiArea.h>
@@ -109,10 +107,6 @@ namespace GUI
 
       MdiArea* mdiArea;
 
-      QDockWidget* downloadsDock;
-      DownloadsWidget* downloadsWidget;
-      QDockWidget* uploadsDock;
-      UploadsWidget* uploadsWidget;
       SettingsWidget* settingsWidget;
       SharedEntryListModel sharedEntryListModel;
 

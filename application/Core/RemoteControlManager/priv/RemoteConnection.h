@@ -99,6 +99,7 @@ namespace RCM
    private:
       void askForAuthentication();
       void removeGetEntriesResult(const PM::IGetEntriesResult* getEntriesResult);
+      void markOwnedEntries(Protos::GUI::BrowseResult& result);
       void sendLastChatMessages();
 
       void refreshAllInterfaces();
@@ -127,6 +128,8 @@ namespace RCM
       QList<QSharedPointer<PM::IGetEntriesResult>> getEntriesResults;
 
       bool authenticated;
+
+      bool masterKeyAuthFailed; // Transient: set when a wrong master-key password was received.
       quint64 saltChallenge;
 
       QList<QNetworkInterface> interfaces; // We are caching the interfaces because the call of 'QNetworkInterface::allInterfaces()' for each refresh is too heavy.

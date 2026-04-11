@@ -129,7 +129,8 @@ void PeerManager::updatePeer(
    quint32 downloadRate,
    quint32 uploadRate,
    quint32 protocolVersion,
-   quint32 lanSpeed
+   quint32 lanSpeed,
+   bool isMaster
 )
 {
    if (ID.isNull() || ID == this->self->getID())
@@ -147,7 +148,7 @@ void PeerManager::updatePeer(
 
    const bool wasDead = !peer->isAlive();
 
-   peer->update(IP, port, nick, sharingAmount, coreVersion, downloadRate, uploadRate, protocolVersion, lanSpeed);
+   peer->update(IP, port, nick, sharingAmount, coreVersion, downloadRate, uploadRate, protocolVersion, lanSpeed, isMaster);
 
    if (wasDead && peer->isAvailable())
       emit peerBecomesAvailable(peer);

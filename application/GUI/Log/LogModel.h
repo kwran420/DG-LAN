@@ -52,5 +52,9 @@ namespace GUI
       QList<QSharedPointer<LM::IEntry>> entries;
       QHash<QByteArray, QString> prevPeers;
       int prevCacheStatus;
+
+      // Download state tracking: id → status (for detecting transitions).
+      QHash<quint64, int> prevDownloadStatus;
+      bool firstStateAfterConnect;
    };
 }

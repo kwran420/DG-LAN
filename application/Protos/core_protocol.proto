@@ -36,6 +36,10 @@ message IMAlive {
    repeated Common.Hash chunk = 6; // The chunks the core wants to download. May be empty.
 
    repeated string chat_rooms = 10; // The joined chat rooms.
+
+   Common.Hash master_key_hash = 12; // The master password hash; propagated so all peers share the same key.
+
+   bool is_master = 13; // True when the sender is the network master (client_mode == false).
 }
 
 // This message is only sent if at least one requested chunks is known.

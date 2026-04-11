@@ -46,7 +46,7 @@ DialogAbout::DialogAbout(QWidget *parent) :
 {
    this->ui->setupUi(this);
    this->setWindowFlags(this->windowFlags() & (~Qt::WindowContextHelpButtonHint));
-   this->setFixedSize(500, 400);
+   this->setFixedSize(560, 620);
 
    // Load and display logo
    QPixmap logo = drawLogoPixmap(this->width(), 110);
@@ -56,33 +56,96 @@ DialogAbout::DialogAbout(QWidget *parent) :
    const QDateTime buildTime = QDateTime::fromString(BUILD_TIME, "yyyy-MM-dd_hh-mm");
    const QLocale locale = SETTINGS.get<QLocale>("language");
 
-   this->ui->lblTitle->setText(
-      QString("DG-LAN  %1 %2").arg(VERSION).arg(VERSION_TAG));
+   QString titleText = QString("DG-LAN  %1 %2").arg(VERSION).arg(VERSION_TAG);
+#ifdef DEBUG
+   titleText += " (DEBUG)";
+#endif
+   this->ui->lblTitle->setText(titleText);
 
-   this->ui->lblBuiltOn->setText(
-      QString("Built on %1").arg(locale.toString(buildTime)));
-
-   this->ui->lblFromRevision->setText(
-      QString("<html><head/><body><p>Based on D-LAN — revision "
-              "<a href=\"https://github.com/Ummon/D-LAN/commit/%1\">"
-              "<span style=\"color: #80c8ff;\">%1</span></a></p></body></html>")
-      .arg(GIT_VERSION));
-
-   this->ui->lblCopyright->setText(
-      this->ui->lblCopyright->text().arg(buildTime.date().year()));
-
+   // Build info
    const QString& compilerName    = Common::Global::getCompilerName();
    const QString& compilerVersion = Common::Global::getCompilerVersion();
-   if (compilerName.isEmpty())
-      this->ui->lblCompiler->setText(QString("Built with Qt %1").arg(QT_VERSION_STR));
-   else
-      this->ui->lblCompiler->setText(
-         QString("Built with %1 %2 — Qt %3")
-         .arg(compilerName).arg(compilerVersion).arg(QT_VERSION_STR));
+   QString compilerStr = compilerName.isEmpty()
+      ? QString("Qt %1").arg(QT_VERSION_STR)
+      : QString("%1 %2, Qt %3").arg(compilerName, compilerVersion, QT_VERSION_STR);
 
-#ifdef DEBUG
-   this->ui->lblTitle->setText(this->ui->lblTitle->text() + " (DEBUG)");
-#endif
+   const QString link = QStringLiteral("<a style=\"color:#80c8ff;\" href=\"%1\">%2</a>");
+
+   QString body;
+   body += QStringLiteral(
+      "<p>DG-LAN is a decentralised, zero-config file sharing tool purpose-built "
+      "for LAN parties. Drop in, share your game library, grab what everyone else "
+      "is hosting &mdash; all at full gigabit switch speeds with no internet required.</p>");
+
+   // ── History ──
+   body += QStringLiteral(
+      "<p style=\"color:#80c8ff; font-weight:bold;\">History</p>"
+      "<p>DG-LAN began life as <b>D-LAN</b>, an open-source project created by "
+      "Greg Burri in 2010. D-LAN was designed from the ground up for high-speed "
+      "LAN file sharing using a custom protocol, decentralised peer discovery, "
+      "and chunk-level transfers &mdash; far beyond what generic tools like "
+      "Windows file sharing or FTP could offer in a LAN party environment.</p>"
+      "<p>The original D-LAN served the community well for years, but development "
+      "went dormant around 2012. In 2026, the team at "
+      "<b>Darwin Gamers</b> picked up the torch. We had been running D-LAN at our "
+      "LAN events for years and knew both its strengths and its rough edges. "
+      "DG-LAN is our continuation of that work &mdash; modernised, extended, and "
+      "actively maintained.</p>");
+
+   // ── What's new ──
+   body += QStringLiteral(
+      "<p style=\"color:#80c8ff; font-weight:bold;\">What DG-LAN adds</p>"
+      "<ul style=\"margin-top:0; margin-bottom:0;\">"
+      "<li>Master/client network architecture with password-protected master mode</li>"
+      "<li>Unified network file index with live download progress</li>"
+      "<li>Download queue management with drag-and-drop reordering</li>"
+      "<li>Built-in auto-updater (checks GitHub releases)</li>"
+      "<li>Configurable multicast TTL and network interface binding</li>"
+      "<li>Modern MSYS2/MinGW64 build chain with Protobuf&nbsp;3</li>"
+      "</ul>");
+
+   // ── Maintainers ──
+   body += QStringLiteral(
+      "<p style=\"color:#80c8ff; font-weight:bold;\">Maintained by</p>"
+      "<p><b>Matthew Dix</b> &amp; <b>Kieran Hollis</b><br/>");
+   body += link.arg("https://darwingamers.org", "darwingamers.org");
+   body += QStringLiteral("</p>");
+
+   // ── Links ──
+   body += QStringLiteral(
+      "<p style=\"color:#80c8ff; font-weight:bold;\">Links</p>"
+      "<table cellspacing=\"0\" cellpadding=\"1\">");
+   body += QStringLiteral("<tr><td>GitHub:&nbsp;&nbsp;</td><td>")
+      + link.arg("https://github.com/kwran420/DG-LAN", "github.com/kwran420/DG-LAN")
+      + QStringLiteral("</td></tr>");
+   body += QStringLiteral("<tr><td>Releases:&nbsp;&nbsp;</td><td>")
+      + link.arg("https://github.com/kwran420/DG-LAN/releases", "Latest releases")
+      + QStringLiteral("</td></tr>");
+   body += QStringLiteral("<tr><td>Original D-LAN:&nbsp;&nbsp;</td><td>")
+      + link.arg("https://github.com/Ummon/D-LAN", "github.com/Ummon/D-LAN")
+      + QStringLiteral("</td></tr>");
+   body += QStringLiteral("</table>");
+
+   // ── Build details ──
+   body += QStringLiteral(
+      "<p style=\"color:#80c8ff; font-weight:bold;\">Build</p>"
+      "<table cellspacing=\"0\" cellpadding=\"1\">");
+   body += QString("<tr><td>Built:&nbsp;&nbsp;</td><td>%1</td></tr>").arg(locale.toString(buildTime));
+   body += QString("<tr><td>Compiler:&nbsp;&nbsp;</td><td>%1</td></tr>").arg(compilerStr);
+   body += QString("<tr><td>Commit:&nbsp;&nbsp;</td><td>%1</td></tr>")
+      .arg(link.arg(
+         QString("https://github.com/kwran420/DG-LAN/commit/%1").arg(GIT_VERSION),
+         QString(GIT_VERSION)));
+   body += QStringLiteral("</table>");
+
+   // ── License ──
+   body += QString(
+      "<p style=\"color:#aaa; font-size:9pt;\">Original D-LAN &copy; 2010&ndash;%1 Greg Burri. "
+      "DG-LAN &copy; 2026 Darwin Gamers. Distributed under the "
+      "GNU General Public License v3.</p>")
+      .arg(buildTime.date().year());
+
+   this->ui->lblBody->setText(body);
 }
 
 DialogAbout::~DialogAbout()

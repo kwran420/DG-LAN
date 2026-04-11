@@ -29,28 +29,28 @@ GetEntriesResult::GetEntriesResult(Directory* dir, int maxNbHashesPerEntry) :
    IGetEntriesResult(SETTINGS.get<quint32>("get_entries_timeout")), dir(dir), maxNbHashesPerEntry(maxNbHashesPerEntry)
 {
    qRegisterMetaType<Protos::Core::GetEntriesResult::EntryResult>("Protos::Core::GetEntriesResult::EntryResult");
-   L_WARN(QString("FM::GetEntriesResult CTOR dir=%1 maxHash=%2").arg(dir ? dir->getFullPath().getPath() : QString("NULL")).arg(maxNbHashesPerEntry));
+   L_DEBU(QString("GetEntriesResult created: dir=%1 maxHash=%2").arg(dir ? dir->getFullPath().getPath() : QString("NULL")).arg(maxNbHashesPerEntry));
 }
 
 void GetEntriesResult::start()
 {
    if (!this->dir)
    {
-      L_WARN("FM::GetEntriesResult::start(): null directory -> DONT_HAVE");
+      L_WARN("Cannot browse directory: directory not found (may have been removed)");
       this->res.set_status(Protos::Core::GetEntriesResult::EntryResult::DONT_HAVE);
       emit result(this->res);
    }
    else if (this->dir->isScanned())
    {
-      L_WARN(QString("FM::GetEntriesResult::start(): directory scanned: %1").arg(this->dir->getFullPath().getPath()));
+      L_DEBU(QString("Browse: directory already scanned: %1").arg(this->dir->getFullPath().getPath()));
       this->buildResult();
       if (this->res.status() == Protos::Core::GetEntriesResult::EntryResult::OK)
-         L_WARN(QString("FM::GetEntriesResult::start(): buildResult OK, entries=%1").arg(this->res.entries().entry_size()));
+         L_DEBU(QString("Browse: result built OK, entries=%1").arg(this->res.entries().entry_size()));
       emit result(this->res);
    }
    else
    {
-      L_WARN(QString("FM::GetEntriesResult::start(): directory NOT YET scanned: %1 \u2014 waiting...").arg(this->dir->getFullPath().getPath()));
+      L_DEBU(QString("Browse: directory not yet scanned, waiting: %1").arg(this->dir->getFullPath().getPath()));
       connect(this->dir->getCache(), &Cache::directoryScanned, this, &GetEntriesResult::directoryScanned, Qt::DirectConnection);
       this->startTimer();
    }
@@ -64,7 +64,7 @@ void GetEntriesResult::directoryScanned(Directory* dir)
    if (dir != this->dir)
       return;
 
-   L_WARN(QString("FM::GetEntriesResult::directoryScanned(): %1").arg(dir ? dir->getFullPath().getPath() : QString("NULL")));
+   L_DEBU(QString("Browse: directory scan complete: %1").arg(dir ? dir->getFullPath().getPath() : QString("NULL")));
 
    this->buildResult();
 
@@ -73,7 +73,7 @@ void GetEntriesResult::directoryScanned(Directory* dir)
 
 void GetEntriesResult::sendResult()
 {
-   L_WARN("FM::GetEntriesResult::sendResult()");
+   L_DEBU("Browse: sending result to GUI");
    if (this->dir)
       disconnect(this->dir->getCache(), &Cache::directoryScanned, this, &GetEntriesResult::directoryScanned);
    this->stopTimer();
@@ -85,7 +85,7 @@ void GetEntriesResult::buildResult()
 {
    if (!this->dir)
    {
-      L_WARN("FM::GetEntriesResult::buildResult(): dir is NULL — aborting");
+      L_WARN("Cannot build browse results: directory reference is null");
       this->res.set_status(Protos::Core::GetEntriesResult::EntryResult::DONT_HAVE);
       return;
    }
@@ -93,7 +93,7 @@ void GetEntriesResult::buildResult()
    Cache* cache = this->dir->getCache();
    if (!cache)
    {
-      L_WARN("FM::GetEntriesResult::buildResult(): cache is NULL — aborting");
+      L_WARN("Cannot build browse results: file cache unavailable");
       this->res.set_status(Protos::Core::GetEntriesResult::EntryResult::DONT_HAVE);
       return;
    }
@@ -105,33 +105,33 @@ void GetEntriesResult::buildResult()
    try
    {
       QLinkedList<Directory*> subDirs = this->dir->getSubDirs();
-      L_WARN(QString("FM::GetEntriesResult::buildResult(): %1 subdirs, iterating...").arg(subDirs.size()));
+      L_DEBU(QString("Browse: processing %1 subdirectories").arg(subDirs.size()));
       for (auto it = subDirs.begin(); it != subDirs.end(); ++it)
       {
          Directory* subDir = *it;
          if (!subDir)
          {
-            L_WARN("FM::GetEntriesResult::buildResult(): null subDir pointer — skipping");
+            L_WARN("Skipped invalid subdirectory entry while browsing");
             continue;
          }
          subDir->populateEntry(this->res.mutable_entries()->add_entry(), true);
       }
 
       QLinkedList<File*> files = this->dir->getFiles();
-      L_WARN(QString("FM::GetEntriesResult::buildResult(): %1 files, iterating...").arg(files.size()));
+      L_DEBU(QString("Browse: processing %1 files").arg(files.size()));
       for (auto it = files.begin(); it != files.end(); ++it)
       {
          File* file = *it;
          if (!file)
          {
-            L_WARN("FM::GetEntriesResult::buildResult(): null file pointer — skipping");
+            L_WARN("Skipped invalid file entry while browsing");
             continue;
          }
          if (file->isComplete())
             file->populateEntry(this->res.mutable_entries()->add_entry(), true, this->maxNbHashesPerEntry);
       }
 
-      L_WARN(QString("FM::GetEntriesResult::buildResult(): DONE entries=%1").arg(this->res.entries().entry_size()));
+      L_DEBU(QString("Browse: completed, total entries=%1").arg(this->res.entries().entry_size()));
    }
    catch (const std::exception& e)
    {

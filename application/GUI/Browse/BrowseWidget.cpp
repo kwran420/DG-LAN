@@ -137,7 +137,34 @@ void BrowseWidget::displayContextMenuDownload(const QPoint& point)
    }
    else
    {
-      this->downloadMenu.show(globalPosition);
+      // Check if any selected entry exists locally.
+      QModelIndexList selectedRows = this->ui->treeView->selectionModel()->selectedRows();
+      bool anyLocal = false;
+      for (const QModelIndex& idx : selectedRows)
+      {
+         if (!this->browseModel.getLocalPath(idx).isEmpty())
+         {
+            anyLocal = true;
+            break;
+         }
+      }
+
+      if (anyLocal)
+      {
+         QMenu menu;
+         menu.addAction(QIcon(":/icons/ressources/explore_folder.png"), tr("Open in Explorer"), this, SLOT(openLocalLocation()));
+         menu.addSeparator();
+         // Show download menu items inline via its show method won't work here,
+         // so we show our menu first, then fall through to download if not triggered.
+         QAction* dlAction = menu.addAction(QIcon(":/icons/ressources/download.png"), tr("Download && rehost"));
+         QAction* result = menu.exec(globalPosition);
+         if (result == dlAction)
+            this->download();
+      }
+      else
+      {
+         this->downloadMenu.show(globalPosition);
+      }
    }
 }
 
@@ -183,6 +210,21 @@ void BrowseWidget::openLocation()
    QSet<QString> locations;
    for (QListIterator<QModelIndex> i(selectedRows); i.hasNext();)
       locations.insert(this->browseModel.getPath(i.next(), true));
+
+   Utils::openLocations(locations.values());
+}
+
+void BrowseWidget::openLocalLocation()
+{
+   QModelIndexList selectedRows = this->ui->treeView->selectionModel()->selectedRows();
+
+   QSet<QString> locations;
+   for (const QModelIndex& idx : selectedRows)
+   {
+      QString localPath = this->browseModel.getLocalPath(idx);
+      if (!localPath.isEmpty())
+         locations.insert(localPath);
+   }
 
    Utils::openLocations(locations.values());
 }

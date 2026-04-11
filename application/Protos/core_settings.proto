@@ -119,6 +119,10 @@ message Settings {
    // requires entering the correct password. Any PC with the password can be master.
    Common.Hash master_key_hash = 117;
 
+   // Set to true after a local master-key reset; prevents auto-adoption of
+   // the old hash from peers. Cleared when a new password is set.
+   bool master_key_was_reset = 118;
+
    // [default = 3] Number of consecutive multicast send/receive failures before
    // escalating to the broadcast fallback. 0 = never escalate (multicast only).
    uint32 multicast_failure_threshold = 113;

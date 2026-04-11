@@ -111,7 +111,7 @@ void FileUpdater::addRoot(SharedEntry* sharedEntry)
 
    if (!watchable)
    {
-      L_WARN(QString("This entry is not watchable: %1").arg(entryPath.getPath()));
+      L_WARN(QString("Shared folder cannot be watched for live changes (network or unsupported path): %1").arg(entryPath.getPath()));
       this->unwatchableEntries << sharedEntry->getRootEntry();
    }
 

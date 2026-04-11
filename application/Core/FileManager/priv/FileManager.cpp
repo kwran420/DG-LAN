@@ -343,7 +343,7 @@ int FileManager::getProgress() const
 
 void FileManager::dumpWordIndex() const
 {
-   L_WARN(this->wordIndex.toStringLog());
+   L_DEBU(this->wordIndex.toStringLog());
 }
 
 /**
@@ -381,7 +381,7 @@ void FileManager::printSimilarFiles() const
       }
    }
 
-   L_WARN(result);
+   L_DEBU(result);
 }
 
 Directory* FileManager::getFittestDirectory(const QString& path)
@@ -506,16 +506,16 @@ void FileManager::loadCacheFromFile()
       catch (ItemsNotFoundException& e)
       {
          foreach (QString path, e.paths)
-            L_WARN(QString("During the file cache loading, this directory hasn't been found: %1").arg(path));
+            L_WARN(QString("Shared directory missing during cache load (may have been moved or deleted): %1").arg(path));
       }
    }
    catch (Common::UnknownValueException& e)
    {
-      L_WARN(QString("The persisted file cache cannot be retrieved (the file doesn't exist): %1").arg(Common::Constants::FILE_CACHE));
+      L_WARN(QString("File cache not found (first run or cache was deleted): %1").arg(Common::Constants::FILE_CACHE));
    }
    catch (...)
    {
-      L_WARN(QString("The persisted file cache cannot be retrieved (Unknown exception): %1").arg(Common::Constants::FILE_CACHE));
+      L_WARN(QString("Failed to load file cache (unexpected error): %1").arg(Common::Constants::FILE_CACHE));
    }
 
    this->fileUpdater.setFileCache(savedCache);

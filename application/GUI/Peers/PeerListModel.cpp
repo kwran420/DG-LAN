@@ -48,13 +48,15 @@ struct PeerListModel::Peer
    QHostAddress ip;
    TransferInformation transferInformation;
    Protos::GUI::State::Peer::PeerStatus status;
+   bool isMasterPeer;
 };
 
 PeerListModel::PeerListModel(QSharedPointer<RCC::ICoreConnection> coreConnection) :
    coreConnection(coreConnection),
    currentSortType(Protos::GUI::Settings::BY_SHARING_AMOUNT),
    displayOnlyPeersWithStatusOK(false),
-   toolTipEnabled(true)
+   toolTipEnabled(true),
+   isMaster(false)
 {
    connect(this->coreConnection.data(), SIGNAL(newState(Protos::GUI::State)), this, SLOT(newState(Protos::GUI::State)));
    connect(this->coreConnection.data(), SIGNAL(disconnected(bool)), this, SLOT(coreDisconnected(bool)));
@@ -90,6 +92,11 @@ bool PeerListModel::isOurself(int rowNum) const
    if (rowNum >= this->orderedPeers.size())
       return false;
    return this->orderedPeers.getFromIndex(rowNum)->peerID == this->coreConnection->getRemoteID();
+}
+
+bool PeerListModel::getIsMaster() const
+{
+   return this->isMaster;
 }
 
 Common::Hash PeerListModel::getPeerID(int rowNum) const
@@ -206,7 +213,13 @@ QVariant PeerListModel::data(const QModelIndex& index, int role) const
       switch (index.column())
       {
       case 0: return QVariant::fromValue(this->orderedPeers.getFromIndex(index.row())->transferInformation);
-      case 1: return this->orderedPeers.getFromIndex(index.row())->nick;
+      case 1:
+         {
+            const QString& nick = this->orderedPeers.getFromIndex(index.row())->nick;
+            if (this->orderedPeers.getFromIndex(index.row())->isMasterPeer)
+               return QString(QString::fromUtf8("\xe2\x98\x85 ") % nick);
+            return nick;
+         }
       case 2: return Common::Global::formatByteSize(this->orderedPeers.getFromIndex(index.row())->sharingAmount);
       default: return QVariant();
       }
@@ -311,6 +324,8 @@ void PeerListModel::newState(const Protos::GUI::State& state)
             break;
          }
 
+   this->isMaster = !state.client_mode();
+
    this->updatePeers(state.peer(), peersDownloadingOurData, peersToDisplay);
 }
 
@@ -350,6 +365,7 @@ void PeerListModel::updatePeers(const google::protobuf::RepeatedPtrField<Protos:
       const quint64 sharingAmount = peers.Get(i).sharing_amount();
       const TransferInformation transferInformation { peers.Get(i).download_rate(), peers.Get(i).upload_rate(), peers.Get(i).lan_speed(), peersDownloadingOurData.contains(peerID) };
       const Protos::GUI::State::Peer::PeerStatus status = peers.Get(i).status();
+      const bool peerIsMaster = peers.Get(i).is_master();
       const QHostAddress ip =
          peers.Get(i).has_ip() ?
             Common::ProtoHelper::getIP(peers.Get(i).ip()) :
@@ -371,14 +387,17 @@ void PeerListModel::updatePeers(const google::protobuf::RepeatedPtrField<Protos:
             this->orderedPeers.insert(peer);
          }
 
+         if (peer->isMasterPeer != peerIsMaster || peer->status != status)
+            setDataChanged();
          peer->ip = ip;
          peer->coreVersion = coreVersion;
          peer->status = status;
+         peer->isMasterPeer = peerIsMaster;
       }
       else
       {
          setDataChanged();
-         Peer* p = new Peer { peerID, nick, coreVersion, sharingAmount, ip, transferInformation, status };
+         Peer* p = new Peer { peerID, nick, coreVersion, sharingAmount, ip, transferInformation, status, peerIsMaster };
          this->indexedPeers.insert(peerID, p);
          this->orderedPeers.insert(p);
       }

@@ -101,6 +101,7 @@ namespace GUI
 
       void buttonAddressToggled(bool checked);
       void clientModeToggled();
+      void resetMasterKey();
 
    protected:
       bool eventFilter(QObject* obj, QEvent* event);
@@ -122,6 +123,7 @@ namespace GUI
 
       bool corePasswordDefined;
       bool masterKeyDefined;
+      bool initialSetupPrompted;
       QString pendingMasterKeyPassword;
    };
 }

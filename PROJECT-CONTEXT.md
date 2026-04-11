@@ -66,10 +66,10 @@ dglan-api/       → Python HTTP bridge (serves file listings as JSON)
 
 Defined in `application/Common/Version.h`:
 ```cpp
-#define VERSION "1.2.86"
+#define VERSION "1.2.92"
 #define VERSION_TAG "Alpha"
-#define BUILD_TIME "2026-04-11_00-14"   // patched by build-release.ps1
-#define GIT_VERSION "9516631f5c9e"      // patched by build-release.ps1
+#define BUILD_TIME "..."   // patched by build-release.ps1
+#define GIT_VERSION "..."      // patched by build-release.ps1
 ```
 
 - `version.rc` includes `Version.h` → embeds version info into .exe resources

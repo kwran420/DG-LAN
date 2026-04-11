@@ -56,7 +56,9 @@ void MockPeerManager::updatePeer(
    const QString& coreVersion,
    quint32 downloadRate,
    quint32 uploadRate,
-   quint32 protocolVersion
+   quint32 protocolVersion,
+   quint32 lanSpeed,
+   bool isMaster
 )
 {
    // Never called by the download manager.

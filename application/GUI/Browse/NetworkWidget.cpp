@@ -2,17 +2,29 @@
 using namespace GUI;
 
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QHeaderView>
 #include <QMenu>
 #include <QKeyEvent>
 #include <QApplication>
 #include <QByteArray>
+#include <QPainter>
+#include <QStyleOptionProgressBar>
+#include <QMessageBox>
+#include <QFileInfo>
+#include <QVersionNumber>
+#include <QDesktopServices>
 
 #include <Common/ProtoHelper.h>
 #include <Common/Global.h>
+#include <Common/Version.h>
 
 #include <Log.h>
 #include <Utils.h>
+#include <UpdateChecker.h>
+#include <UpdateDialog.h>
+
+// ── PeerSpeedProxy ───────────────────────────────────────────────────────────
 
 int PeerSpeedProxy::columnCount(const QModelIndex& parent) const
 {
@@ -79,20 +91,59 @@ QVariant PeerSpeedProxy::data(const QModelIndex& proxyIndex, int role) const
    return QIdentityProxyModel::data(proxyIndex, role);
 }
 
+// ── ProgressDelegate ─────────────────────────────────────────────────────────
+
+void ProgressDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const
+{
+   if (!index.isValid())
+      return;
+
+   QStyledItemDelegate::paint(painter, option, QModelIndex()); // Draw background/selection.
+
+   int progress = index.data(NetworkWidget::ROLE_PROGRESS).toInt();
+   if (progress <= 0)
+      return;
+
+   QStyleOptionProgressBar bar;
+   bar.QStyleOption::operator=(option);
+   bar.minimum = 0;
+   bar.maximum = 10000;
+   bar.progress = progress;
+   bar.textAlignment = Qt::AlignHCenter | Qt::AlignVCenter;
+
+   double pct = static_cast<double>(progress) / 100.0;
+   bar.text = progress >= 10000 ? "100%" : QString("%1%").arg(pct > 99.99 ? 99.99 : pct, 0, 'f', pct < 10.0 ? 1 : 0);
+   bar.textVisible = true;
+
+   QApplication::style()->drawControl(QStyle::CE_ProgressBar, &bar, painter);
+}
+// ── FileSortProxy ─────────────────────────────────────────────────────────────────
+
+bool FileSortProxy::lessThan(const QModelIndex& left, const QModelIndex& right) const
+{
+   if (left.column() == NetworkWidget::COL_SIZE)
+   {
+      qulonglong lhs = sourceModel()->data(left, Qt::UserRole).toULongLong();
+      qulonglong rhs = sourceModel()->data(right, Qt::UserRole).toULongLong();
+      return lhs < rhs;
+   }
+   return QSortFilterProxyModel::lessThan(left, right);
+}
+// ── NetworkWidget ────────────────────────────────────────────────────────────
+
 NetworkWidget::NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection, PeerListModel& peerListModel, const SharedEntryListModel& sharedEntryListModel, QWidget* parent) :
    QWidget(parent),
    coreConnection(coreConnection),
    peerListModel(peerListModel),
    sharedEntryListModel(sharedEntryListModel),
-   downloadMenu(sharedEntryListModel)
-{
+   downloadMenu(sharedEntryListModel){
    QVBoxLayout* mainLayout = new QVBoxLayout(this);
    mainLayout->setContentsMargins(0, 0, 0, 0);
 
    this->splitter = new QSplitter(Qt::Horizontal, this);
    mainLayout->addWidget(this->splitter);
 
-   // Left panel: peer list with names and LAN speed
+   // ── Left panel: peer list ──
    this->peerTableView = new QTableView();
    this->peerProxy.setSourceModel(&this->peerListModel);
    this->peerTableView->setModel(&this->peerProxy);
@@ -107,10 +158,10 @@ NetworkWidget::NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection
    this->peerTableView->setSelectionBehavior(QAbstractItemView::SelectRows);
    this->peerTableView->setShowGrid(false);
    this->peerTableView->setAlternatingRowColors(false);
-   this->peerTableView->setMaximumWidth(400);
+   this->peerTableView->setMinimumWidth(200);
    this->splitter->addWidget(this->peerTableView);
 
-   // Right panel: filter bar + flat file list
+   // ── Right panel: filter bar + unified file index ──
    QWidget* filePanel = new QWidget();
    QVBoxLayout* filePanelLayout = new QVBoxLayout(filePanel);
    filePanelLayout->setContentsMargins(0, 0, 0, 0);
@@ -119,7 +170,51 @@ NetworkWidget::NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection
    this->filterEdit = new QLineEdit();
    this->filterEdit->setPlaceholderText(tr("Filter files..."));
    this->filterEdit->setClearButtonEnabled(true);
-   filePanelLayout->addWidget(this->filterEdit);
+
+   // ── Action buttons ──
+   QHBoxLayout* buttonBar = new QHBoxLayout();
+   buttonBar->setContentsMargins(2, 2, 2, 2);
+   buttonBar->setSpacing(4);
+
+   this->downloadButton = new QPushButton(tr("Download"));
+   this->redownloadButton = new QPushButton(tr("Redownload"));
+   this->deleteButton = new QPushButton(tr("Delete"));
+
+   this->moveTopButton = new QPushButton(QString::fromUtf8("\u23EB"));     // ⏫
+   this->moveUpButton = new QPushButton(QString::fromUtf8("\u25B2"));      // ▲
+   this->moveDownButton = new QPushButton(QString::fromUtf8("\u25BC"));    // ▼
+   this->moveBottomButton = new QPushButton(QString::fromUtf8("\u23EC"));  // ⏬
+
+   this->downloadButton->setEnabled(false);
+   this->redownloadButton->setEnabled(false);
+   this->deleteButton->setEnabled(false);
+   this->moveTopButton->setEnabled(false);
+   this->moveUpButton->setEnabled(false);
+   this->moveDownButton->setEnabled(false);
+   this->moveBottomButton->setEnabled(false);
+
+   this->moveTopButton->setToolTip(tr("Move to Top"));
+   this->moveUpButton->setToolTip(tr("Move Up"));
+   this->moveDownButton->setToolTip(tr("Move Down"));
+   this->moveBottomButton->setToolTip(tr("Move to Bottom"));
+
+   this->moveTopButton->setFixedWidth(28);
+   this->moveUpButton->setFixedWidth(28);
+   this->moveDownButton->setFixedWidth(28);
+   this->moveBottomButton->setFixedWidth(28);
+
+   buttonBar->addWidget(this->downloadButton);
+   buttonBar->addWidget(this->redownloadButton);
+   buttonBar->addWidget(this->deleteButton);
+   buttonBar->addSpacing(8);
+   buttonBar->addWidget(this->moveTopButton);
+   buttonBar->addWidget(this->moveUpButton);
+   buttonBar->addWidget(this->moveDownButton);
+   buttonBar->addWidget(this->moveBottomButton);
+   buttonBar->addStretch();
+   buttonBar->addWidget(this->filterEdit);
+
+   filePanelLayout->addLayout(buttonBar);
 
    this->fileTableView = new QTableView();
    this->fileTableView->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -132,38 +227,55 @@ NetworkWidget::NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection
    this->fileTableView->verticalHeader()->setDefaultSectionSize(QApplication::fontMetrics().height() + 4);
    this->fileTableView->setSortingEnabled(true);
 
-   this->fileModel.setHorizontalHeaderLabels({ tr("Name"), tr("Size"), tr("Peers") });
+   this->fileModel.setHorizontalHeaderLabels({ tr("Name"), tr("Size"), tr("Status"), tr("#"), tr("Progress"), tr("DL Speed"), tr("UL Speed"), tr("Peers") });
    this->fileSortProxy.setSourceModel(&this->fileModel);
    this->fileSortProxy.setFilterCaseSensitivity(Qt::CaseInsensitive);
    this->fileSortProxy.setFilterKeyColumn(0);
    this->fileTableView->setModel(&this->fileSortProxy);
-   this->fileTableView->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-   this->fileTableView->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-   this->fileTableView->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-   this->fileTableView->sortByColumn(0, Qt::AscendingOrder);
+
+   this->fileTableView->horizontalHeader()->setSectionResizeMode(COL_NAME, QHeaderView::Stretch);
+   this->fileTableView->horizontalHeader()->setSectionResizeMode(COL_SIZE, QHeaderView::ResizeToContents);
+   this->fileTableView->horizontalHeader()->setSectionResizeMode(COL_STATUS, QHeaderView::ResizeToContents);
+   this->fileTableView->horizontalHeader()->setSectionResizeMode(COL_QUEUE, QHeaderView::ResizeToContents);
+   this->fileTableView->horizontalHeader()->setSectionResizeMode(COL_PROGRESS, QHeaderView::Fixed);
+   this->fileTableView->setColumnWidth(COL_PROGRESS, 120);
+   this->fileTableView->horizontalHeader()->setSectionResizeMode(COL_DL_SPEED, QHeaderView::ResizeToContents);
+   this->fileTableView->horizontalHeader()->setSectionResizeMode(COL_UL_SPEED, QHeaderView::ResizeToContents);
+   this->fileTableView->horizontalHeader()->setSectionResizeMode(COL_PEERS, QHeaderView::ResizeToContents);
+
+   this->fileTableView->setItemDelegateForColumn(COL_PROGRESS, &this->progressDelegate);
+   this->fileTableView->sortByColumn(COL_NAME, Qt::AscendingOrder);
    filePanelLayout->addWidget(this->fileTableView);
 
    this->splitter->addWidget(filePanel);
-
+   this->splitter->setSizes({280, 600});
    this->splitter->setStretchFactor(0, 0);
    this->splitter->setStretchFactor(1, 1);
 
+   // ── Connections ──
    connect(this->fileTableView, &QTableView::customContextMenuRequested, this, &NetworkWidget::displayContextMenuDownload);
    connect(this->filterEdit, &QLineEdit::textChanged, &this->fileSortProxy, &QSortFilterProxyModel::setFilterFixedString);
    connect(&this->downloadMenu, SIGNAL(download()), this, SLOT(download()));
    connect(&this->downloadMenu, SIGNAL(downloadTo()), this, SLOT(downloadTo()));
    connect(&this->downloadMenu, SIGNAL(downloadTo(const QString&, const Common::Hash&)), this, SLOT(downloadTo(const QString&, const Common::Hash&)));
 
-   // Auto-browse peers when the peer list changes
-   connect(&this->peerListModel, &QAbstractItemModel::layoutChanged, this, &NetworkWidget::refreshPeers);
-   connect(&this->peerListModel, &QAbstractItemModel::rowsInserted, this, &NetworkWidget::refreshPeers);
-   connect(&this->peerListModel, &PeerListModel::peersRemoved, this, &NetworkWidget::peersRemoved);
+   connect(this->downloadButton, &QPushButton::clicked, this, &NetworkWidget::download);
+   connect(this->redownloadButton, &QPushButton::clicked, this, &NetworkWidget::redownload);
+   connect(this->deleteButton, &QPushButton::clicked, this, &NetworkWidget::cancelDownload);
+   connect(this->moveTopButton, &QPushButton::clicked, this, &NetworkWidget::moveToTop);
+   connect(this->moveUpButton, &QPushButton::clicked, this, &NetworkWidget::moveUp);
+   connect(this->moveDownButton, &QPushButton::clicked, this, &NetworkWidget::moveDown);
+   connect(this->moveBottomButton, &QPushButton::clicked, this, &NetworkWidget::moveToBottom);
+   connect(this->fileTableView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &NetworkWidget::updateButtonStates);
+
+   connect(this->coreConnection.data(), &RCC::ICoreConnection::newState, this, &NetworkWidget::onNewState);
    connect(this->coreConnection.data(), SIGNAL(disconnected(bool)), this, SLOT(coreDisconnected()));
 
-   // Periodically re-browse all peers to pick up newly downloaded/added files.
+   // Re-browse all peers periodically to pick up changes.
    connect(&this->rebrowseTimer, &QTimer::timeout, this, [this]() {
       this->browsedPeers.clear();
-      this->refreshPeers();
+      this->browseGeneration++;
+      L_USER(QString("[Network] Refreshing file index from all peers..."));
    });
    this->rebrowseTimer.start(30000);
 
@@ -187,66 +299,143 @@ void NetworkWidget::keyPressEvent(QKeyEvent* event)
    this->download();
 }
 
-void NetworkWidget::refreshPeers()
+// ── Peer discovery & state handling ──────────────────────────────────────────
+
+void NetworkWidget::onNewState(const Protos::GUI::State& state)
 {
-   const int count = this->peerListModel.rowCount();
-   for (int i = 0; i < count; ++i)
+   // The first peer is always ourselves.
+   if (state.peer_size() > 0)
+      this->localPeerID = Common::Hash(state.peer(0).peer_id().hash().data());
+
+   // Find the master peer with the highest version from the state's peer list.
+   // Multiple masters can exist on the network; pick the one running the newest
+   // version so that the update prompt uses the authoritative target.
+   Common::Hash newMasterID;
+   QString masterVersion;
+   QVersionNumber bestMasterVer;
+   for (int i = 0; i < state.peer_size(); ++i)
    {
-      const Common::Hash peerID = this->peerListModel.getPeerID(i);
-      if (peerID.isNull())
+      if (!state.peer(i).is_master())
          continue;
-      if (this->browsedPeers.contains(peerID))
-         continue;
-      this->browsePeer(peerID);
+      const Common::Hash peerID(state.peer(i).peer_id().hash().data());
+      const QString ver = QString::fromStdString(state.peer(i).core_version());
+      const QVersionNumber peerVer = QVersionNumber::fromString(ver);
+      if (peerVer > bestMasterVer)
+      {
+         bestMasterVer = peerVer;
+         newMasterID = peerID;
+         masterVersion = ver;
+      }
    }
+
+   // Check if the highest-version master is running a newer version than us.
+   if (!this->updatePromptShown && !masterVersion.isEmpty() && !newMasterID.isNull() && newMasterID != this->localPeerID)
+   {
+      const QVersionNumber localVer = QVersionNumber::fromString(QString(VERSION));
+      if (!bestMasterVer.isNull() && bestMasterVer > localVer)
+      {
+         this->updatePromptShown = true;
+
+         // Trigger the built-in updater to fetch the installer from GitHub.
+         auto* checker = new UpdateChecker(this);
+         connect(checker, &UpdateChecker::updateAvailable, this, [this, checker, bestMasterVer, localVer]
+            (QString latestVersion, QString releaseUrl, QString downloadUrl) {
+            checker->deleteLater();
+            UpdateDialog dlg(latestVersion, releaseUrl, downloadUrl, this, true);
+            dlg.exec();
+            // Forced update: quit regardless of dialog result.
+            QApplication::quit();
+         });
+         connect(checker, &UpdateChecker::upToDate, this, [this, checker, bestMasterVer](QString) {
+            checker->deleteLater();
+            // Master says newer but GitHub says up-to-date — open releases page.
+            QMessageBox box(this);
+            box.setIcon(QMessageBox::Warning);
+            box.setWindowTitle(tr("Update Required"));
+            box.setText(tr("The master server is running v%1 but the updater could not find a newer release.\n"
+                           "Please check GitHub for the latest version.")
+                        .arg(bestMasterVer.toString()));
+            box.addButton(tr("Open Downloads"), QMessageBox::AcceptRole);
+            box.addButton(tr("Quit"), QMessageBox::RejectRole);
+            box.exec();
+            QDesktopServices::openUrl(QUrl("https://github.com/kwran420/DG-LAN/releases/latest"));
+            QApplication::quit();
+         });
+         connect(checker, &UpdateChecker::checkFailed, this, [this, checker, bestMasterVer](QString) {
+            checker->deleteLater();
+            QMessageBox box(this);
+            box.setIcon(QMessageBox::Warning);
+            box.setWindowTitle(tr("Update Required"));
+            box.setText(tr("The master server is running v%1 but the update check failed.\n"
+                           "Please download the latest version from GitHub.")
+                        .arg(bestMasterVer.toString()));
+            box.addButton(tr("Open Downloads"), QMessageBox::AcceptRole);
+            box.addButton(tr("Quit"), QMessageBox::RejectRole);
+            box.exec();
+            QDesktopServices::openUrl(QUrl("https://github.com/kwran420/DG-LAN/releases/latest"));
+            QApplication::quit();
+         });
+         checker->check();
+         return;
+      }
+   }
+
+   if (newMasterID != this->masterPeerID)
+   {
+      this->masterPeerID = newMasterID;
+      this->browsedPeers.clear();
+      this->activeBrowseResults.clear();
+      this->fileModel.removeRows(0, this->fileModel.rowCount());
+   }
+
+   // Browse every peer we haven't visited in this cycle.
+   for (int i = 0; i < state.peer_size(); ++i)
+   {
+      Common::Hash peerID(state.peer(i).peer_id().hash().data());
+      if (!this->browsedPeers.contains(peerID))
+         this->browsePeer(peerID);
+   }
+
+   // After all browse results have returned, prune stale file rows.
+   // A file is pruned if the master did not confirm it this generation.
+   if (this->activeBrowseResults.isEmpty() && this->browseGeneration > 0)
+   {
+      int pruned = 0;
+      for (int row = this->fileModel.rowCount() - 1; row >= 0; --row)
+      {
+         QStandardItem* item = this->fileModel.item(row, COL_NAME);
+         if (!item)
+            continue;
+         quint32 masterGen = item->data(ROLE_MASTER_GEN).toUInt();
+         if (masterGen < this->browseGeneration && item->data(ROLE_DOWNLOAD_ID).toULongLong() == 0)
+         {
+            this->fileModel.removeRow(row);
+            ++pruned;
+         }
+      }
+      if (this->lastLoggedGeneration < this->browseGeneration)
+      {
+         this->lastLoggedGeneration = this->browseGeneration;
+         L_USER(QString("[Network] File index updated — %1 files from %2 peers")
+            .arg(this->fileModel.rowCount()).arg(this->browsedPeers.size()));
+      }
+   }
+
+   // Update download/upload columns from the state.
+   this->updateFileFromState(state);
 }
 
 void NetworkWidget::coreDisconnected()
 {
    this->activeBrowseResults.clear();
+   this->masterPeerID = Common::Hash();
    this->browsedPeers.clear();
+   this->prevDownloadedBytes.clear();
+   this->prevUploadBytes.clear();
    this->fileModel.removeRows(0, this->fileModel.rowCount());
 }
 
-void NetworkWidget::peersRemoved(const QList<Common::Hash>& peerIDs)
-{
-   for (const Common::Hash& peerID : peerIDs)
-      this->browsedPeers.remove(peerID);
-
-   QSet<QString> removedHexIds;
-   for (const Common::Hash& peerID : peerIDs)
-   {
-      QByteArray bytes(peerID.getData(), Common::Hash::HASH_SIZE);
-      removedHexIds.insert(QString::fromLatin1(bytes.toHex()));
-   }
-
-   for (int row = this->fileModel.rowCount() - 1; row >= 0; --row)
-   {
-      QStandardItem* item = this->fileModel.item(row, 0);
-      if (!item)
-         continue;
-
-      QStringList peerIds = item->data(ROLE_PEER_IDS).toStringList();
-      QStringList remaining;
-      for (const QString& id : peerIds)
-      {
-         if (!removedHexIds.contains(id))
-            remaining.append(id);
-      }
-
-      if (remaining.isEmpty())
-      {
-         this->fileModel.removeRow(row);
-      }
-      else if (remaining.size() != peerIds.size())
-      {
-         item->setData(remaining, ROLE_PEER_IDS);
-         QStandardItem* peersItem = this->fileModel.item(row, 2);
-         if (peersItem)
-            peersItem->setText(QString::number(remaining.size()));
-      }
-   }
-}
+// ── Browse peers ─────────────────────────────────────────────────────────────
 
 void NetworkWidget::browsePeer(const Common::Hash& peerID)
 {
@@ -270,6 +459,7 @@ void NetworkWidget::browseRootResult(const google::protobuf::RepeatedPtrField<Pr
    auto* senderObj = sender();
    QByteArray idData = senderObj->property("peerID").toByteArray();
    Common::Hash peerID(idData.constData());
+   bool fromMaster = (peerID == this->masterPeerID);
 
    for (int i = 0; i < this->activeBrowseResults.size(); ++i)
    {
@@ -289,7 +479,7 @@ void NetworkWidget::browseRootResult(const google::protobuf::RepeatedPtrField<Pr
          if (entry.type() == Protos::Common::Entry::DIR)
             this->browseDir(peerID, entry);
          else
-            this->addFileEntry(entry, peerID);
+            this->addFileEntry(entry, peerID, fromMaster);
       }
    }
 }
@@ -315,6 +505,7 @@ void NetworkWidget::browseSubResult(const google::protobuf::RepeatedPtrField<Pro
    auto* senderObj = sender();
    QByteArray idData = senderObj->property("peerID").toByteArray();
    Common::Hash peerID(idData.constData());
+   bool fromMaster = (peerID == this->masterPeerID);
 
    for (int i = 0; i < this->activeBrowseResults.size(); ++i)
    {
@@ -334,17 +525,27 @@ void NetworkWidget::browseSubResult(const google::protobuf::RepeatedPtrField<Pro
          if (entry.type() == Protos::Common::Entry::DIR)
             this->browseDir(peerID, entry);
          else
-            this->addFileEntry(entry, peerID);
+            this->addFileEntry(entry, peerID, fromMaster);
       }
    }
 }
 
-void NetworkWidget::addFileEntry(const Protos::Common::Entry& entry, const Common::Hash& peerID)
+// ── File model helpers ───────────────────────────────────────────────────────
+
+void NetworkWidget::addFileEntry(const Protos::Common::Entry& entry, const Common::Hash& peerID, bool fromMaster)
 {
    const QString name = Common::ProtoHelper::getStr(entry, &Protos::Common::Entry::name);
    quint64 size = entry.size();
 
-   QStandardItem* item = this->findOrAddFile(name, size);
+   // Only the master can create new file rows. Non-master peers can only
+   // enrich existing rows with peer counts and ownership info.
+   QStandardItem* item = this->findFile(name, size);
+   if (!item)
+   {
+      if (!fromMaster)
+         return;
+      item = this->addFile(name, size);
+   }
 
    QVariant existingEntry = item->data(ROLE_ENTRY);
    if (!existingEntry.isValid())
@@ -357,16 +558,49 @@ void NetworkWidget::addFileEntry(const Protos::Common::Entry& entry, const Commo
    }
 
    QByteArray peerIdBytes(peerID.getData(), Common::Hash::HASH_SIZE);
-   item->setData(peerIdBytes, ROLE_PEER_ID);
-   QStringList peerIds = item->data(ROLE_PEER_IDS).toStringList();
+   // Prefer a remote peer for ROLE_PEER_ID (used as download source).
+   if (peerID != this->localPeerID || !item->data(ROLE_PEER_ID).isValid())
+      item->setData(peerIdBytes, ROLE_PEER_ID);
+
+   // Stamp master generation when the master confirms this file.
+   if (fromMaster)
+      item->setData(this->browseGeneration, ROLE_MASTER_GEN);
+
+   // Reset peer list when entering a new browse generation.
+   quint32 itemGen = item->data(ROLE_BROWSE_GEN).toUInt();
+   QStringList peerIds;
+   if (itemGen == this->browseGeneration)
+      peerIds = item->data(ROLE_PEER_IDS).toStringList();
+   item->setData(this->browseGeneration, ROLE_BROWSE_GEN);
+
    QString peerIdStr = QString::fromLatin1(peerIdBytes.toHex());
    if (!peerIds.contains(peerIdStr))
       peerIds.append(peerIdStr);
    item->setData(peerIds, ROLE_PEER_IDS);
-   this->updatePeerCount(item);
+
+   // Update peers column.
+   QStandardItem* peersItem = this->fileModel.item(item->row(), COL_PEERS);
+   if (peersItem)
+      peersItem->setText(QString::number(peerIds.size()));
+
+   // Green if owned locally.
+   if (entry.owned_locally())
+   {
+      item->setData(true, ROLE_OWNED);
+      QBrush green(QColor(0, 140, 0));
+      for (int col = 0; col < COL_COUNT; ++col)
+      {
+         QStandardItem* colItem = this->fileModel.item(item->row(), col);
+         if (colItem)
+            colItem->setForeground(green);
+      }
+      QStandardItem* statusItem = this->fileModel.item(item->row(), COL_STATUS);
+      if (statusItem && statusItem->text().isEmpty())
+         statusItem->setText(tr("Owned"));
+   }
 }
 
-QStandardItem* NetworkWidget::findOrAddFile(const QString& name, quint64 size)
+QStandardItem* NetworkWidget::findFile(const QString& name, quint64 size)
 {
    const int rowCount = this->fileModel.rowCount();
    for (int i = 0; i < rowCount; ++i)
@@ -375,32 +609,324 @@ QStandardItem* NetworkWidget::findOrAddFile(const QString& name, quint64 size)
       if (item && item->text() == name && item->data(ROLE_SIZE).toULongLong() == size)
          return item;
    }
-
-   QStandardItem* nameItem = new QStandardItem(name);
-   nameItem->setEditable(false);
-
-   QStandardItem* sizeItem = new QStandardItem();
-   sizeItem->setEditable(false);
-   sizeItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-   if (size > 0)
-      sizeItem->setText(Common::Global::formatByteSize(size));
-
-   QStandardItem* peersItem = new QStandardItem("1");
-   peersItem->setEditable(false);
-   peersItem->setTextAlignment(Qt::AlignCenter);
-
-   this->fileModel.appendRow({ nameItem, sizeItem, peersItem });
-   return nameItem;
+   return nullptr;
 }
 
-void NetworkWidget::updatePeerCount(QStandardItem* item)
+QStandardItem* NetworkWidget::addFile(const QString& name, quint64 size)
 {
-   QStringList peerIds = item->data(ROLE_PEER_IDS).toStringList();
-   int row = item->row();
-   QStandardItem* peersItem = this->fileModel.item(row, 2);
-   if (peersItem)
-      peersItem->setText(QString::number(peerIds.size()));
+   QList<QStandardItem*> row;
+   for (int col = 0; col < COL_COUNT; ++col)
+   {
+      QStandardItem* item = new QStandardItem();
+      item->setEditable(false);
+      row.append(item);
+   }
+
+   row[COL_NAME]->setText(name);
+   row[COL_SIZE]->setText(size > 0 ? Common::Global::formatByteSize(size) : QString());
+   row[COL_SIZE]->setData(static_cast<qulonglong>(size), Qt::UserRole);
+   row[COL_SIZE]->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+   row[COL_QUEUE]->setTextAlignment(Qt::AlignCenter);
+   row[COL_PEERS]->setTextAlignment(Qt::AlignCenter);
+   row[COL_PEERS]->setText("1");
+   row[COL_DL_SPEED]->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+   row[COL_UL_SPEED]->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+
+   this->fileModel.appendRow(row);
+   return row[COL_NAME];
 }
+
+// ── State-driven update (download/upload tracking) ───────────────────────────
+
+void NetworkWidget::updateFileFromState(const Protos::GUI::State& state)
+{
+   // Build a set of active download IDs for cleanup later.
+   QSet<quint64> activeDownloadIds;
+
+   // Track current downloaded_bytes for speed calculation.
+   QMap<quint64, qint64> currentDownloadedBytes;
+
+   // Build the ordered queue of non-complete download IDs (for move operations and numbering).
+   this->downloadQueue.clear();
+   for (int d = 0; d < state.download_size(); ++d)
+   {
+      const auto& dl = state.download(d);
+      if (dl.status() != Protos::GUI::State::Download::COMPLETE)
+         this->downloadQueue.append(dl.id());
+   }
+
+   for (int d = 0; d < state.download_size(); ++d)
+   {
+      const auto& dl = state.download(d);
+      const quint64 dlId = dl.id();
+      activeDownloadIds.insert(dlId);
+      currentDownloadedBytes[dlId] = dl.downloaded_bytes();
+
+      // Match to file row by name + size.
+      const QString name = Common::ProtoHelper::getStr(dl.local_entry(), &Protos::Common::Entry::name);
+      const quint64 size = dl.local_entry().size();
+
+      for (int row = 0; row < this->fileModel.rowCount(); ++row)
+      {
+         QStandardItem* item = this->fileModel.item(row, COL_NAME);
+         if (!item || item->text() != name || item->data(ROLE_SIZE).toULongLong() != size)
+            continue;
+
+         item->setData(static_cast<qulonglong>(dlId), ROLE_DOWNLOAD_ID);
+
+         // Queue position — stored on both COL_NAME (for move methods reading
+         // selectedRows column 0) and COL_QUEUE (for display).
+         {
+            const int queuePos = (dl.status() != Protos::GUI::State::Download::COMPLETE)
+               ? this->downloadQueue.indexOf(dlId) + 1
+               : 0;
+            item->setData(queuePos, ROLE_QUEUE_POS);
+
+            QStandardItem* queueItem = this->fileModel.item(row, COL_QUEUE);
+            if (queueItem)
+            {
+               queueItem->setText(queuePos > 0 ? QString::number(queuePos) : QString());
+               queueItem->setData(queuePos, ROLE_QUEUE_POS);
+            }
+         }
+
+         // Status column.
+         QStandardItem* statusItem = this->fileModel.item(row, COL_STATUS);
+         if (statusItem)
+         {
+            if (dl.status() == Protos::GUI::State::Download::COMPLETE)
+               statusItem->setText(tr("Owned"));
+            else
+               statusItem->setText(statusText(dl.status()));
+         }
+
+         // Progress column.
+         int progress = 0;
+         if (dl.status() != Protos::GUI::State::Download::COMPLETE && size > 0)
+            progress = static_cast<int>(dl.downloaded_bytes() * 10000 / size);
+
+         QStandardItem* progressItem = this->fileModel.item(row, COL_PROGRESS);
+         if (progressItem)
+            progressItem->setData(progress, ROLE_PROGRESS);
+
+         // DL Speed column: delta from previous state.
+         QStandardItem* dlSpeedItem = this->fileModel.item(row, COL_DL_SPEED);
+         if (dlSpeedItem)
+         {
+            qint64 speed = 0;
+            if (this->prevDownloadedBytes.contains(dlId) && dl.status() == Protos::GUI::State::Download::DOWNLOADING)
+               speed = dl.downloaded_bytes() - this->prevDownloadedBytes[dlId];
+
+            if (speed > 0)
+               dlSpeedItem->setText(Common::Global::formatByteSize(speed) + "/s");
+            else
+               dlSpeedItem->setText(QString());
+         }
+
+         // Mark error states with orange and tooltip.
+         {
+            bool isError = false;
+            switch (dl.status())
+            {
+            case Protos::GUI::State::Download::UNABLE_TO_RETRIEVE_THE_HASHES:
+            case Protos::GUI::State::Download::HASH_MISMATCH:
+            case Protos::GUI::State::Download::TRANSFER_ERROR:
+            case Protos::GUI::State::Download::UNABLE_TO_OPEN_THE_FILE:
+            case Protos::GUI::State::Download::FILE_IO_ERROR:
+            case Protos::GUI::State::Download::FILE_NON_EXISTENT:
+            case Protos::GUI::State::Download::GOT_TOO_MUCH_DATA:
+            case Protos::GUI::State::Download::UNABLE_TO_GET_ENTRIES:
+            case Protos::GUI::State::Download::NO_SOURCE:
+            case Protos::GUI::State::Download::ENTRY_NOT_FOUND:
+               isError = true;
+               break;
+            default:
+               break;
+            }
+            if (isError)
+            {
+               QBrush orange(QColor(200, 120, 0));
+               for (int col = 0; col < COL_COUNT; ++col)
+               {
+                  QStandardItem* colItem = this->fileModel.item(row, col);
+                  if (colItem)
+                  {
+                     colItem->setForeground(orange);
+                     colItem->setToolTip(tr("Download stuck — right-click or use Redownload button"));
+                  }
+               }
+            }
+            else if (!item->data(ROLE_OWNED).toBool())
+            {
+               // Reset color for non-error, non-owned rows.
+               for (int col = 0; col < COL_COUNT; ++col)
+               {
+                  QStandardItem* colItem = this->fileModel.item(row, col);
+                  if (colItem)
+                  {
+                     colItem->setForeground(QBrush());
+                     colItem->setToolTip(QString());
+                  }
+               }
+            }
+         }
+
+         // Mark green on completion.
+         if (dl.status() == Protos::GUI::State::Download::COMPLETE && !item->data(ROLE_OWNED).toBool())
+         {
+            item->setData(true, ROLE_OWNED);
+            QBrush green(QColor(0, 140, 0));
+            for (int col = 0; col < COL_COUNT; ++col)
+            {
+               QStandardItem* colItem = this->fileModel.item(row, col);
+               if (colItem)
+                  colItem->setForeground(green);
+            }
+         }
+
+         // Enrich peer count from download sources, but only within the current browse generation
+         // to avoid re-inflating counts after a generation reset.
+         if (dl.peer_id_size() > 0 && item->data(ROLE_BROWSE_GEN).toUInt() == this->browseGeneration)
+         {
+            QStringList peerIds = item->data(ROLE_PEER_IDS).toStringList();
+            for (int p = 0; p < dl.peer_id_size(); ++p)
+            {
+               QString pid = QString::fromLatin1(QByteArray(dl.peer_id(p).hash().data(), Common::Hash::HASH_SIZE).toHex());
+               if (!peerIds.contains(pid))
+                  peerIds.append(pid);
+            }
+            item->setData(peerIds, ROLE_PEER_IDS);
+            QStandardItem* peersItem = this->fileModel.item(row, COL_PEERS);
+            if (peersItem)
+               peersItem->setText(QString::number(peerIds.size()));
+         }
+
+         break;
+      }
+   }
+
+   // Update upload speeds.
+   // First clear all UL speed cells.
+   for (int row = 0; row < this->fileModel.rowCount(); ++row)
+   {
+      QStandardItem* ulItem = this->fileModel.item(row, COL_UL_SPEED);
+      if (ulItem)
+         ulItem->setText(QString());
+   }
+
+   QMap<quint64, qint64> currentUploadBytes;
+   for (int u = 0; u < state.upload_size(); ++u)
+   {
+      const auto& ul = state.upload(u);
+      const quint64 ulId = ul.id();
+      const QString name = Common::ProtoHelper::getStr(ul.file(), &Protos::Common::Entry::name);
+      const quint64 size = ul.file().size();
+
+      // Estimate total uploaded bytes from chunk progress.
+      qint64 estimatedBytes = 0;
+      if (ul.nb_part() > 0 && ul.current_part() > 0)
+      {
+         double fraction = (static_cast<double>(ul.current_part() - 1) + static_cast<double>(ul.progress()) / 10000.0) / static_cast<double>(ul.nb_part());
+         estimatedBytes = static_cast<qint64>(fraction * static_cast<double>(size));
+      }
+      currentUploadBytes[ulId] = estimatedBytes;
+
+      for (int row = 0; row < this->fileModel.rowCount(); ++row)
+      {
+         QStandardItem* item = this->fileModel.item(row, COL_NAME);
+         if (!item || item->text() != name || item->data(ROLE_SIZE).toULongLong() != size)
+            continue;
+
+         QStandardItem* ulItem = this->fileModel.item(row, COL_UL_SPEED);
+         if (ulItem)
+         {
+            qint64 speed = 0;
+            if (this->prevUploadBytes.contains(ulId))
+               speed = estimatedBytes - this->prevUploadBytes[ulId];
+            if (speed > 0)
+               ulItem->setText(Common::Global::formatByteSize(speed) + "/s");
+            else
+               ulItem->setText(tr("Uploading"));
+         }
+
+         break;
+      }
+   }
+
+   // Clear status/progress/speed for downloads that are no longer active.
+   for (int row = 0; row < this->fileModel.rowCount(); ++row)
+   {
+      QStandardItem* item = this->fileModel.item(row, COL_NAME);
+      if (!item)
+         continue;
+      quint64 dlId = item->data(ROLE_DOWNLOAD_ID).toULongLong();
+      if (dlId == 0 || activeDownloadIds.contains(dlId))
+         continue;
+
+      // This download is no longer in state — clear transient columns.
+      QStandardItem* statusItem = this->fileModel.item(row, COL_STATUS);
+      if (statusItem)
+      {
+         if (item->data(ROLE_OWNED).toBool())
+            statusItem->setText(tr("Owned"));
+         else
+            statusItem->setText(QString());
+      }
+
+      QStandardItem* queueItem = this->fileModel.item(row, COL_QUEUE);
+      if (queueItem)
+      {
+         queueItem->setText(QString());
+         queueItem->setData(0, ROLE_QUEUE_POS);
+      }
+
+      QStandardItem* progressItem = this->fileModel.item(row, COL_PROGRESS);
+      if (progressItem)
+         progressItem->setData(0, ROLE_PROGRESS);
+
+      QStandardItem* dlSpeedItem = this->fileModel.item(row, COL_DL_SPEED);
+      if (dlSpeedItem)
+         dlSpeedItem->setText(QString());
+
+      item->setData(QVariant(), ROLE_DOWNLOAD_ID);
+      item->setData(0, ROLE_QUEUE_POS);
+   }
+
+   this->prevDownloadedBytes = currentDownloadedBytes;
+   this->prevUploadBytes = currentUploadBytes;
+}
+
+QString NetworkWidget::statusText(Protos::GUI::State::Download::Status status)
+{
+   switch (status)
+   {
+   case Protos::GUI::State::Download::QUEUED:                       return tr("Queued");
+   case Protos::GUI::State::Download::GETTING_THE_HASHES:           return tr("Hashing...");
+   case Protos::GUI::State::Download::DOWNLOADING:                  return tr("Downloading");
+   case Protos::GUI::State::Download::COMPLETE:                     return tr("Complete");
+   case Protos::GUI::State::Download::PAUSED:                       return tr("Paused");
+   case Protos::GUI::State::Download::UNKNOWN_PEER_SOURCE:          return tr("Peer offline");
+   case Protos::GUI::State::Download::ENTRY_NOT_FOUND:              return tr("Not found");
+   case Protos::GUI::State::Download::NO_SOURCE:                    return tr("No source");
+   case Protos::GUI::State::Download::NO_SHARED_DIRECTORY_TO_WRITE: return tr("No incoming dir");
+   case Protos::GUI::State::Download::NO_ENOUGH_FREE_SPACE:         return tr("No space");
+   case Protos::GUI::State::Download::UNABLE_TO_CREATE_THE_FILE:    return tr("Can't create file");
+   case Protos::GUI::State::Download::UNABLE_TO_CREATE_THE_DIRECTORY: return tr("Can't create dir");
+   case Protos::GUI::State::Download::TRANSFER_ERROR:               return tr("Transfer error");
+   case Protos::GUI::State::Download::HASH_MISMATCH:                return tr("Hash mismatch");
+   case Protos::GUI::State::Download::REMOTE_SCANNING_IN_PROGRESS:  return tr("Remote scanning...");
+   case Protos::GUI::State::Download::LOCAL_SCANNING_IN_PROGRESS:   return tr("Local scanning...");
+   case Protos::GUI::State::Download::UNABLE_TO_RETRIEVE_THE_HASHES: return tr("Stale hashes — Redownload");
+   case Protos::GUI::State::Download::UNABLE_TO_OPEN_THE_FILE:     return tr("Can't open file");
+   case Protos::GUI::State::Download::FILE_IO_ERROR:                return tr("File I/O error");
+   case Protos::GUI::State::Download::FILE_NON_EXISTENT:            return tr("File missing");
+   case Protos::GUI::State::Download::GOT_TOO_MUCH_DATA:            return tr("Excess data");
+   case Protos::GUI::State::Download::UNABLE_TO_GET_ENTRIES:        return tr("Can't get entries");
+   default:                                                          return tr("Error");
+   }
+}
+
+// ── Context menu & download actions ──────────────────────────────────────────
 
 void NetworkWidget::displayContextMenuDownload(const QPoint& point)
 {
@@ -408,8 +934,232 @@ void NetworkWidget::displayContextMenuDownload(const QPoint& point)
    if (selectedRows.isEmpty())
       return;
 
-   QPoint globalPosition = this->fileTableView->mapToGlobal(point);
-   this->downloadMenu.show(globalPosition);
+   QMenu menu;
+   QAction* dlAction = menu.addAction(tr("Download"));
+   QAction* redlAction = menu.addAction(tr("Redownload"));
+   QAction* delAction = menu.addAction(tr("Delete"));
+
+   // Check if any selected file is owned locally and has a known path.
+   bool canOpenLocation = false;
+   for (const QModelIndex& proxyIndex : selectedRows)
+   {
+      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+      if (item && item->data(ROLE_OWNED).toBool() && !this->getLocalPath(item).isEmpty())
+      {
+         canOpenLocation = true;
+         break;
+      }
+   }
+
+   menu.addSeparator();
+   QAction* openLocAction = menu.addAction(tr("Open file location"));
+   openLocAction->setEnabled(canOpenLocation);
+
+   // Queue reorder actions — only enabled when at least one selected item has an active download.
+   bool hasActiveDownload = false;
+   for (const QModelIndex& proxyIndex : selectedRows)
+   {
+      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+      if (item && item->data(ROLE_QUEUE_POS).toInt() > 0)
+      {
+         hasActiveDownload = true;
+         break;
+      }
+   }
+
+   menu.addSeparator();
+   QAction* moveTopAction = menu.addAction(tr("Move to Top"));
+   QAction* moveUpAction = menu.addAction(tr("Move Up"));
+   QAction* moveDownAction = menu.addAction(tr("Move Down"));
+   QAction* moveBottomAction = menu.addAction(tr("Move to Bottom"));
+   moveTopAction->setEnabled(hasActiveDownload);
+   moveUpAction->setEnabled(hasActiveDownload);
+   moveDownAction->setEnabled(hasActiveDownload);
+   moveBottomAction->setEnabled(hasActiveDownload);
+
+   QAction* chosen = menu.exec(this->fileTableView->mapToGlobal(point));
+   if (chosen == dlAction)
+      this->download();
+   else if (chosen == redlAction)
+      this->redownload();
+   else if (chosen == delAction)
+      this->cancelDownload();
+   else if (chosen == openLocAction)
+      this->openFileLocation();
+   else if (chosen == moveTopAction)
+      this->moveToTop();
+   else if (chosen == moveUpAction)
+      this->moveUp();
+   else if (chosen == moveDownAction)
+      this->moveDown();
+   else if (chosen == moveBottomAction)
+      this->moveToBottom();
+}
+
+void NetworkWidget::openFileLocation()
+{
+   QModelIndexList selectedRows = this->fileTableView->selectionModel()->selectedRows();
+   for (const QModelIndex& proxyIndex : selectedRows)
+   {
+      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+      if (!item || !item->data(ROLE_OWNED).toBool())
+         continue;
+
+      QString path = this->getLocalPath(item);
+      if (!path.isEmpty())
+         Utils::openLocation(path);
+   }
+}
+
+void NetworkWidget::moveToTop()
+{
+   if (this->downloadQueue.isEmpty())
+      return;
+
+   QModelIndexList selectedRows = this->fileTableView->selectionModel()->selectedRows();
+   QList<quint64> idsToMove;
+   for (const QModelIndex& proxyIndex : selectedRows)
+   {
+      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+      if (item)
+      {
+         quint64 dlId = item->data(ROLE_DOWNLOAD_ID).toULongLong();
+         if (dlId != 0 && item->data(ROLE_QUEUE_POS).toInt() > 0)
+            idsToMove.append(dlId);
+      }
+   }
+   if (idsToMove.isEmpty())
+      return;
+
+   this->coreConnection->moveDownloads(this->downloadQueue.first(), idsToMove, Protos::GUI::MoveDownloads::BEFORE);
+}
+
+void NetworkWidget::moveUp()
+{
+   if (this->downloadQueue.size() < 2)
+      return;
+
+   QModelIndexList selectedRows = this->fileTableView->selectionModel()->selectedRows();
+   int minPos = INT_MAX;
+   QList<quint64> idsToMove;
+   for (const QModelIndex& proxyIndex : selectedRows)
+   {
+      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+      if (item)
+      {
+         int pos = item->data(ROLE_QUEUE_POS).toInt();
+         quint64 dlId = item->data(ROLE_DOWNLOAD_ID).toULongLong();
+         if (dlId != 0 && pos > 0)
+         {
+            idsToMove.append(dlId);
+            if (pos < minPos)
+               minPos = pos;
+         }
+      }
+   }
+   if (idsToMove.isEmpty() || minPos <= 1)
+      return;
+
+   // The item just above the topmost selected is at downloadQueue index minPos-2.
+   quint64 refId = this->downloadQueue.at(minPos - 2);
+   this->coreConnection->moveDownloads(refId, idsToMove, Protos::GUI::MoveDownloads::BEFORE);
+}
+
+void NetworkWidget::moveDown()
+{
+   if (this->downloadQueue.size() < 2)
+      return;
+
+   QModelIndexList selectedRows = this->fileTableView->selectionModel()->selectedRows();
+   int maxPos = 0;
+   QList<quint64> idsToMove;
+   for (const QModelIndex& proxyIndex : selectedRows)
+   {
+      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+      if (item)
+      {
+         int pos = item->data(ROLE_QUEUE_POS).toInt();
+         quint64 dlId = item->data(ROLE_DOWNLOAD_ID).toULongLong();
+         if (dlId != 0 && pos > 0)
+         {
+            idsToMove.append(dlId);
+            if (pos > maxPos)
+               maxPos = pos;
+         }
+      }
+   }
+   if (idsToMove.isEmpty() || maxPos >= this->downloadQueue.size())
+      return;
+
+   // The item just below the bottommost selected is at downloadQueue index maxPos.
+   quint64 refId = this->downloadQueue.at(maxPos);
+   this->coreConnection->moveDownloads(refId, idsToMove, Protos::GUI::MoveDownloads::AFTER);
+}
+
+void NetworkWidget::moveToBottom()
+{
+   if (this->downloadQueue.isEmpty())
+      return;
+
+   QModelIndexList selectedRows = this->fileTableView->selectionModel()->selectedRows();
+   QList<quint64> idsToMove;
+   for (const QModelIndex& proxyIndex : selectedRows)
+   {
+      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+      if (item)
+      {
+         quint64 dlId = item->data(ROLE_DOWNLOAD_ID).toULongLong();
+         if (dlId != 0 && item->data(ROLE_QUEUE_POS).toInt() > 0)
+            idsToMove.append(dlId);
+      }
+   }
+   if (idsToMove.isEmpty())
+      return;
+
+   this->coreConnection->moveDownloads(this->downloadQueue.last(), idsToMove, Protos::GUI::MoveDownloads::AFTER);
+}
+
+QString NetworkWidget::getLocalPath(QStandardItem* item) const
+{
+   QByteArray entryData = item->data(ROLE_ENTRY).toByteArray();
+   if (entryData.isEmpty())
+      return QString();
+
+   Protos::Common::Entry entry;
+   if (!entry.ParseFromArray(entryData.constData(), entryData.size()))
+      return QString();
+
+   const QString entryName = Common::ProtoHelper::getStr(entry, &Protos::Common::Entry::name);
+   const QString entryPath = Common::ProtoHelper::getStr(entry, &Protos::Common::Entry::path);
+
+   for (const Common::SharedEntry& localDir : this->sharedEntryListModel.getSharedDirectories())
+   {
+      QString candidatePath = localDir.path.getPath();
+      if (!candidatePath.endsWith('/'))
+         candidatePath.append('/');
+
+      if (!entryPath.isEmpty())
+      {
+         QString rel = entryPath;
+         if (rel.startsWith('/'))
+            rel = rel.mid(1);
+         candidatePath.append(rel);
+      }
+
+      candidatePath.append(entryName);
+
+      if (QFileInfo::exists(candidatePath))
+         return candidatePath;
+   }
+
+   return QString();
 }
 
 void NetworkWidget::download()
@@ -435,6 +1185,11 @@ void NetworkWidget::download()
          continue;
 
       Common::Hash peerID(peerIdData.constData());
+
+      // Don't download from ourselves.
+      if (peerID == this->localPeerID)
+         continue;
+
       this->coreConnection->download(peerID, entry);
    }
 }
@@ -466,6 +1221,116 @@ void NetworkWidget::downloadTo(const QString& path, const Common::Hash& sharedDi
          continue;
 
       Common::Hash peerID(peerIdData.constData());
+
+      // Don't download from ourselves.
+      if (peerID == this->localPeerID)
+         continue;
+
       this->coreConnection->download(peerID, entry, sharedDirID, path);
    }
+}
+
+void NetworkWidget::redownload()
+{
+   QModelIndexList selectedRows = this->fileTableView->selectionModel()->selectedRows();
+   if (selectedRows.isEmpty())
+      return;
+
+   // Cancel existing downloads first, then re-issue.
+   QList<quint64> toCancel;
+   for (const QModelIndex& proxyIndex : selectedRows)
+   {
+      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+      if (!item)
+         continue;
+      quint64 dlId = item->data(ROLE_DOWNLOAD_ID).toULongLong();
+      if (dlId != 0)
+         toCancel.append(dlId);
+   }
+
+   if (!toCancel.isEmpty())
+      this->coreConnection->cancelDownloads(toCancel);
+
+   this->download();
+}
+
+void NetworkWidget::cancelDownload()
+{
+   QModelIndexList selectedRows = this->fileTableView->selectionModel()->selectedRows();
+   if (selectedRows.isEmpty())
+      return;
+
+   QList<quint64> toCancel;
+   QStringList names;
+   for (const QModelIndex& proxyIndex : selectedRows)
+   {
+      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+      if (!item)
+         continue;
+      quint64 dlId = item->data(ROLE_DOWNLOAD_ID).toULongLong();
+      if (dlId != 0)
+      {
+         toCancel.append(dlId);
+         names.append(item->text());
+      }
+   }
+
+   if (toCancel.isEmpty())
+      return;
+
+   int ret = QMessageBox::question(
+      this,
+      tr("Cancel Downloads"),
+      tr("Cancel %n download(s)?\n%1", "", toCancel.size()).arg(names.join(", ")),
+      QMessageBox::Yes | QMessageBox::No,
+      QMessageBox::No
+   );
+
+   if (ret == QMessageBox::Yes)
+      this->coreConnection->cancelDownloads(toCancel);
+}
+
+void NetworkWidget::updateButtonStates()
+{
+   QModelIndexList selectedRows = this->fileTableView->selectionModel()->selectedRows();
+   bool canDownload = false;
+   bool hasDownload = false;
+   bool hasQueuedDownload = false;
+
+   QString localHex = QString::fromLatin1(QByteArray(this->localPeerID.getData(), Common::Hash::HASH_SIZE).toHex());
+
+   for (const QModelIndex& proxyIndex : selectedRows)
+   {
+      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+      if (!item)
+         continue;
+
+      if (item->data(ROLE_DOWNLOAD_ID).toULongLong() != 0)
+         hasDownload = true;
+
+      if (item->data(ROLE_QUEUE_POS).toInt() > 0)
+         hasQueuedDownload = true;
+
+      // Can download if any non-local peer has this file.
+      QStringList peerIds = item->data(ROLE_PEER_IDS).toStringList();
+      for (const QString& pid : peerIds)
+      {
+         if (pid != localHex)
+         {
+            canDownload = true;
+            break;
+         }
+      }
+   }
+
+   this->downloadButton->setEnabled(canDownload);
+   this->redownloadButton->setEnabled(canDownload);
+   this->deleteButton->setEnabled(hasDownload);
+   this->moveTopButton->setEnabled(hasQueuedDownload);
+   this->moveUpButton->setEnabled(hasQueuedDownload);
+   this->moveDownButton->setEnabled(hasQueuedDownload);
+   this->moveBottomButton->setEnabled(hasQueuedDownload);
 }

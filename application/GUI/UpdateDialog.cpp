@@ -34,15 +34,18 @@ using namespace GUI;
 UpdateDialog::UpdateDialog(const QString& latestVersion,
                            const QString& releaseUrl,
                            const QString& downloadUrl,
-                           QWidget* parent)
+                           QWidget* parent,
+                           bool forced)
    : QDialog(parent)
    , m_dlNam(new QNetworkAccessManager(this))
    , m_downloadUrl(downloadUrl)
    , m_releaseUrl(releaseUrl)
    , m_tempFile(QDir::temp().filePath("DG-LAN-Update-Setup.exe"))
 {
-   setWindowTitle("DG-LAN — Update Available");
+   setWindowTitle(forced ? "DG-LAN — Update Required" : "DG-LAN — Update Available");
    setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
+   if (forced)
+      setWindowFlags(windowFlags() & ~Qt::WindowCloseButtonHint);
    setFixedSize(420, 290);
    setAttribute(Qt::WA_StyledBackground, false);
 
@@ -61,7 +64,7 @@ UpdateDialog::UpdateDialog(const QString& latestVersion,
 
    QVBoxLayout* headText = new QVBoxLayout();
 
-   QLabel* headline = new QLabel("A new version is available!");
+   QLabel* headline = new QLabel(forced ? "Update required to stay on the network!" : "A new version is available!");
    QFont hf;
    hf.setPointSize(14);
    hf.setBold(true);
@@ -126,12 +129,15 @@ UpdateDialog::UpdateDialog(const QString& latestVersion,
    btnRow->setSpacing(8);
    btnRow->addStretch();
 
-   m_btnLater = new QPushButton("Later");
+   m_btnLater = new QPushButton(forced ? "Quit" : "Later");
    m_btnLater->setFixedWidth(80);
    m_btnLater->setStyleSheet(
       "QPushButton { background: #2a3a4a; color: #aabbcc; border: 1px solid #445566; border-radius: 4px; padding: 6px 12px; }"
       "QPushButton:hover { background: #344455; }");
-   connect(m_btnLater, &QPushButton::clicked, this, &QDialog::reject);
+   if (forced)
+      connect(m_btnLater, &QPushButton::clicked, []() { QCoreApplication::quit(); });
+   else
+      connect(m_btnLater, &QPushButton::clicked, this, &QDialog::reject);
 
    const bool hasDirect = !downloadUrl.isEmpty();
    m_btnAction = new QPushButton(hasDirect ? "Download && Install" : "Open Release Page");
