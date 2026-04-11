@@ -439,7 +439,7 @@ void NetworkWidget::coreDisconnected()
    this->masterPeerID = Common::Hash();
    this->browsedPeers.clear();
    this->prevDownloadedBytes.clear();
-   this->prevUploadBytes.clear();
+   this->prevUploadByFile.clear();
    this->fileModel.removeRows(0, this->fileModel.rowCount());
 }
 
@@ -827,22 +827,29 @@ void NetworkWidget::updateFileFromState(const Protos::GUI::State& state)
          ulItem->setText(QString());
    }
 
-   QMap<quint64, qint64> currentUploadBytes;
+   // Aggregate estimated uploaded bytes per file (name+size) across all active chunk uploaders.
+   // ChunkUploader IDs change with every chunk, so we key by file identity instead.
+   QMap<QPair<QString, quint64>, qint64> currentUploadByFile;
    for (int u = 0; u < state.upload_size(); ++u)
    {
       const auto& ul = state.upload(u);
-      const quint64 ulId = ul.id();
       const QString name = Common::ProtoHelper::getStr(ul.file(), &Protos::Common::Entry::name);
       const quint64 size = ul.file().size();
 
-      // Estimate total uploaded bytes from chunk progress.
       qint64 estimatedBytes = 0;
       if (ul.nb_part() > 0 && ul.current_part() > 0)
       {
          double fraction = (static_cast<double>(ul.current_part() - 1) + static_cast<double>(ul.progress()) / 10000.0) / static_cast<double>(ul.nb_part());
          estimatedBytes = static_cast<qint64>(fraction * static_cast<double>(size));
       }
-      currentUploadBytes[ulId] = estimatedBytes;
+      currentUploadByFile[qMakePair(name, size)] += estimatedBytes;
+   }
+
+   for (auto it = currentUploadByFile.constBegin(); it != currentUploadByFile.constEnd(); ++it)
+   {
+      const QString& name = it.key().first;
+      const quint64 size = it.key().second;
+      const qint64 estimatedBytes = it.value();
 
       for (int row = 0; row < this->fileModel.rowCount(); ++row)
       {
@@ -854,14 +861,14 @@ void NetworkWidget::updateFileFromState(const Protos::GUI::State& state)
          if (ulItem)
          {
             qint64 speed = 0;
-            if (this->prevUploadBytes.contains(ulId))
-               speed = estimatedBytes - this->prevUploadBytes[ulId];
+            auto key = it.key();
+            if (this->prevUploadByFile.contains(key))
+               speed = estimatedBytes - this->prevUploadByFile[key];
             if (speed > 0)
                ulItem->setText(Common::Global::formatByteSize(speed) + "/s");
             else
                ulItem->setText(tr("Uploading"));
          }
-
          break;
       }
    }
@@ -906,7 +913,7 @@ void NetworkWidget::updateFileFromState(const Protos::GUI::State& state)
    }
 
    this->prevDownloadedBytes = currentDownloadedBytes;
-   this->prevUploadBytes = currentUploadBytes;
+   this->prevUploadByFile = currentUploadByFile;
 }
 
 QString NetworkWidget::statusText(Protos::GUI::State::Download::Status status)

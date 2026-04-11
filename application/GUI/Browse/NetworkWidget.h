@@ -145,7 +145,8 @@ namespace GUI
 
       // Per-download speed tracking: download ID → previous downloaded_bytes
       QMap<quint64, qint64> prevDownloadedBytes;
-      QMap<quint64, qint64> prevUploadBytes;
+      // Per-file upload speed tracking: (name, size) → previous total estimated bytes
+      QMap<QPair<QString, quint64>, qint64> prevUploadByFile;
       bool updatePromptShown = false;
 
       // Ordered list of non-complete download IDs from latest state (index 0 = first in queue).
