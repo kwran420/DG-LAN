@@ -493,11 +493,14 @@ void FileDownload::nextHash(const Protos::Core::HashResult& hashResult)
       if (this->chunkDownloaders[num]->getHash() != hash)
       {
          L_WARN(
-            QString("The hash (%1) num %2 received doesn't match the hash (%3) in our entry").
-               arg(hash.toStr()).
+            QString("Hash mismatch for chunk %1: entry has %2, peer has %3 — updating to fresh hash").
                arg(num).
-               arg(this->chunkDownloaders[num]->getHash().toStr())
+               arg(this->chunkDownloaders[num]->getHash().toStr()).
+               arg(hash.toStr())
          );
+         this->chunkDownloaders[num]->updateHash(hash);
+         if (num < static_cast<quint32>(this->remoteEntry.chunk_size()))
+            this->remoteEntry.mutable_chunk(num)->set_hash(hash.getData(), Common::Hash::HASH_SIZE);
       }
       return;
    }

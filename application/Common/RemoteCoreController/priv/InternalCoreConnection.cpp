@@ -230,6 +230,7 @@ void InternalCoreConnection::download(const Common::Hash& peerID, const Protos::
    Protos::GUI::Download downloadMessage;
    downloadMessage.mutable_peer_id()->set_hash(peerID.getData(), Common::Hash::HASH_SIZE);
    downloadMessage.mutable_entry()->CopyFrom(entry);
+   downloadMessage.mutable_entry()->clear_chunk(); // Always fetch fresh hashes from peer.
    this->send(Common::MessageHeader::GUI_DOWNLOAD, downloadMessage);
 }
 
@@ -242,6 +243,7 @@ void InternalCoreConnection::download(const Common::Hash& peerID, const Protos::
    Protos::GUI::Download downloadMessage;
    downloadMessage.mutable_peer_id()->set_hash(peerID.getData(), Common::Hash::HASH_SIZE);
    downloadMessage.mutable_entry()->CopyFrom(entry);
+   downloadMessage.mutable_entry()->clear_chunk(); // Always fetch fresh hashes from peer.
    if (!sharedFolderID.isNull())
       downloadMessage.mutable_destination_directory_id()->set_hash(sharedFolderID.getData(), Common::Hash::HASH_SIZE);
    Common::ProtoHelper::setStr(downloadMessage, &Protos::GUI::Download::mutable_destination_path, path);

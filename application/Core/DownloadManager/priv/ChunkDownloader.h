@@ -79,6 +79,7 @@ namespace DM
       Status getLastTransferStatus() const;
       void resetLastTransferStatus();
 
+      void updateHash(const Common::Hash& newHash);
       int getDownloadedBytes() const;
       QList<PM::IPeer*> getPeers();
 

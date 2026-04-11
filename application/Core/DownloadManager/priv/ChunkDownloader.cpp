@@ -85,6 +85,13 @@ Common::Hash ChunkDownloader::getHash() const
    return this->chunkHash;
 }
 
+void ChunkDownloader::updateHash(const Common::Hash& newHash)
+{
+   this->chunkHash = newHash;
+   if (!this->chunk.isNull())
+      this->chunk->setHash(newHash);
+}
+
 void ChunkDownloader::addPeer(PM::IPeer* peer)
 {
    Q_ASSERT(peer);
