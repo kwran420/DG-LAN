@@ -1,187 +1,58 @@
-# DG-LAN API Server
+# DG-LAN Python API Bridge
 
-Standalone HTTP bridge that connects to a running DG-LAN Core and serves
-shared file data as JSON — so your website can build `dglan://` download links.
+Standalone HTTP server that connects to a running DG-LAN Core and serves
+shared files over HTTP — with `dglan://` download links, configurable CORS,
+and forced-download mode.
 
-## How it works
+> **Not sure which HTTP server to use?** DG-LAN also has a [built-in HTTP server](../HTTP-SERVER.md)
+> compiled directly into Core (port 59480, zero dependencies). This Python bridge
+> adds `dglan://` links, configurable CORS, and `?download=1` support.
+> See the [comparison table](../HTTP-SERVER.md#comparison-built-in-server-vs-python-bridge).
 
-```
-┌─────────────┐  TCP:59485  ┌────────────┐  HTTP:8080  ┌────────────┐
-│  DG-LAN     │◄───────────►│  dglan-api │◄───────────►│  Website   │
-│  Core       │  protobuf   │  server.py │    JSON     │  (JS)      │
-└─────────────┘             └────────────┘             └────────────┘
-```
-
-1. `server.py` connects to Core on `127.0.0.1:59485` (same machine)
-2. Core auto-authenticates local connections (no password needed locally)
-3. Server receives the peer ID and browses all shared files
-4. Website fetches `GET /api/files` → JSON with filenames, sizes, hashes, and
-   pre-built `dglan://` URLs ready to use as `<a href="...">` links
-
-## Quick start
+## Quick Start
 
 ```bash
-# Install dependency
 pip install protobuf
-
-# Run (Core must be running on this machine)
-python server.py
-
-# Or with options
-python server.py --http-port 9090 --http-host 0.0.0.0 --cors-origins https://mysite.com
-
-# Remote Core — prefer environment variable for password
-DGLAN_PASSWORD=mysecret python server.py --core-host 10.0.0.5
+python server.py                        # Core must be running
+python server.py --cors-origins "*"     # Allow cross-origin requests
+DGLAN_PASSWORD=secret python server.py --core-host 10.0.0.5  # Remote Core
 ```
+
+Server starts on `http://127.0.0.1:8080`.
 
 ## API Endpoints
 
-### `GET /api/v1/files`
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/v1/files` | File listing with `dglan://` and HTTP streaming URLs |
+| `GET /api/v1/files/{hash}/{path}` | Stream a file (Range, ETag, `?download=1`) |
+| `GET /api/v1/status` | Core connection status and peer count |
+| `GET /api/v1/health` | Liveness probe: `{"status": "ok"}` |
 
-Returns all shared files with `dglan://` link parameters.
-Also available at `/api/files` for backward compatibility.
+All `/api/v1/` endpoints have backward-compatible aliases at `/api/` (e.g., `/api/files`).
 
-```json
-{
-  "peer": "0011aabbccdd...",
-  "shared_entries": [
-    {
-      "id": "aabb1122...",
-      "name": "Games",
-      "path": "C:/Shared/Games/",
-      "size": 52428800,
-      "free_space": 107374182400
-    }
-  ],
-  "files": [
-    {
-      "name": "movie.mkv",
-      "path": "/",
-      "size": 1073741824,
-      "shared_entry_hash": "aabb1122...",
-      "peer": "0011aabbccdd...",
-      "chunks": ["ff00aa...", "bb11cc...", ...],
-      "dglan_url": "dglan://download?peer=0011aa...&hash=aabb11...&size=1073741824&name=movie.mkv&path=/"
-    }
-  ],
-  "timestamp": 1712345678
-}
-```
-
-### `GET /api/v1/status`
-
-Core connection status and indexing progress.
-Also available at `/api/status`.
-
-```json
-{
-  "connected": true,
-  "peer": "0011aabbccdd...",
-  "cache_status": "UP_TO_DATE",
-  "cache_progress": 100.0,
-  "shared_entries": 3,
-  "peers_online": 5
-}
-```
-
-### `GET /api/v1/health`
-
-Simple health check: `{"status": "ok"}`
-Also available at `/api/health`.
-
-### `GET /api/v1/files/{shared_entry_hash}/{path}`
-
-Stream a file directly over HTTP. The `shared_entry_hash` identifies the shared
-directory and `path` is the file's relative path within it.
-
-**Features:**
-- `Range` header support (partial content / resume)
-- `If-None-Match` conditional requests (ETag-based caching)
-- Correct `Content-Type` via MIME detection
-- `?download=1` query parameter forces `Content-Disposition: attachment`
-
-**Examples:**
-```
-GET /api/v1/files/aabb1122.../movie.mkv
-GET /api/v1/files/aabb1122.../Videos/Cats/lolcat.avi
-GET /api/v1/files/aabb1122.../game.zip?download=1
-```
-
-**How load balancing works:** The files served by this endpoint are stored
-locally by the DG-LAN Core. When Core downloads a file, it automatically load
-balances across all available peers — requesting different chunks from different
-machines. By the time the file reaches the HTTP endpoint, it is already a
-complete local copy assembled from multiple sources.
-
-## Website integration
-
-Include `dglan-api.js` in your page:
-
-```html
-<script src="dglan-api.js"></script>
-<div id="files"></div>
-<script>
-  (async () => {
-    const api = new DglanApi("https://your-server.com:8080");
-    const data = await api.getFiles();
-    const container = document.getElementById("files");
-
-    for (const file of data.files) {
-      const row = document.createElement("div");
-      row.className = "file-row";
-
-      // HTTP streaming link (opens/plays in browser)
-      const httpLink = document.createElement("a");
-      httpLink.href = api.buildStreamUrl(file);
-      httpLink.textContent = file.name;
-      row.appendChild(httpLink);
-
-      // Direct download link (forces save dialog)
-      const dlLink = document.createElement("a");
-      dlLink.href = api.buildStreamUrl({ ...file, download: true });
-      dlLink.textContent = "[download]";
-      row.appendChild(dlLink);
-
-      const size = document.createElement("span");
-      size.textContent = DglanApi.formatSize(file.size);
-      row.appendChild(size);
-      container.appendChild(row);
-    }
-  })();
-</script>
-```
-
-## Command-line options
+## Configuration
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--core-host` | `127.0.0.1` | Core daemon IP |
 | `--core-port` | `59485` | Core remote control port |
-| `--password` | *(empty)* | Core remote password (prefer `DGLAN_PASSWORD` env var) |
-| `--http-host` | `127.0.0.1` | HTTP listen address (use `0.0.0.0` for all interfaces) |
+| `--password` | *(empty)* | Core password (prefer `DGLAN_PASSWORD` env var) |
+| `--http-host` | `127.0.0.1` | HTTP listen address (`0.0.0.0` for all interfaces) |
 | `--http-port` | `8080` | HTTP listen port |
 | `--cors-origins` | *(none)* | Allowed CORS origins (e.g., `https://mysite.com`) |
-| `--verbose` | off | Debug logging |
-
-## Deployment
-
-Run this on the same machine as your DG-LAN Core. For production,
-put it behind a reverse proxy (nginx/Caddy) with HTTPS:
-
-```nginx
-# nginx example
-server {
-    listen 443 ssl;
-    server_name files.mysite.com;
-
-    location /api/ {
-        proxy_pass http://127.0.0.1:8080;
-    }
-}
-```
+| `--verbose` / `-v` | off | Debug logging |
 
 ## Requirements
 
 - Python 3.10+
 - `protobuf` package
 - DG-LAN Core running on the same (or reachable) machine
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [HTTP-STREAMING.md](HTTP-STREAMING.md) | Full API reference, HTTP features, JavaScript integration, security, deployment |
+| [TESTING.md](TESTING.md) | Testing guide — manual tests and 59-test automated suite |
+| [Built-in HTTP Server](../HTTP-SERVER.md) | C++ HTTP server embedded in Core (port 59480) |

@@ -1,9 +1,12 @@
-# DG-LAN API — Testing Guide
+# DG-LAN Python API Bridge — Testing Guide
 
 ## What is this?
 
 A live HTTP API that connects to a running DG-LAN Core and serves shared file listings as JSON.
 Use it to verify that `dglan://` download links and HTTP streaming work end-to-end.
+
+> See [HTTP-STREAMING.md](HTTP-STREAMING.md) for the full API reference and feature details.
+> See [README.md](README.md) for quick start and configuration.
 
 ---
 
@@ -121,3 +124,7 @@ Tests cover:
 - Content-Type detection, Content-Disposition modes
 - CORS header propagation
 - Edge cases: empty files, invalid hashes, directory paths
+
+---
+
+*See also: [HTTP-STREAMING.md](HTTP-STREAMING.md) for full API reference, [README.md](README.md) for setup, [Built-in HTTP Server](../HTTP-SERVER.md) for the C++ server in Core.*

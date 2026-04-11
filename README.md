@@ -108,8 +108,7 @@ Gossip entries expire after 30 minutes (configurable). The peer list is capped a
 ## Ports
 
 | Port | Protocol | Purpose |
-|------|----------|---------|
-| 59485 | TCP | GUI ↔ Core remote control |
+|------|----------|---------|| 59480 | TCP | Built-in HTTP file server ([docs](HTTP-SERVER.md)) || 59485 | TCP | GUI ↔ Core remote control |
 | 59486 | UDP | Multicast / broadcast peer discovery |
 | 59487 | UDP + TCP | Unicast peer communication |
 
@@ -139,9 +138,29 @@ Registration instructions: [BUILD.md — URL Scheme Registration](BUILD.md#url-s
 
 ---
 
-## HTTP API Bridge
+## Built-in HTTP File Server
 
-The `dglan-api/` directory contains a standalone Python HTTP server that connects to a running Core and serves shared file listings as JSON — so a website can generate `dglan://` download links dynamically. See [dglan-api/README.md](dglan-api/README.md).
+Core includes a compiled-in HTTP server (port 59480) that lets any browser on the LAN
+access shared files — no DG-LAN client required. Enabled by default, zero configuration.
+
+- Stream video/audio with seeking (Range requests)
+- ETag caching, proper MIME types, CORS
+- Peer redirect — if this machine doesn't have the file, redirects to one that does
+
+Full documentation: **[HTTP-SERVER.md](HTTP-SERVER.md)**
+
+## Python API Bridge
+
+The `dglan-api/` directory contains a standalone Python HTTP server that connects to Core
+and adds `dglan://` download links, configurable CORS, and forced-download mode.
+
+| Document | Description |
+|----------|-------------|
+| [dglan-api/README.md](dglan-api/README.md) | Quick start and configuration |
+| [dglan-api/HTTP-STREAMING.md](dglan-api/HTTP-STREAMING.md) | Full API reference, HTTP features, JavaScript integration, deployment |
+| [dglan-api/TESTING.md](dglan-api/TESTING.md) | Testing guide (manual + 59 automated tests) |
+
+See the [comparison table](HTTP-SERVER.md#comparison-built-in-server-vs-python-bridge) to choose between the two.
 
 ---
 
