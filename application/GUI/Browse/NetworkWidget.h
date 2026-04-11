@@ -80,6 +80,8 @@ namespace GUI
       void redownload();
       void cancelDownload();
       void openFileLocation();
+      void fileDoubleClicked(const QModelIndex& index);
+      void openFolder();
       void moveToTop();
       void moveUp();
       void moveDown();
@@ -124,6 +126,7 @@ namespace GUI
       QPushButton* moveUpButton;
       QPushButton* moveDownButton;
       QPushButton* moveBottomButton;
+      QPushButton* openFolderButton;
       QTableView* fileTableView;
       QStandardItemModel fileModel;
       FileSortProxy fileSortProxy;
@@ -137,6 +140,8 @@ namespace GUI
       QTimer rebrowseTimer;
       quint32 browseGeneration = 0;
       quint32 lastLoggedGeneration = 0;
+      quint32 lastPrunedGeneration = 0;
+      int browsesPendingThisGen = 0;
 
       // Per-download speed tracking: download ID → previous downloaded_bytes
       QMap<quint64, qint64> prevDownloadedBytes;

@@ -203,6 +203,10 @@ NetworkWidget::NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection
    this->moveDownButton->setFixedWidth(28);
    this->moveBottomButton->setFixedWidth(28);
 
+   this->openFolderButton = new QPushButton(QString::fromUtf8("\U0001F4C2"));
+   this->openFolderButton->setToolTip(tr("Open Shared Folder"));
+   this->openFolderButton->setFixedWidth(28);
+
    buttonBar->addWidget(this->downloadButton);
    buttonBar->addWidget(this->redownloadButton);
    buttonBar->addWidget(this->deleteButton);
@@ -211,6 +215,8 @@ NetworkWidget::NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection
    buttonBar->addWidget(this->moveUpButton);
    buttonBar->addWidget(this->moveDownButton);
    buttonBar->addWidget(this->moveBottomButton);
+   buttonBar->addSpacing(8);
+   buttonBar->addWidget(this->openFolderButton);
    buttonBar->addStretch();
    buttonBar->addWidget(this->filterEdit);
 
@@ -267,6 +273,8 @@ NetworkWidget::NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection
    connect(this->moveDownButton, &QPushButton::clicked, this, &NetworkWidget::moveDown);
    connect(this->moveBottomButton, &QPushButton::clicked, this, &NetworkWidget::moveToBottom);
    connect(this->fileTableView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &NetworkWidget::updateButtonStates);
+   connect(this->fileTableView, &QTableView::doubleClicked, this, &NetworkWidget::fileDoubleClicked);
+   connect(this->openFolderButton, &QPushButton::clicked, this, &NetworkWidget::openFolder);
 
    connect(this->coreConnection.data(), &RCC::ICoreConnection::newState, this, &NetworkWidget::onNewState);
    connect(this->coreConnection.data(), SIGNAL(disconnected(bool)), this, SLOT(coreDisconnected()));
@@ -275,7 +283,7 @@ NetworkWidget::NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection
    connect(&this->rebrowseTimer, &QTimer::timeout, this, [this]() {
       this->browsedPeers.clear();
       this->browseGeneration++;
-      L_USER(QString("[Network] Refreshing file index from all peers..."));
+      this->browsesPendingThisGen = 0;
    });
    this->rebrowseTimer.start(30000);
 
@@ -385,7 +393,8 @@ void NetworkWidget::onNewState(const Protos::GUI::State& state)
       this->masterPeerID = newMasterID;
       this->browsedPeers.clear();
       this->activeBrowseResults.clear();
-      this->fileModel.removeRows(0, this->fileModel.rowCount());
+      this->browseGeneration++;
+      this->browsesPendingThisGen = 0;
    }
 
    // Browse every peer we haven't visited in this cycle.
@@ -396,11 +405,13 @@ void NetworkWidget::onNewState(const Protos::GUI::State& state)
          this->browsePeer(peerID);
    }
 
-   // After all browse results have returned, prune stale file rows.
-   // A file is pruned if the master did not confirm it this generation.
-   if (this->activeBrowseResults.isEmpty() && this->browseGeneration > 0)
+   // Prune stale file rows only once per generation, after all browse results have returned.
+   // This prevents rows from flickering away mid-browse while the user is interacting.
+   if (this->activeBrowseResults.isEmpty() && this->browseGeneration > 0
+       && this->lastPrunedGeneration < this->browseGeneration
+       && this->browsesPendingThisGen == 0)
    {
-      int pruned = 0;
+      this->lastPrunedGeneration = this->browseGeneration;
       for (int row = this->fileModel.rowCount() - 1; row >= 0; --row)
       {
          QStandardItem* item = this->fileModel.item(row, COL_NAME);
@@ -408,10 +419,7 @@ void NetworkWidget::onNewState(const Protos::GUI::State& state)
             continue;
          quint32 masterGen = item->data(ROLE_MASTER_GEN).toUInt();
          if (masterGen < this->browseGeneration && item->data(ROLE_DOWNLOAD_ID).toULongLong() == 0)
-         {
             this->fileModel.removeRow(row);
-            ++pruned;
-         }
       }
       if (this->lastLoggedGeneration < this->browseGeneration)
       {
@@ -440,6 +448,7 @@ void NetworkWidget::coreDisconnected()
 void NetworkWidget::browsePeer(const Common::Hash& peerID)
 {
    this->browsedPeers.insert(peerID);
+   this->browsesPendingThisGen++;
    auto browseResult = this->coreConnection->browse(peerID);
 
    QByteArray idData(peerID.getData(), Common::Hash::HASH_SIZE);
@@ -449,6 +458,8 @@ void NetworkWidget::browsePeer(const Common::Hash& peerID)
            this, SLOT(browseRootResult(const google::protobuf::RepeatedPtrField<Protos::Common::Entries>&)));
    connect(browseResult.data(), &RCC::IBrowseResult::timeout, [this, browseResult]() {
       this->activeBrowseResults.removeOne(browseResult);
+      if (this->browsesPendingThisGen > 0)
+         this->browsesPendingThisGen--;
    });
    browseResult->start();
    this->activeBrowseResults.append(browseResult);
@@ -469,6 +480,8 @@ void NetworkWidget::browseRootResult(const google::protobuf::RepeatedPtrField<Pr
          break;
       }
    }
+   if (this->browsesPendingThisGen > 0)
+      this->browsesPendingThisGen--;
 
    for (int i = 0; i < entries.size(); ++i)
    {
@@ -1012,6 +1025,52 @@ void NetworkWidget::openFileLocation()
       if (!path.isEmpty())
          Utils::openLocation(path);
    }
+}
+
+void NetworkWidget::fileDoubleClicked(const QModelIndex& index)
+{
+   QModelIndex sourceIndex = this->fileSortProxy.mapToSource(index);
+   QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+   if (!item)
+      return;
+
+   // If owned locally, open the file's location in Explorer.
+   if (item->data(ROLE_OWNED).toBool())
+   {
+      QString path = this->getLocalPath(item);
+      if (!path.isEmpty())
+      {
+         Utils::openLocation(path);
+         return;
+      }
+   }
+
+   // Otherwise, download if not already in the queue.
+   if (item->data(ROLE_DOWNLOAD_ID).toULongLong() != 0)
+      return;
+
+   QByteArray entryData = item->data(ROLE_ENTRY).toByteArray();
+   QByteArray peerIdData = item->data(ROLE_PEER_ID).toByteArray();
+   if (entryData.isEmpty() || peerIdData.isEmpty())
+      return;
+
+   Common::Hash peerID(peerIdData.constData());
+   if (peerID == this->localPeerID)
+      return;
+
+   Protos::Common::Entry entry;
+   if (!entry.ParseFromArray(entryData.constData(), entryData.size()))
+      return;
+
+   this->coreConnection->download(peerID, entry);
+}
+
+void NetworkWidget::openFolder()
+{
+   QList<Common::SharedEntry> dirs = this->sharedEntryListModel.getSharedDirectories();
+   if (dirs.isEmpty())
+      return;
+   Utils::openLocation(dirs.first().path.getPath());
 }
 
 void NetworkWidget::moveToTop()
