@@ -20,7 +20,9 @@ import asyncio
 import hashlib
 import json
 import logging
+import mimetypes
 import os
+import re
 import struct
 import time
 import urllib.parse
@@ -48,6 +50,8 @@ MAX_HTTP_HEADER_SIZE = 8192
 MAX_HTTP_HEADERS = 100
 HTTP_READ_TIMEOUT_S = 10.0
 HTTP_HEADER_TIMEOUT_S = 5.0
+STREAM_CHUNK_SIZE = 65536  # 64 KiB read buffer for HTTP streaming
+SE_HASH_PATTERN = re.compile(r"^[0-9a-f]{56}$")
 
 # Message type codes (from MessageHeader.h)
 GUI_STATE                  = 0x1001
@@ -101,6 +105,7 @@ class CoreClient:
         self.peer_id: bytes = b""           # 28-byte local peer ID
         self.peer_hex: str = ""             # 56-char hex version
         self.shared_entries: list[dict] = []
+        self.file_streamer: FileStreamer = FileStreamer(self)
         self._state: Optional[gui.State] = None
         self._browse_futures: dict[int, asyncio.Future] = {}  # tag → Future[BrowseResult]
         self._pending_browse_future: Optional[asyncio.Future] = None  # awaiting tag assignment
@@ -210,6 +215,9 @@ class CoreClient:
                     "free_space": shared_entry.free_space,
                 })
 
+            # Update file streamer path index
+            self.file_streamer.update_index(self.shared_entries)
+
             # Acknowledge state so Core keeps sending updates
             self.writer.write(pack_header(GUI_STATE_RESULT, b""))
             await self.writer.drain()
@@ -316,6 +324,7 @@ class CoreClient:
                 "shared_entry_hash": se_hash,
                 "peer": self.peer_hex,
                 "chunks": chunks,
+                "http_url": self._build_http_url(entry, se_hash),
                 "dglan_url": self._build_dglan_url(entry, se_hash_raw),
             })
 
@@ -352,6 +361,172 @@ class CoreClient:
             "path": entry.path or "/",
         }
         return "dglan://download?" + urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
+
+    def _build_http_url(self, entry, se_hash: str) -> str:
+        """Build an HTTP streaming URL for a file."""
+        if not se_hash:
+            return ""
+        entry_path = entry.path.strip("/") if entry.path else ""
+        if entry_path:
+            relative = f"{entry_path}/{entry.name}"
+        else:
+            relative = entry.name
+        encoded_path = urllib.parse.quote(relative, safe="/")
+        return f"/api/v1/files/{se_hash}/{encoded_path}"
+
+
+# ── File Streamer ─────────────────────────────────────────────
+
+def parse_range_header(range_header: str, file_size: int) -> tuple[int, int] | None:
+    """Parse 'bytes=START-END' header. Returns (start, end) inclusive, or None if invalid."""
+    if not range_header.startswith("bytes="):
+        return None
+    range_spec = range_header[6:]
+    if "," in range_spec:
+        return None
+    parts = range_spec.split("-", 1)
+    if len(parts) != 2:
+        return None
+    start_str, end_str = parts
+    try:
+        if start_str == "":
+            suffix_len = int(end_str)
+            if suffix_len <= 0 or suffix_len > file_size:
+                return None
+            return (file_size - suffix_len, file_size - 1)
+        start = int(start_str)
+        end = int(end_str) if end_str else file_size - 1
+    except ValueError:
+        return None
+    if start < 0 or start > end or start >= file_size:
+        return None
+    # RFC 7233 §2.1: clamp last-byte-pos to file_size - 1
+    if end >= file_size:
+        end = file_size - 1
+    return (start, end)
+
+
+def compute_etag(se_hash_prefix: str, file_path: str) -> str:
+    """Build an ETag from shared-entry hash prefix, mtime, and size."""
+    stat = os.stat(file_path)
+    return f'"{se_hash_prefix}:{int(stat.st_mtime)}:{stat.st_size}"'
+
+
+def guess_content_type(filename: str) -> str:
+    ct, _ = mimetypes.guess_type(filename)
+    return ct or "application/octet-stream"
+
+
+class FileStreamer:
+    """Resolves shared-entry paths and streams files over HTTP."""
+
+    def __init__(self, core_client: "CoreClient"):
+        self.core = core_client
+        self._se_path_index: dict[str, str] = {}
+
+    def update_index(self, shared_entries: list[dict]):
+        self._se_path_index = {se["id"]: se["path"] for se in shared_entries}
+
+    def resolve(self, se_hash: str, relative_path: str) -> str | None:
+        """Map (se_hash, relative_path) to an absolute file path, or None."""
+        if not SE_HASH_PATTERN.match(se_hash):
+            return None
+        se_path = self._se_path_index.get(se_hash)
+        if se_path is None:
+            return None
+        if "\x00" in relative_path:
+            return None
+        se_root = os.path.realpath(se_path)
+        candidate = os.path.realpath(os.path.join(se_root, relative_path))
+        # Guard against path traversal: resolved path must be strictly inside se_root
+        try:
+            if os.path.commonpath([se_root, candidate]) != se_root:
+                return None
+        except ValueError:
+            return None  # Different drives on Windows
+        if not os.path.isfile(candidate):
+            return None
+        return candidate
+
+    async def stream(self, writer: asyncio.StreamWriter, file_path: str,
+                     range_header: str | None, if_none_match: str | None,
+                     force_download: bool, cors_headers: dict,
+                     se_hash_prefix: str = ""):
+        """Stream a resolved file to the HTTP writer."""
+        file_size = os.path.getsize(file_path)
+        filename = os.path.basename(file_path)
+        etag = compute_etag(se_hash_prefix, file_path)
+
+        if if_none_match and if_none_match.strip() == etag:
+            headers = {"ETag": etag}
+            headers.update(cors_headers)
+            await _send_response(writer, HTTPStatus.NOT_MODIFIED, b"", headers)
+            return
+
+        content_type = guess_content_type(filename)
+        disposition = "attachment" if force_download else "inline"
+        # Sanitize filename for Content-Disposition header (prevent header injection)
+        safe_name = filename.replace('"', "'").replace("\r", "").replace("\n", "")
+
+        base_headers: dict[str, str] = {
+            "Content-Type": content_type,
+            "Accept-Ranges": "bytes",
+            "ETag": etag,
+            "Cache-Control": "private, max-age=60",
+            "Content-Disposition": f'{disposition}; filename="{safe_name}"',
+        }
+        base_headers.update(cors_headers)
+
+        if range_header:
+            parsed = parse_range_header(range_header, file_size)
+            if parsed is None:
+                base_headers["Content-Range"] = f"bytes */{file_size}"
+                await _send_response(writer, HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE, b"", base_headers)
+                return
+            start, end = parsed
+            length = end - start + 1
+            base_headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
+            base_headers["Content-Length"] = str(length)
+            status = HTTPStatus.PARTIAL_CONTENT
+        else:
+            start, end = 0, file_size - 1
+            length = file_size
+            base_headers["Content-Length"] = str(length)
+            status = HTTPStatus.OK
+
+        status_line = f"HTTP/1.1 {status.value} {status.phrase}\r\n"
+        header_lines = "".join(f"{k}: {v}\r\n" for k, v in base_headers.items())
+        header_lines += "Connection: close\r\n"
+        writer.write((status_line + header_lines + "\r\n").encode("utf-8"))
+        await writer.drain()
+
+        try:
+            with open(file_path, "rb") as f:
+                f.seek(start)
+                remaining = length
+                while remaining > 0:
+                    read_size = min(STREAM_CHUNK_SIZE, remaining)
+                    data = f.read(read_size)
+                    if not data:
+                        break
+                    writer.write(data)
+                    await writer.drain()
+                    remaining -= len(data)
+        except OSError:
+            log.exception("Error streaming file: %s", file_path)
+
+
+async def _send_response(writer: asyncio.StreamWriter, status: HTTPStatus,
+                          body: bytes, headers: dict):
+    """Standalone response sender (used by FileStreamer for non-streaming responses)."""
+    status_line = f"HTTP/1.1 {status.value} {status.phrase}\r\n"
+    header_lines = "".join(f"{k}: {v}\r\n" for k, v in headers.items())
+    header_lines += f"Content-Length: {len(body)}\r\n"
+    header_lines += "Connection: close\r\n"
+    writer.write((status_line + header_lines + "\r\n").encode("utf-8"))
+    if body:
+        writer.write(body)
+    await writer.drain()
 
 
 # ── HTTP Server ───────────────────────────────────────────────
@@ -391,7 +566,7 @@ class APIServer:
             elif method != "GET":
                 await self._send_error(writer, "METHOD_NOT_ALLOWED", "Method not allowed", HTTPStatus.METHOD_NOT_ALLOWED, cors_headers)
             else:
-                await self._route_request(path, writer, cors_headers)
+                await self._route_request(path, writer, cors_headers, headers)
 
         except Exception:
             log.exception("Request handling error")
@@ -435,10 +610,16 @@ class APIServer:
 
         return method, path, headers
 
-    async def _route_request(self, path: str, writer: asyncio.StreamWriter, cors_headers: dict):
-        url_path = path.split("?")[0]
+    async def _route_request(self, path: str, writer: asyncio.StreamWriter, cors_headers: dict,
+                             headers: dict | None = None):
+        url_path, _, query_string = path.partition("?")
 
-        if url_path == "/api/v1/files" or url_path == "/api/files":
+        # File streaming: /api/v1/files/{se_hash}/{relative_path...}
+        stream_prefix = "/api/v1/files/"
+        if url_path.startswith(stream_prefix) and len(url_path) > len(stream_prefix):
+            remainder = url_path[len(stream_prefix):]
+            await self._handle_file_stream(remainder, query_string, headers or {}, writer, cors_headers)
+        elif url_path == "/api/v1/files" or url_path == "/api/files":
             data = await self._get_files()
             await self._send_json_response(writer, data, HTTPStatus.OK, cors_headers)
         elif url_path == "/api/v1/status" or url_path == "/api/status":
@@ -448,6 +629,61 @@ class APIServer:
             await self._send_json_response(writer, {"status": "ok"}, HTTPStatus.OK, cors_headers)
         else:
             await self._send_error(writer, "NOT_FOUND", "Not found", HTTPStatus.NOT_FOUND, cors_headers)
+
+    async def _handle_file_stream(self, remainder: str, query_string: str,
+                                   headers: dict, writer: asyncio.StreamWriter,
+                                   cors_headers: dict):
+        """Handle GET /api/v1/files/{se_hash}/{path...} — stream a file from disk."""
+        if not self.core.is_connected:
+            await self._send_error(writer, "CORE_DISCONNECTED", "Not connected to Core",
+                                   HTTPStatus.SERVICE_UNAVAILABLE, cors_headers)
+            return
+
+        slash_pos = remainder.find("/")
+        if slash_pos == -1:
+            await self._send_error(writer, "INVALID_PATH", "Missing file path after shared entry hash",
+                                   HTTPStatus.BAD_REQUEST, cors_headers)
+            return
+
+        se_hash = remainder[:slash_pos].lower()
+        relative_path = urllib.parse.unquote(remainder[slash_pos + 1:])
+
+        if not relative_path:
+            await self._send_error(writer, "INVALID_PATH", "Empty file path",
+                                   HTTPStatus.BAD_REQUEST, cors_headers)
+            return
+
+        if not SE_HASH_PATTERN.match(se_hash):
+            await self._send_error(writer, "INVALID_HASH", "Invalid shared entry hash format",
+                                   HTTPStatus.BAD_REQUEST, cors_headers)
+            return
+
+        streamer = self.core.file_streamer
+        file_path = streamer.resolve(se_hash, relative_path)
+
+        if file_path is None:
+            if se_hash not in streamer._se_path_index:
+                await self._send_error(writer, "ENTRY_NOT_FOUND", "Shared entry not found",
+                                       HTTPStatus.NOT_FOUND, cors_headers)
+            else:
+                await self._send_error(writer, "FILE_NOT_FOUND", "File not found",
+                                       HTTPStatus.NOT_FOUND, cors_headers)
+            return
+
+        range_header = headers.get("range")
+        if_none_match = headers.get("if-none-match")
+        params = urllib.parse.parse_qs(query_string)
+        force_download = params.get("download", ["0"])[0] == "1"
+
+        log.info("Streaming file: %s (range=%s, download=%s)", file_path, range_header, force_download)
+
+        try:
+            await streamer.stream(writer, file_path, range_header, if_none_match,
+                                  force_download, cors_headers, se_hash_prefix=se_hash[:16])
+        except OSError:
+            log.exception("I/O error streaming file")
+            await self._send_error(writer, "IO_ERROR", "Error reading file",
+                                   HTTPStatus.INTERNAL_SERVER_ERROR, cors_headers)
 
     async def _get_files(self) -> dict:
         now = time.monotonic()

@@ -89,6 +89,30 @@ Also available at `/api/status`.
 Simple health check: `{"status": "ok"}`
 Also available at `/api/health`.
 
+### `GET /api/v1/files/{shared_entry_hash}/{path}`
+
+Stream a file directly over HTTP. The `shared_entry_hash` identifies the shared
+directory and `path` is the file's relative path within it.
+
+**Features:**
+- `Range` header support (partial content / resume)
+- `If-None-Match` conditional requests (ETag-based caching)
+- Correct `Content-Type` via MIME detection
+- `?download=1` query parameter forces `Content-Disposition: attachment`
+
+**Examples:**
+```
+GET /api/v1/files/aabb1122.../movie.mkv
+GET /api/v1/files/aabb1122.../Videos/Cats/lolcat.avi
+GET /api/v1/files/aabb1122.../game.zip?download=1
+```
+
+**How load balancing works:** The files served by this endpoint are stored
+locally by the DG-LAN Core. When Core downloads a file, it automatically load
+balances across all available peers — requesting different chunks from different
+machines. By the time the file reaches the HTTP endpoint, it is already a
+complete local copy assembled from multiple sources.
+
 ## Website integration
 
 Include `dglan-api.js` in your page:
@@ -105,12 +129,21 @@ Include `dglan-api.js` in your page:
     for (const file of data.files) {
       const row = document.createElement("div");
       row.className = "file-row";
-      const link = document.createElement("a");
-      link.href = file.dglan_url;
-      link.textContent = file.name;
+
+      // HTTP streaming link (opens/plays in browser)
+      const httpLink = document.createElement("a");
+      httpLink.href = api.buildStreamUrl(file);
+      httpLink.textContent = file.name;
+      row.appendChild(httpLink);
+
+      // Direct download link (forces save dialog)
+      const dlLink = document.createElement("a");
+      dlLink.href = api.buildStreamUrl({ ...file, download: true });
+      dlLink.textContent = "[download]";
+      row.appendChild(dlLink);
+
       const size = document.createElement("span");
       size.textContent = DglanApi.formatSize(file.size);
-      row.appendChild(link);
       row.appendChild(size);
       container.appendChild(row);
     }

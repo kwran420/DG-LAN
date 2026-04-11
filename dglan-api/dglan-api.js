@@ -14,7 +14,7 @@ class DglanApi {
         this.baseUrl = baseUrl.replace(/\/$/, "");
     }
 
-    /** Fetch all shared files with dglan:// URLs pre-built. */
+    /** Fetch all shared files with dglan:// and http streaming URLs pre-built. */
     async getFiles() {
         const resp = await fetch(`${this.baseUrl}/api/v1/files`);
         if (!resp.ok) throw new Error(`API error: ${resp.status}`);
@@ -36,6 +36,20 @@ class DglanApi {
         } catch {
             return false;
         }
+    }
+
+    /**
+     * Build an HTTP streaming URL for a file.
+     * Returns a full URL that can be used as an <a href> or opened directly.
+     */
+    buildStreamUrl({ shared_entry_hash, path, name, download }) {
+        if (!shared_entry_hash || !name) {
+            throw new Error("buildStreamUrl requires shared_entry_hash and name");
+        }
+        const relativePath = path && path !== "/" ? `${path.replace(/^\/|\/$/g, "")}/${name}` : name;
+        const encoded = relativePath.split("/").map(encodeURIComponent).join("/");
+        const url = `${this.baseUrl}/api/v1/files/${shared_entry_hash}/${encoded}`;
+        return download ? `${url}?download=1` : url;
     }
 
     /**
