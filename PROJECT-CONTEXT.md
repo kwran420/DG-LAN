@@ -1,13 +1,16 @@
-# DG-LAN Project Context
+# DG-LAN — Project Context
 
-## What is this?
-DG-LAN is a fork of [D-LAN](https://github.com/Ummon/D-LAN) — a decentralized LAN file sharing application.  
-C++ with Qt5, built with MSYS2 MinGW64 toolchain.
+Development reference for DG-LAN contributors and AI assistants.
 
-- **GitHub**: https://github.com/kwran420/DG-LAN.git
-- **Upstream**: https://github.com/Ummon/D-LAN.git
+## Overview
+
+DG-LAN is a decentralized LAN file-sharing application. Forked from [D-LAN](https://github.com/Ummon/D-LAN).  
+C++17 with Qt5, built with MSYS2 MinGW64 on Windows.
+
+- **GitHub**: https://github.com/kwran420/DG-LAN
+- **Upstream**: https://github.com/Ummon/D-LAN
 - **Branch**: `master`
-- **Current version**: 1.2.3 Alpha (`application/Common/Version.h`)
+- **Version**: Defined in `application/Common/Version.h` (auto-incremented by `build-release.ps1`)
 
 ---
 
@@ -15,59 +18,47 @@ C++ with Qt5, built with MSYS2 MinGW64 toolchain.
 
 ```
 application/
-  Core/          → Headless service/daemon → DG-LAN.Core.exe
-  GUI/           → Qt Widgets UI           → DG-LAN.GUI.exe
-  Common/        → Shared library (hash, network, settings, etc.)
+  Core/          → Headless daemon (Windows service)  → DG-LAN.Core.exe
+  GUI/           → Qt Widgets UI                      → DG-LAN.GUI.exe
+  Common/        → Shared library (hash, network, settings, proto helpers)
   Protos/        → Protobuf definitions (pre-generated .pb.cc/.pb.h)
   Setups/Windows → Inno Setup installer (windows_setup.iss)
   Tools/         → Build helper scripts
   translations/  → .qm language files
   styles/        → UI stylesheets
+
+dglan-api/       → Python HTTP bridge (serves file listings as JSON)
 ```
 
 ---
 
 ## Build System
 
-### Requirements
-- **MSYS2** installed at `C:\msys64` with MinGW64 packages:
-  - `mingw-w64-x86_64-gcc`
-  - `mingw-w64-x86_64-qt5-base`
-  - `mingw-w64-x86_64-qt5-tools`
-  - `mingw-w64-x86_64-protobuf`
-  - `mingw-w64-x86_64-openssl`
-  - `mingw-w64-x86_64-make`
+### Prerequisites
+- **MSYS2** at `C:\msys64` with MinGW64 packages: gcc, qt5-base, qt5-tools, protobuf, openssl, make
 - **Inno Setup 6** for building the installer
+- **GitHub CLI** (`gh`) for publishing releases (optional)
 
-### Local Build (PowerShell)
+### Build Commands
+
 ```powershell
-.\build-release.ps1                        # build with version from Version.h
-.\build-release.ps1 -Version 1.3.0         # override version
-.\build-release.ps1 -SkipBuild             # just rebuild the installer
-.\build-release.ps1 -Publish               # build + tag + push + create GitHub Release
-.\build-release.ps1 -Version 1.3.0 -Publish  # override version + publish
+.\build-release.ps1                  # build + publish (default)
+.\build-release.ps1 -SkipPublish     # build only, no git push
+.\build-release.ps1 -SkipBuild       # just rebuild the installer
+.\build-release.ps1 -Version 2.0.0   # override version number
 ```
 
-### Manual Build (MSYS2 bash)
-```bash
-# IMPORTANT: Must use MINGW64 subsystem for qmake to be in PATH
-export MSYSTEM=MINGW64
-
-cd /c/Dev/DG-LAN/application
-
-# Build Core
-qmake-qt5 Core.pro -r -spec win32-g++ "CONFIG+=release"
-mingw32-make -f Makefile-Core -j$(nproc)
-
-# Build GUI
-qmake-qt5 GUI.pro -r -spec win32-g++ "CONFIG+=release"
-mingw32-make -f Makefile-GUI -j$(nproc)
-```
+### What `build-release.ps1` Does
+1. Auto-increments patch version in `Version.h` (unless `-Version` overrides)
+2. Patches `BUILD_TIME` and `GIT_VERSION` in `Version.h`
+3. Builds Core + GUI via MSYS2 MinGW64 (`qmake-qt5` + `mingw32-make`)
+4. Builds the Inno Setup installer (ISCC output → `installer_log.txt`)
+5. If publishing (default): commits `Version.h`, tags `v<version>`, pushes, creates GitHub Release with installer attached
 
 ### Build Outputs
 - `application/Core/output/release/DG-LAN.Core.exe`
 - `application/GUI/output/release/DG-LAN.GUI.exe`
-- `application/Setups/Windows/Installations/DG-LAN-<ver>-Setup.exe`
+- `application/Setups/Windows/Installations/DG-LAN-<ver><tag>-<buildtime>-Setup.exe`
 
 ---
 
@@ -75,59 +66,36 @@ mingw32-make -f Makefile-GUI -j$(nproc)
 
 Defined in `application/Common/Version.h`:
 ```cpp
-#define VERSION "1.2.3"
+#define VERSION "1.2.86"
 #define VERSION_TAG "Alpha"
-#define BUILD_TIME "..."       // patched by build-release.ps1 at build time
-#define GIT_VERSION "..."     // patched by build-release.ps1 at build time
+#define BUILD_TIME "2026-04-11_00-14"   // patched by build-release.ps1
+#define GIT_VERSION "9516631f5c9e"      // patched by build-release.ps1
 ```
 
-- `version.rc` includes Version.h → embeds version info into .exe resources
-- The installer (.iss) reads version from the built .exe via `GetStringFileInfo()`
+- `version.rc` includes `Version.h` → embeds version info into .exe resources
+- The installer reads version from the built .exe via `GetStringFileInfo()`
 
 ---
 
-## Release & CI/CD
+## CI/CD
 
-### How to Release (one command)
-```powershell
-.\build-release.ps1 -Publish
-```
-This does everything:
-1. Patches `Version.h` with build time + git hash
-2. Builds Core + GUI via MSYS2 MinGW64
-3. Builds the Inno Setup installer
-4. Commits pending changes, creates a git tag (`vX.Y.Z`), pushes to origin
-5. Creates a GitHub Release and uploads the `.exe` installer
+### Primary: Local Build
+All releases are built locally via `.\build-release.ps1`. This is faster and more reliable than CI for a Qt5 + MSYS2 + protobuf project.
 
-Clients auto-update by checking GitHub Releases (see Auto-Update below).
-
-### Why local builds?
-Building on GitHub Actions required MSYS2 + Qt5 + protobuf setup (~10 min).
-Local builds are faster and more reliable. The CI workflow now only exists as
-a lightweight fallback — if a tag is pushed without a release, CI creates a
-draft release on `ubuntu-latest` (no compile) so you can manually upload.
-
-### CI Workflow
+### Fallback: GitHub Actions
 **File**: `.github/workflows/build.yml`  
 **Trigger**: Push a `v*` tag OR manual `workflow_dispatch`  
-**Runner**: `ubuntu-latest` (lightweight — no build, no MSYS2)  
-**Behaviour**:
-- If a GitHub Release already exists for the tag (created by `-Publish`), CI exits immediately
-- If no release exists, CI creates a **draft** release — you then upload the .exe manually:
-  ```bash
-  gh release upload v1.3.0 path/to/DG-LAN-Setup.exe
-  gh release edit v1.3.0 --draft=false
-  ```
+**Runner**: `ubuntu-latest` (lightweight — no compile)  
+**Behavior**: If a GitHub Release already exists (created by `build-release.ps1`), CI exits. Otherwise, it creates a **draft** release so you can manually upload the installer.
 
 ---
 
-## Installer (.iss) Details
+## Installer Details
 
 **File**: `application/Setups/Windows/windows_setup.iss`
 
-- `QtDir` / `MingwDir` default to `C:/msys64/mingw64` (correct for local builds)
+- Paths default to `C:/msys64/mingw64` for Qt/MinGW runtime DLLs
 - Bundles: Qt5Core/Gui/Network/Widgets/Xml, ICU, MinGW runtime, OpenSSL, platform/imageformat plugins
-- ICU version currently 78 — may change with MSYS2 updates
 - Output: `Installations/DG-LAN-<version><tag>-<buildtime>-Setup.exe`
 
 ---
@@ -136,54 +104,57 @@ draft release on `ubuntu-latest` (no compile) so you can manually upload.
 
 Clients check for updates via the GitHub Releases API.
 
-**Files**:
-- `application/GUI/UpdateChecker.h/.cpp` — queries GitHub API, compares versions
-- `application/GUI/UpdateDialog.h/.cpp` — download progress dialog, launches installer
-- `application/GUI/D-LAN_GUI.cpp` — wires up auto-check on launch + manual check
-- `application/GUI/MainWindow.cpp` — Help → "Check for Updates..." menu item
+| File | Purpose |
+|------|---------|
+| `GUI/UpdateChecker.h/.cpp` | Queries GitHub API, compares semver, emits `updateAvailable` |
+| `GUI/UpdateDialog.h/.cpp` | Download progress dialog, launches installer with `/VERYSILENT /NORESTART` |
+| `GUI/D-LAN_GUI.cpp` | Wires up auto-check on launch (3s delay) + manual check |
+| `GUI/MainWindow.cpp` | Help → "Check for Updates..." menu item |
 
-**How it works**:
-1. On launch (3s delay, if auto-check enabled) or via Help menu / tray icon
-2. `UpdateChecker` fetches `https://api.github.com/repos/kwran420/DG-LAN/releases?per_page=10`
-3. Iterates all non-draft releases, finds the highest semver tag
-4. If newer than current `VERSION`, emits `updateAvailable` with the `.exe` download URL
-5. `UpdateDialog` downloads the `.exe` to temp, launches it with `/VERYSILENT /NORESTART`
+**Flow**:
+1. `UpdateChecker` fetches `https://api.github.com/repos/kwran420/DG-LAN/releases?per_page=10`
+2. Iterates non-draft releases, finds the highest semver tag
+3. If newer than current `VERSION`, emits `updateAvailable` with the `.exe` URL
+4. `UpdateDialog` downloads to temp, launches installer, app quits
+
+**Forced Update**: When a peer reports a protocol version mismatch, `UpdateDialog` opens in forced mode (title "Update Required", no dismiss — user must update or quit).
+
+**Note**: Uses `/releases` (list), NOT `/releases/latest` — the latter skips pre-releases, which broke auto-update.
+
+**Settings**: `QSettings("DGLan", "DG-LAN")` → `update/check_on_launch`
 
 ---
 
 ## Architecture Notes
 
 ### Core ↔ GUI Connection
-- GUI connects to Core via TCP on localhost (default port 59485)
+- GUI connects to Core via TCP on localhost:59485
 - Communication uses protobuf messages with `Common::MessageHeader` type codes
-- `RemoteConnection` (in `Core/RemoteControlManager`) handles all GUI→Core commands
+- `RemoteConnection` (in `Core/RemoteControlManager`) handles all GUI → Core commands
+- GUI can connect to a remote Core via Settings → Core Address
+
+### Peer Discovery (fallback chain)
+1. **Multicast** (`224.0.0.1:59486`) — always
+2. **Directed broadcast** (`x.x.x.255`) — fallback ~2s
+3. **Subnet scan** (`/24`) — fallback ~4s
+4. **Gossip / PEX** — continuous after first peer contact
 
 ### Peer-to-Peer Browsing
-- **Local browse** (browsing own files): `RemoteConnection` → `FileManager::getEntries()` (sync, mutex-protected)
-- **Remote browse** (peer A asks peer B): 
-  - GUI → `RemoteConnection` → `Peer::getEntries()` → sends `CORE_GET_ENTRIES` over network
-  - Remote peer receives in `PeerMessageSocket::onNewMessage()` → `FileManager::getScannedEntries()` (async)
-  - Remote peer's `GetEntriesResult` waits for directory scan, then sends back `CORE_GET_ENTRIES_RESULT`
-- Key files: `GUI/Browse/BrowseModel.cpp`, `Core/RemoteControlManager/priv/RemoteConnection.cpp`,
-  `Core/PeerManager/priv/PeerMessageSocket.cpp`, `Core/FileManager/priv/GetEntriesResult.cpp`
+- **Local browse**: `RemoteConnection` → `FileManager::getEntries()` (sync, mutex-protected)
+- **Remote browse**: GUI → `RemoteConnection` → `Peer::getEntries()` → `CORE_GET_ENTRIES` over network → remote `GetEntriesResult` waits for scan → sends `CORE_GET_ENTRIES_RESULT`
 
 ### File Scanning & Caching
 - `FileUpdater` thread continuously scans shared directories
-- `Cache` stores the directory tree; `Directory*` raw pointers are used throughout
-- `Cache::directoryScanned` signal fires when a directory finishes scanning
-- Shared directories can be added/removed at runtime, invalidating `Directory*` pointers
+- `Cache` stores the directory tree; `Directory*` raw pointers used throughout
+- `file_cache.bin`: protobuf binary saved every 60s via `timerPersistCache`
+- Selective rehosting: watcher-driven rescans skip genuinely new files; only downloads and existing files are indexed
 
-### Build & Release
-- `build-release.ps1` redirects ISCC output to `installer_log.txt` (avoids terminal image flood)
-- `-Publish` flag uses `--latest` to ensure GitHub release is not marked pre-release
-- CI workflow (`.github/workflows/build.yml`) is lightweight fallback only
-6. App quits, Inno Setup installs over the existing installation
-
-**Important**: The endpoint is `/releases` (list), NOT `/releases/latest`.
-This is intentional — `/releases/latest` skips pre-releases, which broke
-auto-update when CI was publishing with `--prerelease`.
-
-**Settings**: Auto-check on launch is stored in `QSettings("DGLan", "DG-LAN")` → `update/check_on_launch`
+### GUI Layout
+- **MainWindow**: Central MdiArea + Log dock (always visible) + StatusBar
+- **NetworkWidget**: Unified file index — all peers' files in one table with columns: Name, Size, Status, Queue #, Progress, DL Speed, UL Speed, Peers
+- **PeersDock**: Peer list with priority (High/Normal/Low) and connection speed
+- **Settings**: Menu bar → dialog (not tabs)
+- **ScrollingNotification**: Marquee banner when update available
 
 ---
 
@@ -191,25 +162,17 @@ auto-update when CI was publishing with `--prerelease`.
 
 | File | Purpose |
 |------|---------|
-| `application/Common/Version.h` | Version macros (VERSION, VERSION_TAG, BUILD_TIME, GIT_VERSION) |
-| `application/Common/version.rc` | Windows resource file embedding version into .exe |
-| `application/Core.pro` | qmake project → Makefile-Core |
-| `application/GUI.pro` | qmake project → Makefile-GUI |
+| `application/Common/Version.h` | Version macros |
+| `application/Common/version.rc` | Windows resource file for .exe version info |
+| `application/Core.pro` | qmake project → `Makefile-Core` |
+| `application/GUI.pro` | qmake project → `Makefile-GUI` |
+| `application/GUI/Browse/NetworkWidget.h/.cpp` | Unified file index widget |
+| `application/GUI/Peers/PeersDock.h/.cpp` | Peer list with priority |
+| `application/GUI/UpdateChecker.h/.cpp` | Auto-update version checker |
+| `application/GUI/UpdateDialog.h/.cpp` | Update download + install dialog |
+| `application/GUI/Log/LogModel.h/.cpp` | Activity log model |
+| `application/Core/NetworkListener/priv/UDPListener.h/.cpp` | Discovery (multicast, broadcast, scan, gossip) |
+| `application/Core/FileManager/priv/FileUpdater/FileUpdater.h/.cpp` | File scanning + selective rehosting |
 | `application/Setups/Windows/windows_setup.iss` | Inno Setup installer script |
-| `.github/workflows/build.yml` | CI fallback — creates draft release if `-Publish` wasn't used |
-| `build-release.ps1` | Local build + optional publish to GitHub Releases (`-Publish`) |
-| `application/GUI/UpdateChecker.cpp` | GitHub API client — checks for new releases |
-| `application/GUI/UpdateDialog.cpp` | Download + install UI for auto-update |
-
----
-
-## Git Remotes
-```
-origin    https://github.com/kwran420/DG-LAN.git
-upstream  https://github.com/Ummon/D-LAN.git
-```
-
-## Important Notes
-- Project was moved from OneDrive to `C:\Dev\DG-LAN` — spaces in the OneDrive path broke MSYS2 bash
-- `$env:MSYSTEM = "MINGW64"` must be set before calling `bash --login` from PowerShell
-- The `build-release.ps1` script handles Windows→MSYS2 path conversion automatically
+| `.github/workflows/build.yml` | CI fallback (draft release) |
+| `build-release.ps1` | Primary build + publish script |

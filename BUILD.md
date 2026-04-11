@@ -1,129 +1,156 @@
-# DG-LAN Build Instructions
+# DG-LAN — Build Instructions
 
-DG-LAN is a fork of [D-LAN](https://github.com/Ummon/D-LAN) with ZeroTier support, gossip-based peer discovery, and core seeder mode.
+DG-LAN is built with **MSYS2 MinGW64** on Windows (the primary platform). Linux and macOS builds are possible but untested.
 
 ---
 
-## Dependencies
+## Windows Build (Primary)
 
-### All Platforms
-- **Qt 5.15.x** (with Qt Network and Qt Widgets modules)
-- **Protocol Buffers v3** (`protoc` compiler + C++ runtime library)
+### Prerequisites
 
-### Windows
-1. Install [Qt 5.15.x](https://www.qt.io/download) with the **MSVC 2019 64-bit** kit
-2. Install [Visual Studio 2019 Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) (C++ workload)
-3. Install [protobuf](https://github.com/protocolbuffers/protobuf/releases) — download the Windows binary release, add `bin/` to your `PATH`
-4. Verify: open a **Developer Command Prompt for VS 2019** and run:
+1. **[MSYS2](https://www.msys2.org/)** installed at `C:\msys64` (default)
+2. Open an **MSYS2 MinGW64** shell and install packages:
+   ```bash
+   pacman -Syu
+   pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-qt5-base \
+             mingw-w64-x86_64-qt5-tools mingw-w64-x86_64-protobuf \
+             mingw-w64-x86_64-openssl mingw-w64-x86_64-make
    ```
-   qmake --version
-   protoc --version
-   cl
-   ```
+3. **[Inno Setup 6](https://jrsoftware.org/isinfo.php)** — for building the Windows installer
+4. **[GitHub CLI](https://cli.github.com/)** (`gh`) — for publishing releases (optional)
 
-### Linux (Debian/Ubuntu)
+### One-Command Build
+
+From PowerShell in the repo root:
+
+```powershell
+.\build-release.ps1 -SkipPublish   # build only — no git push
+```
+
+This:
+- Patches `Version.h` with the build timestamp and git hash
+- Auto-increments the patch version (e.g. 1.2.85 → 1.2.86)
+- Builds Core and GUI via MSYS2 MinGW64
+- Builds the Inno Setup installer
+
+**Output:**
+- `application/Core/output/release/DG-LAN.Core.exe`
+- `application/GUI/output/release/DG-LAN.GUI.exe`
+- `application/Setups/Windows/Installations/DG-LAN-<version>-Setup.exe`
+
+### Build + Publish (Release)
+
+```powershell
+.\build-release.ps1               # default: build + commit + tag + push + GitHub Release
+```
+
+This does everything above, plus:
+- Commits `Version.h`, tags with `v<version>`, pushes to origin
+- Creates a GitHub Release and uploads the installer `.exe`
+
+### Build Script Flags
+
+| Flag | Effect |
+|------|--------|
+| *(no flags)* | Build + publish to GitHub Releases |
+| `-SkipPublish` | Build locally, no git push or release |
+| `-SkipBuild` | Skip compilation, rebuild installer only |
+| `-Version 2.0.0` | Override the version number |
+
+### Manual Build (MSYS2 Shell)
+
+If you prefer manual control, open an **MSYS2 MinGW64** shell:
+
+```bash
+export MSYSTEM=MINGW64
+cd /c/Dev/DG-LAN/application
+
+# Build Core
+qmake-qt5 Core.pro -r -spec win32-g++ "CONFIG+=release"
+mingw32-make -f Makefile-Core -j$(nproc)
+
+# Build GUI
+qmake-qt5 GUI.pro -r -spec win32-g++ "CONFIG+=release"
+mingw32-make -f Makefile-GUI -j$(nproc)
+```
+
+---
+
+## Linux Build (Experimental)
+
 ```bash
 sudo apt-get update
 sudo apt-get install -y qt5-default qtbase5-dev qttools5-dev \
     libprotobuf-dev protobuf-compiler build-essential
-```
 
-### macOS
-```bash
-brew install qt@5 protobuf
-export PATH="/usr/local/opt/qt@5/bin:$PATH"
+cd application
+qmake Core.pro -r && make -j$(nproc)
+qmake GUI.pro -r && make -j$(nproc)
 ```
 
 ---
 
-## Build
+## macOS Build (Experimental)
 
-### Linux / macOS
 ```bash
-git clone https://github.com/YOUR_USERNAME/DG-LAN.git
-cd DG-LAN/application
-qmake D-LAN.pro
-make -j$(nproc)
-```
+brew install qt@5 protobuf
+export PATH="/usr/local/opt/qt@5/bin:$PATH"
 
-### Windows (Developer Command Prompt for VS 2019)
-```bat
-git clone https://github.com/YOUR_USERNAME/DG-LAN.git
-cd DG-LAN\application
-qmake D-LAN.pro
-nmake
-```
-
-Or use the provided script:
-```bat
-build.bat
+cd application
+qmake Core.pro -r && make -j$(nproc)
+qmake GUI.pro -r && make -j$(nproc)
 ```
 
 ---
 
 ## Running
 
-### Core (daemon / headless)
+### Core (headless daemon)
 ```bash
-# Linux
-./Core/Core
-
 # Windows
-Core\Core.exe
+application\Core\output\release\DG-LAN.Core.exe
+
+# Linux / macOS
+./application/Core/output/release/DG-LAN.Core
 ```
 
-### GUI Client
-```bash
-# Linux
-./GUI/GUI
+The Core also installs as a Windows service via the installer.
 
+### GUI
+```bash
 # Windows
-GUI\GUI.exe
+application\GUI\output\release\DG-LAN.GUI.exe
+
+# Linux / macOS
+./application/GUI/output/release/DG-LAN.GUI
 ```
 
 ---
 
 ## ZeroTier Setup
 
+For cross-subnet use (e.g., connecting machines on different networks):
+
 1. Install [ZeroTier](https://www.zerotier.com/download/) on all machines
 2. Join the same ZeroTier network: `zerotier-cli join <network-id>`
-3. Note your ZeroTier interface name:
-   - **Linux**: `ip addr` — look for `zt...` interface
-   - **Windows**: Network Adapter name in Device Manager, usually `ZeroTier One [...]`
-   - **macOS**: `ifconfig` — look for `ztXXXXXX` interface
-4. In DG-LAN Settings → Network → **Interface**: select the ZeroTier interface
+3. Note the ZeroTier interface name:
+   - **Windows**: Network adapter name in Device Manager, usually `ZeroTier One [...]`
+   - **Linux**: `ip addr` — look for `zt...`
+   - **macOS**: `ifconfig` — look for `ztXXXXXX`
+4. In DG-LAN: **Settings → Network → Interface** → select the ZeroTier adapter
 5. Set **Multicast TTL** to `1` for ZeroTier networks
 
-> **ZeroTier network controller requirements**: For multicast/broadcast to work,
-> ensure your ZeroTier network has `multicastLimit > 0` and `enableBroadcast: true`
-> configured in the [ZeroTier Central](https://my.zerotier.com) network settings.
-> If not, DG-LAN will automatically fall back to subnet scan + gossip discovery.
+> **ZeroTier network controller**: Ensure `multicastLimit > 0` and `enableBroadcast: true`
+> in [ZeroTier Central](https://my.zerotier.com). If multicast is disabled, DG-LAN
+> falls back to subnet scan + gossip discovery automatically.
 
 ---
 
-## Core Seeder Setup
+## Firewall
 
-A Core Seeder is just a regular DG-LAN instance that runs 24/7 and holds the files.
+Allow DG-LAN's port range through your OS firewall.
 
-1. Enable: Settings → Network → **"This machine is a Core Seeder"**
-2. Share your files as normal via the GUI
-3. Other peers: Settings → Network → Core Seeders → **Add** the seeder's ZeroTier IP
-
-Core Seeders are probed first at startup, before the full subnet scan begins.
-
----
-
-## Ports Used
-
-| Port | Protocol | Purpose |
-|------|----------|---------|
-| 59486 | UDP | Multicast discovery |
-| 59487 | UDP + TCP | Unicast peer communication (increments if busy) |
-| 59485 | TCP | Remote GUI control |
-
-Ensure these are allowed through your OS firewall on the ZeroTier interface.
-
-### Windows Firewall (PowerShell, run as Administrator)
+### Windows (PowerShell, run as Administrator)
 ```powershell
 New-NetFirewallRule -DisplayName "DG-LAN UDP" -Direction Inbound -Protocol UDP -LocalPort 59486-59497 -Action Allow
 New-NetFirewallRule -DisplayName "DG-LAN TCP" -Direction Inbound -Protocol TCP -LocalPort 59485-59497 -Action Allow
@@ -139,26 +166,25 @@ sudo ufw allow 59486:59497/udp
 
 ## URL Scheme Registration (`dglan://`)
 
-DG-LAN supports a custom URL scheme so that clicking a `dglan://` link in a browser automatically adds the file to the download queue of your already-running DG-LAN instance.
+DG-LAN supports a custom `dglan://` URL scheme so that clicking a link on a web page queues a download in the running app.
 
-The URL format is:
 ```
-dglan://download?peer=PEER_HEX&hash=ENTRY_HEX&size=BYTES&name=FILENAME&path=/relative/path
+dglan://download?peer=PEER_HEX&hash=ENTRY_HEX&size=BYTES&name=FILENAME&path=/
 ```
 
 | Parameter | Description |
 |-----------|-------------|
-| `peer`    | 56-character hex ID of the peer that holds the file |
-| `hash`    | 56-character hex ID of the shared entry |
-| `size`    | File size in bytes |
-| `name`    | Percent-encoded filename |
-| `path`    | Percent-encoded path inside the shared entry (use `/` for root) |
+| `peer` | 56-char hex peer ID |
+| `hash` | 56-char hex shared-entry ID |
+| `size` | File size in bytes |
+| `name` | Percent-encoded filename |
+| `path` | Percent-encoded path (`/` for root) |
 
-The `peer` and `hash` values must come from DG-LAN's own Browse / Search results — they are not human-guessable.
+The `peer` and `hash` values come from DG-LAN's Browse / Search results.
 
-### Register on Windows
+### Windows
 
-Run once from a normal (non-admin) Command Prompt, replacing the path with your actual install path:
+Run once (non-admin), replacing the path with your install location:
 
 ```bat
 reg add "HKCU\Software\Classes\dglan"                          /ve /d "DG-LAN Protocol" /f
@@ -167,12 +193,9 @@ reg add "HKCU\Software\Classes\dglan\DefaultIcon"              /ve /d "\"C:\Prog
 reg add "HKCU\Software\Classes\dglan\shell\open\command"       /ve /d "\"C:\Program Files\DG-LAN\D-LAN.GUI.exe\" \"%1\"" /f
 ```
 
-To remove the registration:
-```bat
-reg delete "HKCU\Software\Classes\dglan" /f
-```
+Remove: `reg delete "HKCU\Software\Classes\dglan" /f`
 
-### Register on Linux
+### Linux
 
 Create `~/.local/share/applications/dglan-handler.desktop`:
 
@@ -185,22 +208,15 @@ Type=Application
 NoDisplay=true
 ```
 
-Then register and update the MIME database:
 ```bash
 chmod +x ~/.local/share/applications/dglan-handler.desktop
 xdg-mime default dglan-handler.desktop x-scheme-handler/dglan
 update-desktop-database ~/.local/share/applications
 ```
 
-Verify:
-```bash
-xdg-mime query default x-scheme-handler/dglan
-# should print: dglan-handler.desktop
-```
+### macOS
 
-### Register on macOS
-
-Add the following key to `D-LAN.GUI.app/Contents/Info.plist` (edit it or add it to your Xcode target's Info tab):
+Add to `D-LAN.GUI.app/Contents/Info.plist`:
 
 ```xml
 <key>CFBundleURLTypes</key>
@@ -216,7 +232,7 @@ Add the following key to `D-LAN.GUI.app/Contents/Info.plist` (edit it or add it 
 </array>
 ```
 
-After editing the plist, re-register with Launch Services:
+Then re-register:
 ```bash
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
     -f /Applications/D-LAN.GUI.app
@@ -226,16 +242,13 @@ After editing the plist, re-register with Launch Services:
 
 ## Generating `dglan://` Links from a Web Page
 
-Any web page can link directly into DG-LAN.  The `peer` and `hash` values come from DG-LAN itself (e.g. exported from a Browse result).
-
 ```html
-<!-- Static link -->
 <a href="dglan://download?peer=0011aabb...&hash=ccdd1122...&size=104857600&name=movie.mkv&path=/">
     Download with DG-LAN
 </a>
+```
 
-<!-- JavaScript helper -->
-<script>
+```javascript
 function dglanLink(peer, hash, size, name, path) {
     const params = new URLSearchParams({
         peer, hash,
@@ -245,14 +258,6 @@ function dglanLink(peer, hash, size, name, path) {
     });
     return 'dglan://download?' + params.toString();
 }
-
-document.getElementById('dl-btn').href =
-    dglanLink(
-        '0011aabbccddeeff...',   // 56-char peer hex
-        'aabbccddeeff0011...',   // 56-char entry hash hex
-        104857600,               // bytes
-        'movie.mkv',
-        '/'
-    );
-</script>
 ```
+
+See also: [dglan-api/](dglan-api/) — a Python HTTP server that generates these links from live Core data.

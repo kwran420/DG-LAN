@@ -132,7 +132,7 @@ Include `dglan-api.js` in your page:
 
 ## Deployment
 
-Run this on the same machine as your DG-LAN Core seeder. For production,
+Run this on the same machine as your DG-LAN Core. For production,
 put it behind a reverse proxy (nginx/Caddy) with HTTPS:
 
 ```nginx
