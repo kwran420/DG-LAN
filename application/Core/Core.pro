@@ -61,6 +61,8 @@ win32 {
    # The NetworkListener component use some functions from this lib.
    # See the 'UDPListener::initMulticastUDPSocket()' method.
    LIBS += -lwsock32
+   # GetAdaptersAddresses for network adapter link-speed detection.
+   LIBS += -liphlpapi
 }
 
 CONFIG(debug, debug|release) {

@@ -60,6 +60,7 @@ namespace CoreSpace
    private:
       static Protos::Core::Settings* createDefaultValuesSettings();
       void checkSettingsIntegrity();
+      void detectAndSetAdapterSpeed();
 
       template <typename T>
       void checkSetting(const QString& name, T min, T max);

@@ -19,7 +19,14 @@
 #include <Core.h>
 using namespace CoreSpace;
 
+#if defined(Q_OS_WIN32)
+#include <winsock2.h>
+#include <iphlpapi.h>
+#endif
+
 #include <QRandomGenerator64>
+#include <QNetworkInterface>
+#include <QNetworkAddressEntry>
 
 #include <Common/PersistentData.h>
 #include <Common/Constants.h>
@@ -106,6 +113,9 @@ void Core::start()
    this->peerManager = PM::Builder::newPeerManager(this->fileManager);
    this->uploadManager = UM::Builder::newUploadManager(this->peerManager);
    this->downloadManager = DM::Builder::newDownloadManager(this->fileManager, this->peerManager);
+
+   this->detectAndSetAdapterSpeed();
+
    this->networkListener = NL::Builder::newNetworkListener(this->fileManager, this->peerManager, this->uploadManager, this->downloadManager);
    this->chatSystem = CS::Builder::newChatSystem(this->peerManager, this->networkListener);
    this->remoteControlManager = RCM::Builder::newRemoteControlManager(this->fileManager, this->peerManager, this->uploadManager, this->downloadManager, this->networkListener, this->chatSystem);
@@ -300,4 +310,129 @@ void Core::checkSettingsIntegrity()
    this->checkSetting("remote_max_nb_connection", 1u, 1000u);
    this->checkSetting("search_lifetime", 1000u, 60 * 1000u);
    this->checkSetting("delay_gui_connection_fail", 0u, 10 * 1000u);
+}
+
+/**
+  * Detect the link speed of the active network adapter and update the lan_speed setting.
+  * Uses GetAdaptersAddresses on Windows to query the real adapter speed in bits/s,
+  * then converts to bytes/s for the setting. Falls back silently to the default if detection fails.
+  */
+void Core::detectAndSetAdapterSpeed()
+{
+#if defined(Q_OS_WIN32)
+   // Determine which address DG-LAN is bound to for matching.
+   QHostAddress targetAddr;
+   const QString ifaceName = SETTINGS.get<QString>("network_interface_name");
+   if (!ifaceName.isEmpty())
+   {
+      for (const auto& iface : QNetworkInterface::allInterfaces())
+      {
+         if (iface.name() != ifaceName)
+            continue;
+         for (const auto& entry : iface.addressEntries())
+            if (entry.ip().protocol() == QAbstractSocket::IPv4Protocol)
+            {
+               targetAddr = entry.ip();
+               break;
+            }
+         break;
+      }
+   }
+   if (targetAddr.isNull())
+   {
+      const QString listenAddr = SETTINGS.get<QString>("listen_address");
+      if (!listenAddr.isEmpty())
+         targetAddr = QHostAddress(listenAddr);
+   }
+
+   ULONG bufSize = 15000;
+   PIP_ADAPTER_ADDRESSES addresses = nullptr;
+   ULONG result;
+
+   do
+   {
+      addresses = static_cast<PIP_ADAPTER_ADDRESSES>(malloc(bufSize));
+      if (!addresses)
+         return;
+      result = GetAdaptersAddresses(AF_INET,
+         GAA_FLAG_SKIP_DNS_SERVER | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_ANYCAST,
+         nullptr, addresses, &bufSize);
+      if (result == ERROR_BUFFER_OVERFLOW)
+      {
+         free(addresses);
+         addresses = nullptr;
+      }
+   }
+   while (result == ERROR_BUFFER_OVERFLOW);
+
+   if (result != NO_ERROR)
+   {
+      free(addresses);
+      return;
+   }
+
+   quint64 detectedSpeed = 0;  // bits/s
+   QString detectedName;
+
+   for (auto adapter = addresses; adapter; adapter = adapter->Next)
+   {
+      if (adapter->OperStatus != IfOperStatusUp)
+         continue;
+      if (adapter->IfType == IF_TYPE_SOFTWARE_LOOPBACK)
+         continue;
+
+      // Skip tunnel/PPP adapters that aren't real LAN hardware.
+      if (adapter->IfType == IF_TYPE_TUNNEL || adapter->IfType == IF_TYPE_PPP)
+         continue;
+
+      if (!targetAddr.isNull())
+      {
+         // Match by IP address.
+         bool matched = false;
+         for (auto ua = adapter->FirstUnicastAddress; ua; ua = ua->Next)
+         {
+            if (ua->Address.lpSockaddr->sa_family != AF_INET)
+               continue;
+            auto* sin = reinterpret_cast<sockaddr_in*>(ua->Address.lpSockaddr);
+            QHostAddress adapterAddr(ntohl(sin->sin_addr.s_addr));
+            if (adapterAddr == targetAddr)
+            {
+               matched = true;
+               break;
+            }
+         }
+         if (!matched)
+            continue;
+      }
+
+      // Use TransmitLinkSpeed (bits/s). Pick this adapter if it matches, or if no
+      // target was specified, pick the fastest active adapter.
+      quint64 speed = adapter->TransmitLinkSpeed;
+      if (speed > detectedSpeed)
+      {
+         detectedSpeed = speed;
+         detectedName = QString::fromWCharArray(adapter->FriendlyName);
+      }
+
+      // If we matched a specific target, stop searching.
+      if (!targetAddr.isNull())
+         break;
+   }
+
+   free(addresses);
+
+   if (detectedSpeed > 0)
+   {
+      quint64 bytesPerSec = detectedSpeed / 8;
+      // Clamp to the valid setting range: 1 MiB/s .. 1 GiB/s.
+      if (bytesPerSec < 1024ULL * 1024)
+         bytesPerSec = 1024ULL * 1024;
+      if (bytesPerSec > 1024ULL * 1024 * 1024)
+         bytesPerSec = 1024ULL * 1024 * 1024;
+      SETTINGS.set("lan_speed", static_cast<quint32>(bytesPerSec));
+      L_USER(QString("Detected adapter '%1' link speed: %2 Mbps")
+         .arg(detectedName)
+         .arg(detectedSpeed / 1000000ULL));
+   }
+#endif
 }
