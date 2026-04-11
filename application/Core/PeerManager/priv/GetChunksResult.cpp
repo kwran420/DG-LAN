@@ -59,6 +59,11 @@ void GetChunksResult::newMessage(const Common::Message& message)
    const Protos::Core::GetChunksResult& chunksResult = message.getMessage<Protos::Core::GetChunksResult>();
    emit result(chunksResult);
 
+   // The result handler (via DirectConnection) may have called downloadingEnded(),
+   // which clears getChunksResult and triggers doDeleteLater(), nullifying this->socket.
+   if (this->socket.isNull())
+      return;
+
    if (chunksResult.status() == Protos::Core::GetChunksResult::OK)
    {
       socket->stopListening();
@@ -67,7 +72,5 @@ void GetChunksResult::newMessage(const Common::Message& message)
    else
    {
       this->closeTheSocket = true;
-      // Segfault, maybe we cannot disconnect a signal during a call to the connected slot (this method)!?.
-      //disconnect(this->socket.data(), SIGNAL(newMessage(Common::MessageHeader::MessageType, const google::protobuf::Message&)), this, SLOT(newMessage(Common::MessageHeader::MessageType, const google::protobuf::Message&)));
    }
 }

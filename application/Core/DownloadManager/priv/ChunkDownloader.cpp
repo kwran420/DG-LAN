@@ -465,7 +465,13 @@ void ChunkDownloader::result(const Protos::Core::GetChunksResult& result)
    }
    else
    {
-      if (result.results_size() == 0 || result.results(0).chunk_size() == 0)
+      if (result.results_size() == 0 ||
+          (result.results(0).status() == Protos::Core::GetChunksResult_ChunkResult::DONT_HAVE))
+      {
+         L_WARN(QString("Remote peer does not have chunk: %1. Download aborted.").arg(this->chunk->getHash().toStr()));
+         this->downloadingEnded();
+      }
+      else if (result.results(0).chunk_size() == 0)
       {
          L_ERRO(QString("Message 'GetChunkResult' doesn't contain the size of the chunk: %1. Download aborted.").arg(this->chunk->getHash().toStr()));
          this->closeTheSocket = true;
