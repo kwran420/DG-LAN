@@ -202,6 +202,11 @@ void RemoteConnection::refresh()
       protoDownload->set_downloaded_bytes(download->getDownloadedBytes());
 
       PM::IPeer* peerSource = download->getPeerSource();
+      if (!peerSource)
+      {
+         state.mutable_download()->RemoveLast();
+         continue;
+      }
       protoDownload->add_peer_id()->set_hash(peerSource->getID().getData(), Common::Hash::HASH_SIZE); // The first hash must be the source.
       QSet<PM::IPeer*> peers = download->getPeers();
       peers.remove(peerSource);
@@ -763,6 +768,8 @@ void RemoteConnection::onNewMessage(const Common::Message& message)
          for (int i = 0; i < cancelDownloadsMessage.id_size(); i++)
             IDs << cancelDownloadsMessage.id(i);
 
+         L_USER(QString("GUI: cancel %1 download(s), complete=%2").arg(IDs.size()).arg(cancelDownloadsMessage.complete()));
+
          this->downloadManager->removeDownloads(IDs);
 
          this->refresh();
@@ -809,12 +816,18 @@ void RemoteConnection::onNewMessage(const Common::Message& message)
 
          if (peer)
          {
+            L_USER(QString("GUI: download request — %1 from %2").arg(Common::ProtoHelper::getStr(downloadMessage.entry(), &Protos::Common::Entry::name), peer->getNick()));
+
             if (downloadMessage.has_destination_directory_id())
                this->downloadManager->addDownload(downloadMessage.entry(), peer, downloadMessage.destination_directory_id().hash(), Common::ProtoHelper::getStr(downloadMessage, &Protos::GUI::Download::destination_path));
             else if (downloadMessage.destination_path().size() > 0)
                this->downloadManager->addDownload(downloadMessage.entry(), peer, Common::ProtoHelper::getStr(downloadMessage, &Protos::GUI::Download::destination_path));
             else
                this->downloadManager->addDownload(downloadMessage.entry(), peer);
+         }
+         else
+         {
+            L_WARN(QString("GUI: download request — peer not found for %1").arg(Common::ProtoHelper::getStr(downloadMessage.entry(), &Protos::Common::Entry::name)));
          }
 
          this->refresh();
@@ -867,5 +880,6 @@ void RemoteConnection::onNewMessage(const Common::Message& message)
 
 void RemoteConnection::onDisconnected()
 {
+   L_USER("GUI client disconnected");
    delete this;
 }

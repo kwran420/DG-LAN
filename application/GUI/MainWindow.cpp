@@ -200,6 +200,8 @@ void MainWindow::coreConnected()
 
 void MainWindow::coreDisconnected(bool forced)
 {
+   L_USER(QString("Core connection lost (forced=%1) — %2:%3").arg(forced).arg(this->coreConnection->getConnectionInfo().address).arg(this->coreConnection->getConnectionInfo().port));
+
    if (!forced && !this->coreConnection->isConnecting())
    {
       QMessageBox msgBox(this);
