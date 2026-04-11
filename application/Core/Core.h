@@ -35,6 +35,7 @@
 #include <NetworkListener/INetworkListener.h>
 #include <ChatSystem/IChatSystem.h>
 #include <RemoteControlManager/IRemoteControlManager.h>
+#include <HttpServer/IHttpServer.h>
 
 #include <Log.h>
 
@@ -85,6 +86,7 @@ namespace CoreSpace
       QSharedPointer<NL::INetworkListener> networkListener;
       QSharedPointer<CS::IChatSystem> chatSystem;
       QSharedPointer<RCM::IRemoteControlManager> remoteControlManager;
+      QSharedPointer<HS::IHttpServer> httpServer;
    };
 }
 

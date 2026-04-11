@@ -39,6 +39,7 @@ using namespace CoreSpace;
 #include <NetworkListener/Builder.h>
 #include <ChatSystem/Builder.h>
 #include <RemoteControlManager/Builder.h>
+#include <HttpServer/Builder.h>
 
 LOG_INIT_CPP(Core)
 
@@ -121,6 +122,9 @@ void Core::start()
    this->remoteControlManager = RCM::Builder::newRemoteControlManager(this->fileManager, this->peerManager, this->uploadManager, this->downloadManager, this->networkListener, this->chatSystem);
 
    connect(this->remoteControlManager.data(), SIGNAL(languageDefined(QLocale)), this, SLOT(setLanguage(QLocale)));
+
+   if (SETTINGS.get<bool>("http_server_enabled"))
+      this->httpServer = HS::Builder::newHttpServer(this->fileManager, this->peerManager);
 
    L_USER(QObject::tr("Ready to serve"));
 }
@@ -245,6 +249,11 @@ Protos::Core::Settings* Core::createDefaultValuesSettings()
    settings->set_gossip_max_peers(50);
    settings->set_multicast_failure_threshold(3); // Activate broadcast fallback after 3 multicast failures.
    // network_interface_name = "" (auto), multicast_ttl_override = 0 (auto) by proto3 defaults.
+
+   ///// HttpServer /////
+   settings->set_http_server_enabled(true);
+   settings->set_http_server_port(59480);
+   settings->set_http_max_connections(50);
 
    return settings;
 }

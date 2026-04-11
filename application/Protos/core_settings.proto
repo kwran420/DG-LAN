@@ -133,4 +133,9 @@ message Settings {
 
    // [default = 50] Maximum number of peer entries to share in a single gossip exchange.
    uint32 gossip_max_peers = 115;
+
+   ///// HttpServer /////
+   bool http_server_enabled = 130; // [default = true] Enable the built-in HTTP file server.
+   uint32 http_server_port = 131; // [default = 59480] TCP port for the HTTP file server.
+   uint32 http_max_connections = 132; // [default = 50] Maximum concurrent HTTP connections.
 }

@@ -23,6 +23,10 @@ LIBS += -LRemoteControlManager/output/$$FOLDER \
     -lRemoteControlManager
 PRE_TARGETDEPS += RemoteControlManager/output/$$FOLDER/libRemoteControlManager.a
 
+LIBS += -LHttpServer/output/$$FOLDER \
+    -lHttpServer
+PRE_TARGETDEPS += HttpServer/output/$$FOLDER/libHttpServer.a
+
 LIBS += -LChatSystem/output/$$FOLDER \
     -lChatSystem
 PRE_TARGETDEPS += ChatSystem/output/$$FOLDER/libChatSystem.a

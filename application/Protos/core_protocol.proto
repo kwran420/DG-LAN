@@ -40,6 +40,8 @@ message IMAlive {
    Common.Hash master_key_hash = 12; // The master password hash; propagated so all peers share the same key.
 
    bool is_master = 13; // True when the sender is the network master (client_mode == false).
+
+   uint32 http_port = 14; // TCP port of the built-in HTTP file server (0 = disabled).
 }
 
 // This message is only sent if at least one requested chunks is known.

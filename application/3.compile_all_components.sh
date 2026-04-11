@@ -16,6 +16,7 @@ PROJECTS=(
    Core/DownloadManager
    Core/NetworkListener
    Core/ChatSystem
+   Core/HttpServer
    Core/RemoteControlManager
    Core
    GUI
