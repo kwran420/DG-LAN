@@ -1348,8 +1348,8 @@ void NetworkWidget::cancelDownload()
 
    int ret = QMessageBox::question(
       this,
-      tr("Cancel Downloads"),
-      tr("Cancel %n download(s)?\n%1", "", toCancel.size()).arg(names.join(", ")),
+      tr("Delete Downloads"),
+      tr("Delete %n download(s) and their files?\n%1", "", toCancel.size()).arg(names.join(", ")),
       QMessageBox::Yes | QMessageBox::No,
       QMessageBox::No
    );

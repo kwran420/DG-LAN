@@ -21,6 +21,7 @@ using namespace DM;
 
 #include <QTimer>
 #include <QSet>
+#include <QFile>
 #include <QRandomGenerator64>
 
 #include <limits>
@@ -308,18 +309,39 @@ void FileDownload::getUnfinishedChunks(QList<QSharedPointer<IChunkDownloader>>& 
 }
 
 /**
-  * When we explicitly remove a download, we must remove all unfinished files.
+  * When we explicitly remove a download, we must remove all files (finished or not).
   */
 void FileDownload::remove()
 {
    this->setStatus(DELETED); // To avoid the call to 'stop()' to relaunch a download (via occupiedPeersDownloadingChunk::setPeerAsFree(..) -> DownloadManager::scanTheQueue()).
    this->stop();
 
+   // Capture the physical file path before cleanup (chunk->file gets nulled during removal).
+   QString filePath;
+   for (const auto& cd : this->chunkDownloaders)
+   {
+      if (!cd.isNull() && !cd->getChunk().isNull())
+      {
+         filePath = cd->getChunk()->getFilePath();
+         if (!filePath.isEmpty())
+            break;
+      }
+   }
+
+   // Remove incomplete (.unfinished) files through the normal chunk→file chain.
    for (QListIterator<QSharedPointer<ChunkDownloader>> i(this->chunkDownloaders); i.hasNext();)
    {
       auto chunkDownloader = i.next();
       if (!chunkDownloader.isNull())
          chunkDownloader->tryToRemoveItsIncompleteFile();
+   }
+
+   // For completed downloads, tryToRemoveItsIncompleteFile() is a no-op.
+   // Explicitly delete the file if it still exists on disk.
+   if (!filePath.isEmpty() && QFile::exists(filePath))
+   {
+      if (!QFile::remove(filePath))
+         L_WARN(QString("Unable to delete file on removal: %1").arg(filePath));
    }
 
    Download::remove();
