@@ -433,11 +433,11 @@ void Core::detectAndSetAdapterSpeed()
    if (detectedSpeed > 0)
    {
       quint64 bytesPerSec = detectedSpeed / 8;
-      // Clamp to the valid setting range: 1 MiB/s .. 1 GiB/s.
-      if (bytesPerSec < 1024ULL * 1024)
-         bytesPerSec = 1024ULL * 1024;
-      if (bytesPerSec > 1024ULL * 1024 * 1024)
-         bytesPerSec = 1024ULL * 1024 * 1024;
+      // Clamp to valid range: 1 MB/s .. 10 Gbps (1.25 GB/s).
+      if (bytesPerSec < 1000000ULL)
+         bytesPerSec = 1000000ULL;
+      if (bytesPerSec > 1250000000ULL)
+         bytesPerSec = 1250000000ULL;
       SETTINGS.set("lan_speed", static_cast<quint32>(bytesPerSec));
       L_USER(QString("Detected adapter '%1' link speed: %2 Mbps")
          .arg(detectedName)

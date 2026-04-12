@@ -268,6 +268,12 @@ QVariant PeerListModel::data(const QModelIndex& index, int role) const
       else
          return QVariant();
 
+   case ROLE_IP:
+      return this->orderedPeers.getFromIndex(index.row())->ip.toString();
+
+   case ROLE_VERSION:
+      return this->orderedPeers.getFromIndex(index.row())->coreVersion;
+
    default:
       return QVariant();
    }

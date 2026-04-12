@@ -30,7 +30,7 @@ int PeerSpeedProxy::columnCount(const QModelIndex& parent) const
 {
    if (!sourceModel())
       return 0;
-   return sourceModel()->columnCount(mapToSource(parent)) + 1;
+   return sourceModel()->columnCount(mapToSource(parent)) + 3; // +Speed, +Version, +IP
 }
 
 QModelIndex PeerSpeedProxy::index(int row, int column, const QModelIndex& parent) const
@@ -60,13 +60,17 @@ QVariant PeerSpeedProxy::headerData(int section, Qt::Orientation orientation, in
       if (section == 1) return QString("Peer");
       if (section == 2) return QString("Shared");
       if (section == 3) return QString("Speed");
+      if (section == 4) return QString("Version");
+      if (section == 5) return QString("IP");
    }
    return QIdentityProxyModel::headerData(section, orientation, role);
 }
 
 QVariant PeerSpeedProxy::data(const QModelIndex& proxyIndex, int role) const
 {
-   if (proxyIndex.column() == 3)
+   const int col = proxyIndex.column();
+
+   if (col == 3) // Speed
    {
       if (role == Qt::DisplayRole)
       {
@@ -74,16 +78,32 @@ QVariant PeerSpeedProxy::data(const QModelIndex& proxyIndex, int role) const
          auto ti = QIdentityProxyModel::data(col0, Qt::DisplayRole).value<PeerListModel::TransferInformation>();
          if (ti.lanSpeed > 0)
          {
-            quint64 bps = static_cast<quint64>(ti.lanSpeed) * 8;
-            if (bps >= 1000000000ULL)
-               return QString(QString::number(bps / 1000000000.0, 'f', 1) + " Gbps");
-            if (bps >= 1000000ULL)
-               return QString(QString::number(bps / 1000000.0, 'f', 0) + " Mbps");
-            if (bps >= 1000ULL)
-               return QString(QString::number(bps / 1000.0, 'f', 0) + " Kbps");
-            return QString(QString::number(bps) + " bps");
+            quint64 mbps = static_cast<quint64>(ti.lanSpeed) * 8 / 1000000ULL;
+            if (mbps >= 1000)
+               return QString(QString::number(mbps / 1000) + " Gbps");
+            return QString(QString::number(mbps) + " Mbps");
          }
          return QString();
+      }
+      if (role == Qt::TextAlignmentRole)
+         return static_cast<int>(Qt::AlignRight | Qt::AlignVCenter);
+   }
+   else if (col == 4) // Version
+   {
+      if (role == Qt::DisplayRole)
+      {
+         QModelIndex col0 = index(proxyIndex.row(), 0, proxyIndex.parent());
+         return QIdentityProxyModel::data(col0, PeerListModel::ROLE_VERSION);
+      }
+      if (role == Qt::TextAlignmentRole)
+         return static_cast<int>(Qt::AlignRight | Qt::AlignVCenter);
+   }
+   else if (col == 5) // IP
+   {
+      if (role == Qt::DisplayRole)
+      {
+         QModelIndex col0 = index(proxyIndex.row(), 0, proxyIndex.parent());
+         return QIdentityProxyModel::data(col0, PeerListModel::ROLE_IP);
       }
       if (role == Qt::TextAlignmentRole)
          return static_cast<int>(Qt::AlignRight | Qt::AlignVCenter);
@@ -151,6 +171,8 @@ NetworkWidget::NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection
    this->peerTableView->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
    this->peerTableView->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
    this->peerTableView->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+   this->peerTableView->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
+   this->peerTableView->horizontalHeader()->setSectionResizeMode(5, QHeaderView::ResizeToContents);
    this->peerTableView->horizontalHeader()->setHighlightSections(false);
    this->peerTableView->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
    this->peerTableView->verticalHeader()->setDefaultSectionSize(QApplication::fontMetrics().height() + 4);

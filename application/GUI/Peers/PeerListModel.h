@@ -57,6 +57,9 @@ namespace GUI
       void setRoom(const QString& room);
       void rmRoom();
 
+      static const int ROLE_IP       = Qt::UserRole + 100;
+      static const int ROLE_VERSION   = Qt::UserRole + 101;
+
       int rowCount(const QModelIndex& parent = QModelIndex()) const;
       int columnCount(const QModelIndex& parent = QModelIndex()) const;
       QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const;
