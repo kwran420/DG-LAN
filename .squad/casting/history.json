@@ -1,0 +1,18 @@
+[
+  {
+    "assignment_id": "2026-04-15-dg-lan-initial-cast",
+    "created_at": "2026-04-15T02:28:24Z",
+    "universe": "Alien",
+    "project": "DG-LAN",
+    "requested_by": "kwran420",
+    "roster": [
+      "Ripley",
+      "Dallas",
+      "Hicks",
+      "Vasquez",
+      "Bishop",
+      "Scribe",
+      "Ralph"
+    ]
+  }
+]
