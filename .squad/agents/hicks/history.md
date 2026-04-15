@@ -102,3 +102,7 @@ Peer discovery uses multicast, directed broadcast, subnet scan, and gossip fallb
 - Bishop documentation now complete: CODE-STYLE.md guides safe test harness design
 - Vasquez validation baseline (59/59 Python PASS) unblocks C++ test execution
 - Dallas GUI analysis done: backend owns test infrastructure, GUI owns dead code removal
+- Linux native release proof now exists in this workspace: Qt5 + protobuf packages on Ubuntu 24.04 can build both `DG-LAN.Core` and `DG-LAN.GUI`, but `python3 validate.py` still fails because the legacy Qt test harness contains stale suites (the current failure is `TestsDownloadManager` against removed `SharedDir`/`setSharedDirs` APIs).
+- The least-risk Linux release path here is a native per-arch tarball, not cross-distro binary promises: `build-release.sh` should build on the target Linux distro/arch, use top-level `make -j1` to avoid recursive qmake races, and attach the tarball to the same version tag as the Windows installer only after native smoke passes.
+- Linux local build/package helpers should not dirty `application/Common/Version.h`: release-only metadata changes belong in `build-release.sh`, while validation/local compile scripts should stay path-safe and restore or skip version rewrites.
+- Linux tarball installs must rewrite prefix-sensitive assets at install time (`dglan-core.service`, `dglan.desktop`) and ship provenance (`RELEASE-METADATA.txt`) instead of assuming `/usr/local` or claiming generic cross-distro compatibility.

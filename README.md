@@ -47,7 +47,7 @@ The result: a single authoritative file list, distributed across every machine t
 
 | Document | For | Purpose |
 |----------|-----|---------|
-| [BUILD.md](BUILD.md) | Contributors, release managers | How to build from source (Windows primary, Linux/macOS experimental) |
+| [BUILD.md](BUILD.md) | Contributors, release managers | How to build from source (Windows primary, Linux experimental/native validation, macOS experimental) |
 | [TESTING.md](TESTING.md) | Contributors, CI/CD engineers | How to run tests and validation (Python baseline: 59 tests; legacy C++ tests gated) |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Core team, system designers | Subsystem design, concurrency patterns, high-risk areas, peer lifecycle, modernization roadmap |
 | [OPERATIONS.md](OPERATIONS.md) | Operators, sysadmins, DevOps | Windows Service setup, logging, troubleshooting, performance tuning, security |
@@ -210,11 +210,17 @@ It reports each validation layer as pass, fail, or blocked. Full coverage detail
 
 See **[BUILD.md](BUILD.md)** for full instructions.
 
-**Quick version (Windows — the primary platform):**
+**Quick version (Windows):**
 ```powershell
 # Requires: MSYS2 with MinGW64 packages (Qt5, protobuf, GCC) + Inno Setup 6
 .\build-release.ps1              # build + publish to GitHub Releases
 .\build-release.ps1 -SkipPublish # build only, no push
+```
+
+**Quick version (Linux):**
+```bash
+# Requires: distro Qt5 dev packages + protobuf compiler
+./build-release.sh -SkipPublish    # build tarball locally
 ```
 
 ---
@@ -222,7 +228,7 @@ See **[BUILD.md](BUILD.md)** for full instructions.
 ## Contributing
 
 1. Fork and clone the repo.
-2. Build with `.\build-release.ps1 -SkipPublish`.
+2. Build natively for your platform (`.\build-release.ps1 -SkipPublish` on Windows or `./build-release.sh -SkipPublish` on Linux).
 3. Run `python3 validate.py` and complete the relevant manual checks from [TESTING.md](TESTING.md).
 4. Open a PR describing what changed, why, and how it was tested.
 

@@ -433,13 +433,13 @@ void Tests::sortedArray()
 void Tests::mapArray()
 {
    MapArray<Common::Hash, QString> array;
-   const Hash h1 = Hash::fromStr("02e4a0f0e55a308eb83b00eb13023a42cbaffe77");
+   const Hash h1 = Hash::fromStr("02e4a0f0e55a308eb83b00eb13023a42cbaffe770000000000000000");
    const QString v1("I'm V1");
 
-   const Hash h2 = Hash::fromStr("2c583d414e4a9eb956228209b367e48f59078a4b");
+   const Hash h2 = Hash::fromStr("2c583d414e4a9eb956228209b367e48f59078a4b0000000000000000");
    const QString v2("I'm V2");
 
-   const Hash h3 = Hash::fromStr("db23d79ed24b1c40b1f88294f877fac03f6dd789");
+   const Hash h3 = Hash::fromStr("db23d79ed24b1c40b1f88294f877fac03f6dd7890000000000000000");
    const QString v3("I'm V3");
 
    array.insert(h1, v1);
@@ -452,7 +452,7 @@ void Tests::mapArray()
    QCOMPARE(array[h2], v2);
    QCOMPARE(array[h3], v3);
 
-   const Hash h4 = Hash::fromStr("e8f98b5a2dd96315dfcf7e490e31b2ba6234887c");
+   const Hash h4 = Hash::fromStr("e8f98b5a2dd96315dfcf7e490e31b2ba6234887c0000000000000000");
    const QString v4("I'm V4");
    array[h4] = v4;
 
@@ -473,7 +473,7 @@ void Tests::mapArray()
    QCOMPARE(array.indexOf(h3), 2);
    QCOMPARE(array.indexOf(h4), 3);
 
-   QVERIFY(!array.remove(Hash::fromStr("ccc5d1390828c75ccd508894d7484bcd6e2f16b9")));
+   QVERIFY(!array.remove(Hash::fromStr("ccc5d1390828c75ccd508894d7484bcd6e2f16b90000000000000000")));
    QVERIFY(array.remove(h1));
    QCOMPARE(array.size(), 3);
    QCOMPARE(array.getKeyFromIndex(0), h2);
@@ -610,7 +610,7 @@ void Tests::generateAHash()
 
 void Tests::buildAnHashFromAString()
 {
-   QString str("2d73736f34a73837d422f7aba2740d8409ac60df");
+   QString str("2d73736f34a73837d422f7aba2740d8409ac60df0000000000000000");
    Hash h = Hash::fromStr(str);
    QCOMPARE(h.toStr(), str);
 }
@@ -625,7 +625,7 @@ void Tests::compareTwoHash()
        0x09, (char)-0x54,  0x60, (char)-0x21
    };
    QByteArray byteArray(array, Hash::HASH_SIZE);
-   QString str("2d73736f34a73837d422f7aba2740d8409ac60df");
+   QString str("2d73736f34a73837d422f7aba2740d8409ac60df0000000000000000");
 
    Hash h1 = Hash::fromStr(str);
    Hash h2(byteArray);
@@ -643,7 +643,7 @@ void Tests::compareTwoHash()
 
 void Tests::hashMoveConstructorAndAssignment()
 {
-   QString str("2d73736f34a73837d422f7aba2740d8409ac60df");
+   QString str("2d73736f34a73837d422f7aba2740d8409ac60df0000000000000000");
 
    // Move constructor.
    Hash h = std::move(Hash::fromStr(str)); // We have to force to rValue reference because of the return optimization (http://en.wikipedia.org/wiki/Return_value_optimization).
@@ -694,8 +694,8 @@ void Tests::hasher()
 void Tests::bloomFilter()
 {
    BloomFilter bloomFilter;
-   Hash h1 = Hash::fromStr("02e4a0f0e55a308eb83b00eb13023a42cbaffe77");
-   Hash h2 = Hash::fromStr("db23d79ed24b1c40b1f88294f877fac03f6dd789");
+   Hash h1 = Hash::fromStr("02e4a0f0e55a308eb83b00eb13023a42cbaffe770000000000000000");
+   Hash h2 = Hash::fromStr("db23d79ed24b1c40b1f88294f877fac03f6dd7890000000000000000");
 
    bloomFilter.add(h1);
    bloomFilter.add(h2);
@@ -703,7 +703,7 @@ void Tests::bloomFilter()
    QCOMPARE(bloomFilter.test(h1), true);
    QCOMPARE(bloomFilter.test(h2), true);
 
-   Hash h3 = Hash::fromStr("ca2dae971001c3da923bb23372b3a66378810a0f");
+   Hash h3 = Hash::fromStr("ca2dae971001c3da923bb23372b3a66378810a0f0000000000000000");
    int nbOfFalsePositive = 0;
    const int NB_TESTS = 100; // Number of test.
    const int n = 10000; // Size of the set.
@@ -737,7 +737,7 @@ void Tests::messageHeader()
       0x09, (char)-0x54,  0x60, (char)-0x21
    };
 
-   const QString peerID("2d73736f34a73837d422f7aba2740d8409ac60df");
+   const QString peerID("2d73736f34a73837d422f7aba2740d8409ac60df0000000000000000");
 
    MessageHeader header = MessageHeader::readHeader(data);
    qDebug() << header.toStr();
@@ -763,8 +763,8 @@ void Tests::readAndWriteWithZeroCopyStreamQIODevice()
    QFile file(filePath);
    file.remove();
 
-   Hash hash1 = Hash::fromStr("2c583d414e4a9eb956228209b367e48f59078a4b");
-   Hash hash2 = Hash::fromStr("5c9c3741bded231f84b8a8200eaf3e30a9c0a951");
+   Hash hash1 = Hash::fromStr("2c583d414e4a9eb956228209b367e48f59078a4b0000000000000000");
+   Hash hash2 = Hash::fromStr("5c9c3741bded231f84b8a8200eaf3e30a9c0a9510000000000000000");
 
    qDebug() << "hash1 : " << hash1.toStr();
    qDebug() << "hash2 : " << hash2.toStr();
@@ -835,9 +835,6 @@ void Tests::protoHelper()
    const QString debugStr = ProtoHelper::getDebugStr(entry);
    qDebug() << endl << "The protocol buffer message (Protos::Common::Entry):" << endl << debugStr;
 
-   QVERIFY(debugStr.indexOf("ac2f75c043fbc36709d315f2245746d8588c3ac1") != -1);
-   QVERIFY(debugStr.indexOf("25eb8c48ff89cb854fc09081cc47edfc8619b214") != -1);
-   QVERIFY(debugStr.indexOf("a80fed48162bd24b6807a2b15f4bd52f3f1fda94") != -1);
-   QVERIFY(debugStr.indexOf("6a98f983b8c80015fd93ca6bf9a98a9577a6e094") != -1);
-   QVERIFY(debugStr.indexOf("7aaeb7c5816857c832893afc676d5e37b73968a4") != -1);
+   for (int i = 0; i < 5; i++)
+      QVERIFY(debugStr.indexOf(Hash::rand(i).toStr()) != -1);
 }

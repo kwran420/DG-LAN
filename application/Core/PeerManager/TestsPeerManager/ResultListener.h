@@ -52,7 +52,7 @@ public slots:
    void hashesResult(const Protos::Core::GetHashesResult& result);
    void nextHashResult(const Protos::Core::HashResult& hashResult);
 
-   void chunkResult(const Protos::Core::GetChunkResult& result);
+   void chunkResult(const Protos::Core::GetChunksResult& result);
    void stream(QSharedPointer<PM::ISocket> socket);
    void getChunk(QSharedPointer<FM::IChunk> chunk, int offset, QSharedPointer<PM::ISocket> socket);
 

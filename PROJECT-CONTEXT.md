@@ -39,12 +39,14 @@ dglan-api/       → Python HTTP bridge (serves file listings as JSON)
 ## Build System
 
 ### Prerequisites
-- **MSYS2** at `C:\msys64` with MinGW64 packages: gcc, qt5-base, qt5-tools, protobuf, openssl, make
-- **Inno Setup 6** for building the installer
+- **MSYS2** at `C:\msys64` with MinGW64 packages: gcc, qt5-base, qt5-tools, protobuf, openssl, make (Windows)
+- **Qt5 dev packages** from system package manager (Linux: apt/dnf/pacman)
+- **Inno Setup 6** for Windows installer only
 - **GitHub CLI** (`gh`) for publishing releases (optional)
 
 ### Build Commands
 
+**Windows (primary):**
 ```powershell
 .\build-release.ps1                  # build + publish (default)
 .\build-release.ps1 -SkipPublish     # build only, no git push
@@ -52,17 +54,67 @@ dglan-api/       → Python HTTP bridge (serves file listings as JSON)
 .\build-release.ps1 -Version 2.0.0   # override version number
 ```
 
-### What `build-release.ps1` Does
+**Linux (experimental build path):**
+```bash
+./build-release.sh                   # build + publish (default)
+./build-release.sh -SkipPublish      # build only, no git push
+./build-release.sh -SkipBuild        # just re-tar binaries
+./build-release.sh -Version 2.0.0    # override version number
+```
+
+**macOS (experimental):**
+```bash
+# manual qmake + make only (see BUILD.md)
+```
+
+### What Each Build Script Does
+
+**Windows (`build-release.ps1`):**
 1. Auto-increments patch version in `Version.h` (unless `-Version` overrides)
 2. Patches `BUILD_TIME` and `GIT_VERSION` in `Version.h`
 3. Builds Core + GUI via MSYS2 MinGW64 (`qmake-qt5` + `mingw32-make`)
-4. Builds the Inno Setup installer (ISCC output → `installer_log.txt`)
-5. If publishing (default): commits `Version.h`, tags `v<version>`, pushes, creates GitHub Release with installer attached
+4. Builds the Inno Setup installer (ISCC output → `DG-LAN-<ver>-Setup.exe`)
+5. If publishing (default): commits `Version.h`, tags `v<version>`, pushes, creates GitHub Release with `.exe` attached
+
+**Linux (`build-release.sh`):**
+1. Auto-increments patch version in `Version.h` (unless `-Version` overrides)
+2. Patches `BUILD_TIME` and `GIT_VERSION` in `Version.h`
+3. Builds Core + GUI via system qmake + top-level recursive make (`-j1` for Linux reliability)
+4. Creates release tarball: `DG-LAN-vX.Y.Z-linux-x86_64.tar.gz` (or your arch)
+5. If publishing (default): commits `Version.h`, tags `v<version>`, pushes, creates GitHub Release with `.tar.gz` attached
+
+**Qualification note:** the script existing is not the same as Linux support being proven. Ubuntu 24.04 x86_64 now builds in this workspace, but each distro/arch still needs native build + smoke evidence before the tarball should be attached to a release.
 
 ### Build Outputs
+
+**Windows:**
 - `application/Core/output/release/DG-LAN.Core.exe`
 - `application/GUI/output/release/DG-LAN.GUI.exe`
-- `application/Setups/Windows/Installations/DG-LAN-<ver><tag>-<buildtime>-Setup.exe`
+- `application/Setups/Windows/Installations/DG-LAN-<ver>-Setup.exe` ← Release artifact
+
+**Linux:**
+- `application/Core/output/release/DG-LAN.Core`
+- `application/GUI/output/release/DG-LAN.GUI`
+- `DG-LAN-vX.Y.Z-linux-x86_64.tar.gz` ← Release artifact
+
+### Dual-Release Strategy (v1.3+ target)
+
+The target release shape is one Windows artifact plus one Linux artifact per version, but Linux assets should only be attached after native validation on the relevant distro/arch:
+
+| Platform | Script | Output | Storage |
+|----------|--------|--------|---------|
+| Windows | `.\build-release.ps1` | `.exe` installer | GitHub Release |
+| Linux x86_64 | `./build-release.sh` | `.tar.gz` tarball | GitHub Release |
+| Linux ARM (RPi) | `./build-release.sh` | `.tar.gz` tarball | GitHub Release after native ARM smoke |
+
+**Single source of truth**: `application/Common/Version.h` — both scripts read and patch it.
+
+**Version sync**: Both `.exe` and `.tar.gz` carry identical version strings and git hashes.
+
+**Workflow**: 
+1. Windows dev runs `.\build-release.ps1` → creates GitHub Release with `.exe`
+2. Linux dev runs `./build-release.sh` on the target distro/arch and uploads `.tar.gz` only after smoke coverage passes
+3. Or, Phase 2 automation (GitHub Actions matrix) does both in CI
 
 ---
 
@@ -72,8 +124,8 @@ Defined in `application/Common/Version.h`:
 ```cpp
 #define VERSION "1.2.92"
 #define VERSION_TAG "Alpha"
-#define BUILD_TIME "..."   // patched by build-release.ps1
-#define GIT_VERSION "..."      // patched by build-release.ps1
+#define BUILD_TIME "..."   // patched by build-release.ps1 / build-release.sh
+#define GIT_VERSION "..."      // patched by build-release.ps1 / build-release.sh
 ```
 
 - `version.rc` includes `Version.h` → embeds version info into .exe resources
@@ -83,14 +135,31 @@ Defined in `application/Common/Version.h`:
 
 ## CI/CD
 
-### Primary: Local Build
-All releases are built locally via `.\build-release.ps1`. This is faster and more reliable than CI for a Qt5 + MSYS2 + protobuf project.
+### Primary: Local Platform-Native Builds
+
+All releases are built locally on their native platform via:
+- **Windows**: `.\build-release.ps1` (faster, more reliable than CI for Qt5 + MSYS2 + protobuf)
+- **Linux**: `./build-release.sh` (directly on target OS; no cross-compilation)
+- **macOS**: manual qmake + make only (experimental)
+
+Each script handles version bumping, tagging, and GitHub Release creation.
 
 ### Fallback: GitHub Actions
+
 **File**: `.github/workflows/build.yml`  
 **Trigger**: Push a `v*` tag OR manual `workflow_dispatch`  
 **Runner**: `ubuntu-latest` (lightweight — no compile)  
-**Behavior**: If a GitHub Release already exists (created by `build-release.ps1`), CI exits. Otherwise, it creates a **draft** release so you can manually upload the installer.
+**Behavior**: If a GitHub Release already exists (created by `build-release.ps1` or `build-release.sh`), CI exits. Otherwise, it creates a **draft** release so you can manually upload the installer.
+
+### Future (Phase 2): GitHub Actions Matrix Builds
+
+Once CI infrastructure is available, this workflow could be enhanced to:
+1. Detect Windows release artifacts uploaded by local `build-release.ps1`
+2. Spawn Ubuntu runner to build Linux `.tar.gz`
+3. Auto-upload both to GitHub Release
+4. Result: Single release tag with both `.exe` and `.tar.gz`
+
+**Phase 2 is optional**: The current local build approach works fine and is actually simpler for contributors.
 
 ---
 

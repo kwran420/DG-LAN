@@ -208,6 +208,25 @@
 
 ---
 
+### ID-6: Linux Release Path Hardening (Hicks)
+
+**Decision**: Treat `build-release.sh` as the single Linux release source of truth, keep `build-linux.sh` as a compatibility wrapper, and make local Linux build/package flows restore `Version.h` instead of leaving version metadata dirty.
+
+**Rationale**:
+- Release packaging had drifted into multiple shell entrypoints with stale Windows assumptions and inconsistent Linux behavior.
+- Local validation/build commands should not mutate repo version metadata just to compile/package artifacts.
+- Linux tarballs need to be honest/native artifacts: prefix-aware install assets, distro/toolchain provenance, and deterministic packaging metadata are higher value than overpromising portability.
+
+**Deliverables**:
+- `build-release.sh`: local Version.h restore trap, current-branch publish, prefix-aware service rewrite, metadata/checksum output, qmake/lrelease probing
+- `build-linux.sh`: forwards old flags to `build-release.sh`
+- `_build_core.sh`, `_build_gui.sh`, `application/3.compile_all_components.sh`, `application/4.run_all_tests.sh`, `application/Tools/update_version.sh`: path-safe and distro-safe script cleanup
+- `BUILD.md`: Linux wrapper/local-clean-prefix-aware notes
+
+**Status**: ✅ IMPLEMENTED 2026-04-15
+
+---
+
 
 ### ID-6: Linux Native Release Bring-up (Hicks)
 

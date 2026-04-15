@@ -38,7 +38,7 @@ using namespace std;
 #include <Common/Global.h>
 #include <Common/ProtoHelper.h>
 #include <Common/Settings.h>
-#include <Common/SharedDir.h>
+#include <Common/SharedEntry.h>
 
 #include <IChunk.h>
 #include <IGetHashesResult.h>
@@ -155,10 +155,10 @@ void Tests::addASharedDirectoryIncoming()
    qDebug() << "===== addASharedDirectoryIncoming() =====";
 
    this->sharedDirs << QDir::currentPath().append("/incoming/");
-   this->fileManager->setSharedDirs(this->sharedDirs);
-   QList<Common::SharedDir> paths = this->fileManager->getSharedDirs();
+   this->fileManager->setSharedPaths(this->sharedDirs);
+   QList<Common::SharedEntry> paths = this->fileManager->getSharedEntries();
    QVERIFY(paths.size() == 1);
-   QCOMPARE(paths.at(0).path, this->sharedDirs.at(0));
+   QCOMPARE(paths.at(0).path.getPath(), this->sharedDirs.at(0));
 }
 
 void Tests::addASharedDirectory()
@@ -166,35 +166,35 @@ void Tests::addASharedDirectory()
    qDebug() << "===== addASharedDirectory() =====";
 
    this->sharedDirs << QDir::currentPath().append("/sharedDirs/share1/");
-   this->fileManager->setSharedDirs(this->sharedDirs);
-   QList<Common::SharedDir> paths = this->fileManager->getSharedDirs();
+   this->fileManager->setSharedPaths(this->sharedDirs);
+   QList<Common::SharedEntry> paths = this->fileManager->getSharedEntries();
    QVERIFY(paths.size() == 2);
-   QCOMPARE(paths.at(1).path, this->sharedDirs.at(1));
+   QCOMPARE(paths.at(1).path.getPath(), this->sharedDirs.at(1));
 }
 
 void Tests::addAnAlreadySharedDirectory()
 {
    qDebug() << "===== addAnAlreadySharedDirectory() =====";
 
-   this->fileManager->setSharedDirs(this->sharedDirs);
-   QList<Common::SharedDir> paths = this->fileManager->getSharedDirs();
+   this->fileManager->setSharedPaths(this->sharedDirs);
+   QList<Common::SharedEntry> paths = this->fileManager->getSharedEntries();
    QVERIFY(paths.size() == 2);
-   QCOMPARE(paths.at(1).path, this->sharedDirs.at(1));
+   QCOMPARE(paths.at(1).path.getPath(), this->sharedDirs.at(1));
 }
 
 void Tests::swapTwoDirectories()
 {
    this->sharedDirs.move(1, 0);
-   this->fileManager->setSharedDirs(this->sharedDirs);
-   QList<Common::SharedDir> paths = this->fileManager->getSharedDirs();
-   QCOMPARE(paths.at(0).path, this->sharedDirs.at(0));
-   QCOMPARE(paths.at(1).path, this->sharedDirs.at(1));
+   this->fileManager->setSharedPaths(this->sharedDirs);
+   QList<Common::SharedEntry> paths = this->fileManager->getSharedEntries();
+   QCOMPARE(paths.at(0).path.getPath(), this->sharedDirs.at(0));
+   QCOMPARE(paths.at(1).path.getPath(), this->sharedDirs.at(1));
 
    this->sharedDirs.move(1, 0);
-   this->fileManager->setSharedDirs(this->sharedDirs);
-   QList<Common::SharedDir> paths2 = this->fileManager->getSharedDirs();
-   QCOMPARE(paths2.at(0).path, this->sharedDirs.at(0));
-   QCOMPARE(paths2.at(1).path, this->sharedDirs.at(1));
+   this->fileManager->setSharedPaths(this->sharedDirs);
+   QList<Common::SharedEntry> paths2 = this->fileManager->getSharedEntries();
+   QCOMPARE(paths2.at(0).path.getPath(), this->sharedDirs.at(0));
+   QCOMPARE(paths2.at(1).path.getPath(), this->sharedDirs.at(1));
 }
 
 void Tests::addInexistingSharedDirectory()
@@ -204,7 +204,7 @@ void Tests::addInexistingSharedDirectory()
    this->sharedDirs << QDir::currentPath().append("/this_is_spartaaaaaa/"); // This directory doesn't exit.
    try
    {
-      this->fileManager->setSharedDirs(this->sharedDirs);
+      this->fileManager->setSharedPaths(this->sharedDirs);
       QFAIL("An exception must be thrown");
    }
    catch (ItemsNotFoundException& e)
@@ -223,9 +223,9 @@ void Tests::addSubSharedDirectories()
    this->sharedDirs << QDir::currentPath().append("/sharedDirs/share1/subdir/");
    this->sharedDirs << QDir::currentPath().append("/sharedDirs/share1/another subdir/");
 
-   this->fileManager->setSharedDirs(this->sharedDirs);
+   this->fileManager->setSharedPaths(this->sharedDirs);
 
-   QCOMPARE(this->fileManager->getSharedDirs().size(), 2);
+   QCOMPARE(this->fileManager->getSharedEntries().size(), 2);
 
    this->sharedDirs.removeLast();
    this->sharedDirs.removeLast();
@@ -239,7 +239,7 @@ void Tests::addSuperSharedDirectories()
    qDebug() << "===== addSuperSharedDirectories() =====";
 
    this->sharedDirs << QDir::currentPath().append("/sharedDirs/");
-   this->fileManager->setSharedDirs(this->sharedDirs);
+   this->fileManager->setSharedPaths(this->sharedDirs);
 
    QTest::qSleep(100);
 }
@@ -436,12 +436,12 @@ void Tests::getHashesFromAFileEntry1()
 
    // Find the id of the first shared directory.
    Protos::Common::Entries sharedDirs = this->fileManager->getEntries();
-   const string sharedDirId = sharedDirs.entry(1).shared_dir().id().hash();
+   const string sharedDirId = sharedDirs.entry(1).shared_entry().id().hash();
 
    Protos::Common::Entry entry;
    entry.set_path("/share1/");
    entry.set_name("r.txt");
-   entry.mutable_shared_dir()->mutable_id()->set_hash(sharedDirId);
+   entry.mutable_shared_entry()->mutable_id()->set_hash(sharedDirId);
    entry.add_chunk();
 
    QSharedPointer<IGetHashesResult> result = this->fileManager->getHashes(entry);
@@ -473,12 +473,12 @@ void Tests::getHashesFromAFileEntry2()
    QTest::qWait(2000); // Begin the computing of the big2.bin hashes.
 
    Protos::Common::Entries sharedDirs = this->fileManager->getEntries();
-   const string sharedDirId = sharedDirs.entry(1).shared_dir().id().hash();
+   const string sharedDirId = sharedDirs.entry(1).shared_entry().id().hash();
 
    Protos::Common::Entry entry;
    entry.set_path("/");
    entry.set_name("big3.bin");
-   entry.mutable_shared_dir()->mutable_id()->set_hash(sharedDirId);
+   entry.mutable_shared_entry()->mutable_id()->set_hash(sharedDirId);
    for (int i = 0; i < 2; i++) // 128 MiB -> 2 chunks.
       entry.add_chunk();
    QSharedPointer<IGetHashesResult> result = this->fileManager->getHashes(entry);
@@ -733,7 +733,7 @@ void Tests::rmSharedDirectory()
    qDebug() << "===== rmSharedDirectory() =====";
 
    this->sharedDirs.clear();
-   this->fileManager->setSharedDirs(this->sharedDirs);
+   this->fileManager->setSharedPaths(this->sharedDirs);
 }
 
 /**
@@ -988,4 +988,3 @@ void Tests::compareStrRegexp(const QString& regexp, const QString& str)
       QFAIL(message.data());
    }
 }
-

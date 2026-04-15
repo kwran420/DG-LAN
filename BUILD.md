@@ -1,6 +1,11 @@
 # DG-LAN — Build Instructions
 
-DG-LAN decentralises a master file list across a network. It is built with **MSYS2 MinGW64** on Windows (the primary platform). Linux and macOS builds are possible but untested.
+DG-LAN decentralises a master file list across a network. It is built with **MSYS2 MinGW64** on Windows (the primary platform) and has an **experimental native Linux build path** based on system Qt5. macOS builds are possible but untested.
+
+**Platform support:**
+- 🔵 **Windows (x86_64)**: Primary platform — full support, auto-update, `.exe` installer
+- 🟢 **Linux (x86_64, ARM)**: Experimental — native tarball path exists, but support must be proven per distro/arch
+- 🟡 **macOS**: Possible (not regularly tested) — manual qmake path only
 
 ---
 
@@ -31,7 +36,7 @@ python3 validate.py
 
 This runs:
 1. **Python bridge tests** (59 automated tests) — Always attempted
-2. **Desktop C++ tests** (legacy Qt/C++ suites) — If `bash`, `qmake`, and `protoc` are available
+2. **Desktop C++ tests** (wired legacy Qt/C++ suites) — If `bash`, `qmake`, and `protoc` are available
 
 **Exit codes:**
 - `0` — All validations passed (or all attempted layers passed)
@@ -101,19 +106,223 @@ mingw32-make -f Makefile-GUI -j$(nproc)
 
 ## Linux Build (Experimental)
 
+DG-LAN builds and runs natively on Linux x86_64. ARM (Raspberry Pi) is structurally supported but requires native compilation on the target device. All Linux releases use distro Qt5/protobuf packages.
+
+### Prerequisites
+
+Choose your distro and install Qt5 dev packages and build tools:
+
+**Ubuntu 20.04+ / Debian 11+:**
 ```bash
 sudo apt-get update
-sudo apt-get install -y qt5-default qtbase5-dev qttools5-dev \
-    libprotobuf-dev protobuf-compiler build-essential
-
-cd application
-qmake Core.pro -r && make -j$(nproc)
-qmake GUI.pro -r && make -j$(nproc)
+sudo apt-get install -y qtbase5-dev qt5-qmake qtchooser \
+    qttools5-dev-tools libprotobuf-dev protobuf-compiler build-essential git
 ```
+
+**Fedora 34+ / RHEL 8+:**
+```bash
+sudo dnf install -y qt5-qtbase-devel qt5-qttools-devel \
+    protobuf-devel protobuf-compiler gcc-c++ make git
+```
+
+**Raspberry Pi OS (Debian-based):**
+```bash
+sudo apt-get update
+sudo apt-get install -y qtbase5-dev qt5-qmake qtchooser \
+    qttools5-dev-tools libprotobuf-dev protobuf-compiler build-essential git
+```
+
+**Verify installation:**
+```bash
+qmake --version          # Should show Qt 5.x
+protoc --version         # Should show 3.x+
+gcc --version            # Should show 9.x+
+```
+
+### One-Command Build (Linux)
+
+```bash
+./build-release.sh -SkipPublish      # build only (no publish)
+./build-release.sh                   # build + tag + GitHub release
+./build-release.sh -Version 2.0.0    # override version
+./build-release.sh -SkipBuild        # package from last build
+./build-linux.sh                     # compatibility alias for local build/package only
+```
+
+This:
+- Auto-detects your architecture (x86_64, aarch64, armhf)
+- Patches `Version.h` with build timestamp and git hash
+- Builds Core and GUI via qmake + make
+- Creates a release tarball: `dist/DG-LAN-X.Y.Z-Alpha-linux-x86_64.tar.gz`
+- Restores `Version.h` after local `-SkipPublish` builds so validation/builds do not leave the worktree dirty
+
+**Output:**
+```
+application/Core/output/release/DG-LAN.Core
+application/GUI/output/release/DG-LAN.GUI
+dist/DG-LAN-X.Y.Z-Alpha-linux-x86_64.tar.gz  ← Release tarball
+```
+
+### Build Script Flags (Linux)
+
+| Flag | Effect |
+|------|--------|
+| *(no flags)* | Build + commit + tag + create/update GitHub Release |
+| `-SkipPublish` | Build locally without git push or release upload |
+| `-SkipBuild` | Skip compilation and re-package existing binaries |
+| `-Version 2.0.0` | Override version number |
+
+`build-linux.sh` remains as a compatibility wrapper for older docs/scripts. It forwards to `build-release.sh` and only publishes when passed `--publish`.
+
+### Manual Build (Linux)
+
+If you prefer step-by-step control:
+
+```bash
+cd application
+
+# Build Core
+qmake Core.pro -r -spec linux-g++
+make -f Makefile-Core -j1
+
+# Build GUI
+qmake GUI.pro -r -spec linux-g++
+make -f Makefile-GUI -j1
+```
+
+### Linux Gotchas & Mitigation
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| **LTO internal compiler error** | GCC ≥ 13 ICE when linking LTO objects + static archives | LTO is disabled by default on Linux builds (see `common.pri`). Opt in with `DEFINES+=ENABLE_LTO` only if your GCC version is known-good. |
+| **Multicast discovery fails** | Distro-specific routing; some ufw rules block 224.0.0.0/4 | See [Multicast Routing](#multicast-routing-linux) below |
+| **GUI won't start** | No X11/Wayland display server (headless systems) | Just run Core; GUI requires display. Core works headless. |
+| **Service install differs by distro** | The tarball ships a systemd unit, but older repo packaging still uses SysV init scripts | Validate the systemd path on the target distro; do not assume old Debian packaging matches current tarball flow |
+| **Config file not found** | Linux uses `~/.config/DGLan/` (XDG), not Windows paths | QSettings handles this automatically; just works |
+| **Port 59485+ already in use** | Another service binding same ports | Change via Settings GUI or `~/.config/DGLan/DG-LAN.conf` |
+| **qmake package name varies** | Ubuntu/Debian, Fedora/RHEL, and Raspberry Pi package Qt5 differently | Install the distro-native Qt5 development packages above; do not rely on `qt5-default` on newer Debian/Ubuntu releases |
+| **protoc not found** | protobuf-compiler not installed | Run package manager install |
+| **Experimental DownloadManager suite is stale** | `--with-stale-tests` opts into an older Qt test harness that still needs modernization | Use default `python3 validate.py` / `bash 4.run_all_tests.sh` for the wired suites; only opt in when actively fixing DownloadManager coverage |
+
+### Multicast Routing (Linux)
+
+DG-LAN peers discover each other via multicast on `224.0.0.1:59486`. Some Linux distributions require explicit routing.
+
+**Check if multicast routing is enabled:**
+```bash
+ip route show table local | grep 224.0.0.0
+```
+
+If you see a line with `224.0.0.0/4 dev eth0`, you're good.
+
+**If missing, add it:**
+
+**One-time (temporary, lost on reboot):**
+```bash
+sudo ip route add 224.0.0.0/4 dev eth0
+# Replace eth0 with your network interface (ip addr show to list)
+```
+
+**Persistent (via netplan, Ubuntu/Debian):**
+
+1. Find your network interface:
+   ```bash
+   ip addr show
+   # Look for your main interface, e.g. eth0, enp0s3, ens33
+   ```
+
+2. Edit `/etc/netplan/00-installer-config.yaml` (or your existing netplan file):
+   ```yaml
+   network:
+     version: 2
+     ethernets:
+       eth0:
+         dhcp4: true
+         routes:
+           - to: 224.0.0.0/4
+             via: 127.0.0.1
+   ```
+
+3. Apply:
+   ```bash
+   sudo netplan apply
+   ```
+
+**Persistent (via ufw, if using firewall):**
+
+Make sure multicast is not blocked:
+```bash
+sudo ufw allow in on eth0 from 224.0.0.1 to 224.0.0.1
+sudo ufw allow out on eth0 to 224.0.0.1 from 224.0.0.1
+```
+
+**Persistent (via firewalld, Fedora/RHEL):**
+```bash
+sudo firewall-cmd --permanent --add-port=59485-59497/tcp
+sudo firewall-cmd --permanent --add-port=59486-59497/udp
+sudo firewall-cmd --reload
+```
+
+### Linux Release Tarball
+
+After `./build-release.sh`, you'll have `dist/DG-LAN-X.Y.Z-Alpha-linux-x86_64.tar.gz` containing:
+
+```
+DG-LAN.Core                 ← Headless daemon
+DG-LAN.GUI                  ← Qt5 GUI application
+styles/                      ← UI stylesheets
+languages/                   ← Translation files
+dglan-core.service           ← systemd unit file
+dglan.desktop                ← XDG desktop entry
+install.sh                   ← Helper to install binaries + service
+RELEASE-METADATA.txt         ← Build/distro/tooling provenance
+```
+
+**Extract and install:**
+```bash
+tar -xzf DG-LAN-*-linux-*.tar.gz
+cd DG-LAN-*-linux-*
+sudo ./install.sh             # installs to /usr/local by default
+sudo ./install.sh /opt/dglan  # or specify a prefix
+```
+
+`install.sh` rewrites the shipped systemd unit and desktop entry to match the chosen install prefix, so `/opt/...` installs do not still point at `/usr/local/bin`.
+
+**Or run directly (no install):**
+```bash
+tar -xzf DG-LAN-*-linux-*.tar.gz
+cd DG-LAN-*-linux-*
+./DG-LAN.Core -e &            # headless daemon in console mode
+./DG-LAN.GUI &                 # Qt5 GUI
+```
+
+### Testing on Linux
+
+Run the unified validation entrypoint:
+
+```bash
+python3 validate.py
+```
+
+**Expected output for a release-ready Linux candidate:**
+- ✅ Python tests: 59/59 PASS (always attempted)
+- ✅ Desktop/C++ validation: PASS (or BLOCKED in headless containers)
+- ✅ `./build-release.sh -SkipPublish`: produces the tarball on the target distro/arch
+- ✅ Tarball smoke: `DG-LAN.Core --version` works, GUI launches on a real desktop session, systemd install smoke passes if shipping as a service
+
+See [TESTING.md](TESTING.md) for details.
+
+### Known Limitations (Linux)
+
+- ❌ **No auto-update**: Linux tarball releases don't auto-update (UpdateChecker looks for `.exe` assets only). Update manually.
+- ❌ **Service integration**: Uses systemd (see `dglan-core.service` in the tarball)
+- ❌ **Config paths**: Uses `~/.config/DGLan/` (XDG standard) instead of Windows `%APPDATA%` paths
+- ⚠️ **IPv6**: Not yet implemented (same as Windows)
+- ⚠️ **TLS**: Network isolation-based security; not yet HTTPS (same as Windows)
 
 ---
 
-## macOS Build (Experimental)
+## macOS Build (Possible, Not Regularly Tested)
 
 ```bash
 brew install qt@5 protobuf
@@ -123,6 +332,53 @@ cd application
 qmake Core.pro -r && make -j$(nproc)
 qmake GUI.pro -r && make -j$(nproc)
 ```
+
+Follow [Linux Build](#linux-build-experimental-native-only) for similar gotchas and systemd replacement (macOS uses launchd).
+
+---
+
+## Dual-Release Strategy
+
+Target state for v1.3+ is two platform-specific release artifacts per version:
+
+| Platform | Release Type | Built With | Auto-Update | Installer |
+|----------|--------------|-----------|-------------|-----------|
+| **Windows** | `.exe` installer | PowerShell: `.\build-release.ps1` | ✅ GitHub Releases API | Inno Setup 6 |
+| **Linux** | `.tar.gz` tarball | Bash: `./build-release.sh` | ❌ Manual | systemd unit + install.sh |
+
+### Release Workflow
+
+**Windows Release (on Windows machine):**
+```powershell
+.\build-release.ps1
+# → Outputs: DG-LAN-X.Y.Z-Setup.exe
+# → Uploads to GitHub Release
+```
+
+**Linux Release (on Linux machine):**
+```bash
+./build-release.sh
+# → Outputs: dist/DG-LAN-X.Y.Z-Alpha-linux-x86_64.tar.gz
+# → Uploads to GitHub Release (attaches alongside Windows .exe)
+```
+
+Both scripts are intended to:
+- Read/patch the same `Version.h`
+- Auto-increment patch version
+- Commit, tag, and push to GitHub
+- Create/update the GitHub Release with appropriate assets
+
+**Release rule:** only attach the Linux tarball to the shared GitHub Release after the native Linux build + smoke checklist passes on that distro/arch. Do not infer Raspberry Pi, Ubuntu, or RedHat support from a different Linux build.
+
+### One Codebase, Two Artifacts
+
+The C++ and Qt code is 100% platform-agnostic. No conditional compilation needed. Build machines just differ:
+
+- **Windows**: MSYS2 MinGW64 toolchain
+- **Linux**: System package manager Qt5 + GCC/Clang
+- **macOS**: Homebrew Qt5 + Clang
+
+All three produce functionally identical binaries (minus platform-specific paths/services).
 
 ---
 

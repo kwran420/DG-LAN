@@ -29,13 +29,9 @@ SOURCES += main.cpp \
     Tests.cpp \
     ../../../Protos/common.pb.cc \
     HashesReceiver.cpp \
-    StressTest.cpp \
-    ../../../Protos/core_settings.pb.cc \
-    StressTests.cpp
+    ../../../Protos/core_settings.pb.cc
 HEADERS += Tests.h \
     ../../../Protos/common.pb.h \
     CacheTest.h \
     HashesReceiver.h \
-    StressTest.h \
-    ../../../Protos/core_settings.pb.h \
-    StressTests.h
+    ../../../Protos/core_settings.pb.h

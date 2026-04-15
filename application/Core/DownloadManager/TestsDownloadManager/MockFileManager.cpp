@@ -10,22 +10,22 @@ MockFileManager::~MockFileManager()
 
 }
 
-void MockFileManager::setSharedDirs(const QStringList& dirs)
+void MockFileManager::setSharedPaths(const QStringList& paths)
 {
 
 }
 
-QPair<Common::SharedDir, QString> MockFileManager::addASharedDir(const QString& absoluteDir)
+QPair<Common::SharedEntry, QString> MockFileManager::addASharedPath(const QString& absolutePath)
 {
-   return qMakePair(Common::SharedDir(), QString());
+   return qMakePair(Common::SharedEntry(), QString());
 }
 
-QList<Common::SharedDir> MockFileManager::getSharedDirs() const
+QList<Common::SharedEntry> MockFileManager::getSharedEntries() const
 {
-   return QList<Common::SharedDir>();
+   return QList<Common::SharedEntry>();
 }
 
-QString MockFileManager::getSharedDir(const Common::Hash& ID) const
+QString MockFileManager::getSharedEntry(const Common::Hash& ID) const
 {
    return QString();
 }
@@ -92,7 +92,7 @@ quint64 MockFileManager::getAmount()
 
 MockFileManager::CacheStatus MockFileManager::getCacheStatus() const
 {
-   return LOADING_CACHE_IN_PROGRSS;
+   return LOADING_CACHE_IN_PROGRESS;
 }
 
 int MockFileManager::getProgress() const

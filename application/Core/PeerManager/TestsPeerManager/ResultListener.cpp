@@ -89,7 +89,7 @@ void ResultListener::nextHashResult(const Protos::Core::HashResult& hashResult)
    this->currentHash++;
 }
 
-void ResultListener::chunkResult(const Protos::Core::GetChunkResult& result)
+void ResultListener::chunkResult(const Protos::Core::GetChunksResult& result)
 {
    qDebug() << "ResultListener::chunkResult : " << Common::ProtoHelper::getDebugStr(result);
 }

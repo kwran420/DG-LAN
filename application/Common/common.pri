@@ -4,11 +4,16 @@ CONFIG(debug, debug|release) {
 } else {
    FOLDER = release
 
-   # The standard Qt distribution on Windows doesn't support ar.
+   # LTO (link-time optimisation)
+   # gcc-ar is required so static archives keep LTO metadata.
+   # Disabled by default on Linux because GCC ≥ 13 triggers an ICE when
+   # linking mixed LTO objects + static libs.  Define ENABLE_LTO to opt in.
    unix {
-      QMAKE_AR = gcc-ar cqs
-      QMAKE_CXXFLAGS_RELEASE += -flto
-      QMAKE_LFLAGS_RELEASE += -flto
+      contains(DEFINES, ENABLE_LTO) {
+         QMAKE_AR = gcc-ar cqs
+         QMAKE_CXXFLAGS_RELEASE += -flto
+         QMAKE_LFLAGS_RELEASE += -flto
+      }
    }
 
    prof {

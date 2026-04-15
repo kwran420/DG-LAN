@@ -20,6 +20,11 @@ Use this pattern when auditing a mixed legacy repo before refactors or moderniza
    - cover highest-risk protocol/data flows
    - add release/install smoke checks
    - only then push large structural refactors
+8. Treat “there is a release script” and “this platform is supported” as different claims:
+   - native build script present
+   - native build actually succeeds
+   - native install/run smoke passes on the target distro/arch
+   - only then call the platform/release path supported
 
 ## DG-LAN example
 

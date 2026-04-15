@@ -104,3 +104,66 @@ Vasquez validation baseline → Bishop documentation → Hicks backend tests →
 - **Hicks (D7):** Migrate IPeer* → QSharedPointer<IPeer> in DownloadManager/ChunkDownloader, using peerBecomesUnavailable as lifecycle hook
 - **Hicks (D8):** Add RemoteControlManager test suite (independent, can start now)
 - **Dallas (D10-D13):** Dead code removal (Chat/Emoticons/Activity/Hashing) — can start after Vasquez validation baseline
+
+### 2026-04-15 — Linux Port & Release Strategy
+
+**Scope:** Establish working Linux build, release tarball, dual-platform release workflow.
+
+**Key findings from actual build attempt on Ubuntu 24.04 (x86_64):**
+1. Both Core and GUI compile and link successfully on Linux with Qt 5.15.13
+2. GCC 13 has an internal compiler error (ICE) when LTO is enabled with static archives — fixed by making LTO opt-in
+3. The upstream D-LAN project already had extensive `Q_OS_LINUX` guards, qtservice_unix.cpp (daemon support), DirWatcherLinux, WaitConditionLinux — the Linux code paths exist and compile
+4. Existing Ubuntu packaging in `application/Setups/Ubuntu/` is outdated (references D-LAN names, SysV init, libprotobuf9)
+
+**Delivered:**
+- ✅ `build-linux.sh` — verified Linux build + tarball packaging script (1.4 MB tarball on x86_64)
+- ✅ `application/Setups/Linux/dglan-core.service` — modern systemd service file with hardening
+- ✅ `application/Setups/Linux/dglan.desktop` — XDG desktop entry for GUI
+- ✅ `application/Common/common.pri` — LTO disabled by default on Linux (GCC 13 ICE fix)
+- ✅ `BUILD.md` — updated with accurate, tested Linux build instructions
+- ✅ Decisions D20-D24 recorded in `.squad/decisions/inbox/ripley-linux-strategy.md`
+
+**Architecture decisions:**
+- D20: Tarball + system deps (simplest reliable artifact, works across all distros)
+- D21: ARM/Pi is native-build-only (no cross-compilation promise)
+- D22: LTO disabled by default on Linux
+- D23: Dual-release workflow (both scripts share Version.h, same GitHub Release tag)
+- D24: Auto-update doesn't work on Linux (accepted limitation)
+
+**Gotchas identified:**
+1. LTO ICE on GCC ≥ 13 (FIXED)
+2. Multicast routing may need manual setup on some distros
+3. protobuf ABI mismatch between distro versions (must build on target)
+4. Auto-update only works for Windows .exe assets
+5. GUI requires X11/Wayland display server
+6. ARM binaries must be compiled on the target device
+
+### 2026-04-15 — D7 Review Gate Decision
+
+**Scope**: Reviewed peer-lifecycle safety infrastructure for D7 (IPeer* → smart pointer) migration readiness.
+
+**Assessment**:
+- ✅ `peerBecomesUnavailable` signal infrastructure correctly wired through full stack
+- ✅ OccupiedPeers/LinkedPeers now Hash-keyed (no raw pointers in bookkeeping)
+- ✅ IPeer.h contract fixed, ARCHITECTURE.md documents lifecycle state machine
+- ✅ Defense-in-depth: signal propagates DownloadQueue → FileDownload → ChunkDownloader
+
+**Verdict**: APPROVED WITH CONSTRAINTS
+
+**Highest-Risk Remaining Seam**: `ChunkDownloader::peers` (`QList<PM::IPeer*>`) and `currentDownloadingPeer` — transient handles during active downloads. Risk is MEDIUM because `peerBecomesUnavailable` mitigates but doesn't eliminate race windows.
+
+**Constraints for D7 Execution**:
+1. ChunkDownloader is the scope — do NOT change IPeerManager return types in this slice
+2. Preserve signal semantics — new code must still react to `peerBecomesUnavailable`
+3. No behavioral changes — verify with existing tests
+4. Staged migration — ChunkDownloader first, then FileDownload/DirDownload peerSource
+
+**Recommended Next Slice**: D7-A — ChunkDownloader IPeer* → ID-based lookup with lazy getPeer() resolution
+
+**Key Files Reviewed**:
+- `application/Core/PeerManager/priv/Peer.cpp:252-259` — becameDead signal emission
+- `application/Core/PeerManager/priv/PeerManager.cpp:277-281` — signal forwarding
+- `application/Core/DownloadManager/priv/ChunkDownloader.cpp:320-338` — peerBecomesUnavailable handling
+- `application/Core/DownloadManager/priv/OccupiedPeers.cpp:82-94` — silent removePeer()
+
+**Decision Written To**: `.squad/decisions/inbox/ripley-d7-review-gate.md`

@@ -36,6 +36,7 @@ using namespace PM;
 #include <ResultListener.h>
 #include <IGetEntriesResult.h>
 #include <IGetHashesResult.h>
+#include <IGetChunksResult.h>
 
 Q_DECLARE_METATYPE(PM::IPeer*)
 
@@ -93,7 +94,7 @@ void Tests::initTestCase()
    // 2) Set the shared directories.
    for (int i = 0; i < this->peerIDs.size(); i++)
    {
-      this->fileManagers[i]->setSharedDirs(QStringList() << QDir::currentPath().append(this->peerSharedDirs[i]));
+      this->fileManagers[i]->setSharedPaths(QStringList() << QDir::currentPath().append(this->peerSharedDirs[i]));
    }
 
    // 3) Create the peer update (to simulate the periodic update).
@@ -269,7 +270,7 @@ void Tests::askForSomeEntries()
    Protos::Core::GetEntries getEntriesMessage2;
    Protos::Common::Entry* entry = getEntriesMessage2.mutable_dirs()->add_entry();
    entry->CopyFrom(this->resultListener.getEntriesResultList().last().result(0).entries().entry(0));
-   entry->mutable_shared_dir()->CopyFrom(getEntriesMessage1.dirs().entry(0).shared_dir());
+   entry->mutable_shared_entry()->CopyFrom(getEntriesMessage1.dirs().entry(0).shared_entry());
    QSharedPointer<IGetEntriesResult> result2 = this->peerManagers[0]->getPeers()[0]->getEntries(getEntriesMessage2);
    QVERIFY(!result2.isNull());
    connect(result2.data(), &IGetEntriesResult::result, &this->resultListener, &ResultListener::entriesResult);
@@ -324,7 +325,7 @@ void Tests::askForHashes()
    for (quint32 i = 0; i < NUMBER_OF_CHUNK; i++)
       fileEntry.add_chunk();
    // Sets the root directory.
-   fileEntry.mutable_shared_dir()->CopyFrom(this->resultListener.getEntriesResultList().first().result(0).entries().entry(0).shared_dir());
+   fileEntry.mutable_shared_entry()->CopyFrom(this->resultListener.getEntriesResultList().first().result(0).entries().entry(0).shared_entry());
 
    QSharedPointer<IGetHashesResult> result = this->peerManagers[0]->getPeers()[0]->getHashes(fileEntry);
    QVERIFY(!result.isNull());
@@ -356,13 +357,14 @@ void Tests::askForAChunk()
 
    connect(this->peerManagers[1].data(), &IPeerManager::getChunk, &this->resultListener, &ResultListener::getChunk);
 
-   Protos::Core::GetChunk getChunkMessage;
-   getChunkMessage.mutable_chunk()->set_hash(this->resultListener.getLastReceivedHash().getData(), Common::Hash::HASH_SIZE);
-   getChunkMessage.set_offset(0);
-   QSharedPointer<IGetChunkResult> result = this->peerManagers[0]->getPeers()[0]->getChunk(getChunkMessage);
+   Protos::Core::GetChunks getChunksMessage;
+   Protos::Core::GetChunks_Chunk* chunk = getChunksMessage.add_chunks();
+   chunk->mutable_hash()->set_hash(this->resultListener.getLastReceivedHash().getData(), Common::Hash::HASH_SIZE);
+   chunk->set_offset(0);
+   QSharedPointer<IGetChunksResult> result = this->peerManagers[0]->getPeers()[0]->getChunks(getChunksMessage);
    QVERIFY(!result.isNull());
-   connect(result.data(), &IGetChunkResult::result, &this->resultListener, &ResultListener::chunkResult);
-   connect(result.data(), &IGetChunkResult::stream, &this->resultListener, &ResultListener::stream);
+   connect(result.data(), &IGetChunksResult::result, &this->resultListener, &ResultListener::chunkResult);
+   connect(result.data(), &IGetChunksResult::stream, &this->resultListener, &ResultListener::stream);
    result->start();
 
    QElapsedTimer timer;
@@ -411,4 +413,3 @@ bool Tests::deleteAllFiles()
 {
    return Common::Global::recursiveDeleteDirectory("sharedDirs");
 }
-

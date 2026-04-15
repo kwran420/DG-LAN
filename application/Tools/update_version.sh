@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
 
-set -o errexit
+set -euo pipefail
 
-# Will update the two fields 'BUILD_TIME' and 'GIT_VERSION' from the file 'application/Common/Version.h'.
-CURRENT_DATE=`date -u +%Y-%m-%d_%H-%M`
-CURRENT_GIT_VERSION=`git show --pretty="%H" HEAD | head -n 1`
-VERSION_FILE=../Common/Version.h
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$ROOT_DIR/../.." && pwd)"
+VERSION_FILE="$ROOT_DIR/../Common/Version.h"
+CURRENT_DATE="$(date -u +%Y-%m-%d_%H-%M)"
+CURRENT_GIT_VERSION="$(git -C "$REPO_DIR" rev-parse --short=12 HEAD)"
 
-if [ `uname -s` = "Darwin" ] ; then # Mac OS X.
-   SED_OPTIONS="-E -n -i backup"
-else
-   SED_OPTION="-i"
-fi
+sed_in_place() {
+   local expression="$1"
 
-sed $SED_OPTION "s/BUILD_TIME \"[^\"]*\"/BUILD_TIME \"$CURRENT_DATE\"/g" $VERSION_FILE
-sed $SED_OPTION "s/GIT_VERSION \"[^\"]*\"/GIT_VERSION \"$CURRENT_GIT_VERSION\"/g" $VERSION_FILE
+   if sed --version >/dev/null 2>&1; then
+      sed -i "$expression" "$VERSION_FILE"
+   else
+      sed -i '' "$expression" "$VERSION_FILE"
+   fi
+}
+
+sed_in_place "s/BUILD_TIME \"[^\"]*\"/BUILD_TIME \"$CURRENT_DATE\"/g"
+sed_in_place "s/GIT_VERSION \"[^\"]*\"/GIT_VERSION \"$CURRENT_GIT_VERSION\"/g"

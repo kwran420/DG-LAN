@@ -4,6 +4,11 @@ DG-LAN decentralises a master file list across a network via a modular Core daem
 
 **Target audience:** Core contributors, system designers, future maintainers.
 
+**Platform support:**
+- 🔵 **Windows (x86_64)**: Primary platform — full support
+- 🟢 **Linux (x86_64, ARM)**: Experimental — shared codebase, but release support still requires native distro/arch validation
+- 🟡 **macOS**: Possible but not regularly tested
+
 **Phase:** Phase 0 (Validation & Safety Net) ✅ Complete; Phase 1 (Test Infrastructure) 🎯 In progress. See [PROJECT-CONTEXT.md#modernization-timeline--next-steps](PROJECT-CONTEXT.md#modernization-timeline--next-steps) for details.
 
 ---

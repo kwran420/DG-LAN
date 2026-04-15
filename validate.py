@@ -74,8 +74,9 @@ def desktop_cpp_tests() -> StepResult:
         missing.append("protoc")
 
     detail_suffix = (
-        " Legacy scripts cover TestsCommon, TestsFileManager, TestsPeerManager, and TestsDownloadManager; "
-        "other discovered Qt suites remain unwired."
+        " Linux validation now compiles Core/GUI and runs the wired suites TestsCommon, TestsFileManager, "
+        "TestsPeerManager, and TestsDownloadManager. Optional legacy tool builds such as Tools/PasswordHasher "
+        "stay out of the default graph, and other discovered Qt suites remain unwired."
     )
 
     if missing:
@@ -85,26 +86,26 @@ def desktop_cpp_tests() -> StepResult:
             f"Missing desktop toolchain prerequisite(s): {', '.join(missing)}.{detail_suffix}",
         )
 
-    build_code = run([bash, "3.compile_all_components.sh"], ROOT / "application")
+    build_code = run([bash, "3.compile_all_components.sh", "--validation"], ROOT / "application")
     if build_code != 0:
         return StepResult(
             "Desktop Qt/C++ tests",
             "FAIL",
-            f"Legacy build step failed with exit code {build_code}.{detail_suffix}",
+            f"Linux validation build step failed with exit code {build_code}.{detail_suffix}",
         )
 
-    test_code = run([bash, "4.run_all_tests.sh"], ROOT / "application")
+    test_code = run([bash, "4.run_all_tests.sh", "--validation"], ROOT / "application")
     if test_code != 0:
         return StepResult(
             "Desktop Qt/C++ tests",
             "FAIL",
-            f"Legacy test step failed with exit code {test_code}.{detail_suffix}",
+            f"Linux validation test step failed with exit code {test_code}.{detail_suffix}",
         )
 
     return StepResult(
         "Desktop Qt/C++ tests",
         "PASS",
-        f"Legacy Qt test entrypoints completed successfully.{detail_suffix}",
+        f"Linux validation profile completed successfully.{detail_suffix}",
     )
 
 

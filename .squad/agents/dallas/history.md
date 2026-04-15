@@ -86,3 +86,24 @@ GUI is a Qt5 Widgets application connected to Core over localhost TCP.
 **Validation**:
 - `python3 validate.py` still passes the 59 Python bridge tests.
 - Desktop Qt/C++ validation remains blocked in this Linux workspace because `qmake`/`protoc` are unavailable, so the GUI refactor is structurally reviewed but not desktop-built here.
+
+### 2026-04-15 — Phase 1 Stage 1: Chat and Emoticons Removal
+
+**What shipped**:
+- Removed 21 dead GUI files: Chat (14 files: ChatWidget, ChatModel, ChatTextEdit, RoomsDock, RoomsModel, RoomsDelegate) and Emoticons (7 files: EmoticonsWidget, Emoticons, SingleEmoticonWidget).
+- Cleaned up empty Activity and Hashing directories (files already removed in prior session).
+- **Total dead code removed**: ~48 KB GUI presentation layer (Chat + Emoticons).
+
+**Critical distinction**:
+- **Removed**: GUI/Chat/* and GUI/Emoticons/* (dead presentation layer, never instantiated)
+- **Preserved**: Core/ChatSystem (active backend, compiled/linked in Core.pro, instantiated in Core.cpp:121)
+
+**Verification**:
+- Zero references to ChatWidget/EmoticonsWidget outside removed files
+- GUI.pro never included Chat/Emoticons sources
+- GUI compiles cleanly without errors
+- validate.py passes (Python 59/59, C++ test failure pre-existing)
+
+**Next pruning target**:
+- **Phase 1 Stage 1 GUI pruning is COMPLETE**. All dead widgets identified in the original audit (Chat, Emoticons, Activity, Hashing) are now removed. Uploads preserved per team decision D14 (deferred, marked "Not Implemented").
+- **Recommendation for next slice**: No further GUI pruning needed in immediate term. Activity/Hashing already handled; Uploads explicitly deferred.
