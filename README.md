@@ -210,18 +210,22 @@ It reports each validation layer as pass, fail, or blocked. Full coverage detail
 
 See **[BUILD.md](BUILD.md)** for full instructions.
 
-**Quick version (Windows):**
-```powershell
-# Requires: MSYS2 with MinGW64 packages (Qt5, protobuf, GCC) + Inno Setup 6
-.\build-release.ps1              # build + publish to GitHub Releases
-.\build-release.ps1 -SkipPublish # build only, no push
+**Cross-platform release command:**
+```bash
+./release.sh --skip-publish      # build for your platform, no git push
+./release.sh                     # build + publish to GitHub Releases
 ```
 
-**Quick version (Linux):**
-```bash
-# Requires: distro Qt5 dev packages + protobuf compiler
-./build-release.sh -SkipPublish    # build tarball locally
+**Platform-native builders:**
+```powershell
+# Windows (PowerShell)
+.\build-release.ps1 -SkipPublish  # build only
+
+# Linux (Bash)
+./build-release.sh -SkipPublish   # build only
 ```
+
+The cross-platform `release.sh` wrapper auto-detects Windows vs. Linux and dispatches to the appropriate native builder.
 
 ---
 

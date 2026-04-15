@@ -1,0 +1,28 @@
+[Unit]
+Description=DG-LAN Core — LAN file sharing daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/DG-LAN.Core -e
+Restart=on-failure
+RestartSec=5
+
+# Run as dedicated user (create with: sudo useradd -r -s /usr/sbin/nologin dglan)
+User=dglan
+Group=dglan
+
+# Data directory
+StateDirectory=dglan
+WorkingDirectory=/var/lib/dglan
+
+# Hardening
+ProtectSystem=strict
+ReadWritePaths=/var/lib/dglan
+ProtectHome=read-only
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

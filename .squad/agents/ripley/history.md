@@ -150,6 +150,15 @@ Vasquez validation baseline → Bishop documentation → Hicks backend tests →
 - ✅ IPeer.h contract fixed, ARCHITECTURE.md documents lifecycle state machine
 - ✅ Defense-in-depth: signal propagates DownloadQueue → FileDownload → ChunkDownloader
 
+### 2026-04-15 — Release Commit Gate
+
+**Scope**: Final review before committing the unified Windows/Linux release wrapper work.
+
+**Learnings**:
+- `dist/` in this repo is local package output only; there is no tracked-artifact precedent, so release tarballs/checksums should stay out of source control.
+- `OPERATIONS.md` needed alignment with the actual Linux tarball contents: `install.sh` defaults to `/usr/local`, installs a system-level `dglan-core.service`, and assumes a dedicated `dglan` account.
+- Fast safety smoke for this release path is `bash -n` plus `./release.sh --skip-publish --skip-build` and `./build-linux.sh --skip-build`; this validates wrapper dispatch/package flow without rebuilding or publishing.
+
 **Verdict**: APPROVED WITH CONSTRAINTS
 
 **Highest-Risk Remaining Seam**: `ChunkDownloader::peers` (`QList<PM::IPeer*>`) and `currentDownloadingPeer` — transient handles during active downloads. Risk is MEDIUM because `peerBecomesUnavailable` mitigates but doesn't eliminate race windows.

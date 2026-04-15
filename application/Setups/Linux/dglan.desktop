@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=DG-LAN
+Comment=LAN file sharing with automatic peer discovery
+Exec=/usr/local/bin/DG-LAN.GUI %u
+Terminal=false
+Type=Application
+Categories=Network;FileTransfer;
+MimeType=x-scheme-handler/dglan;

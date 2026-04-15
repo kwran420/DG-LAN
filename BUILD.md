@@ -47,43 +47,67 @@ For details, see [TESTING.md](TESTING.md).
 
 ---
 
-## One-Command Build
+## One-Command Build (Cross-Platform)
 
-From PowerShell in the repo root:
+### Unified Release Command
 
-```powershell
-.\build-release.ps1 -SkipPublish   # build only — no git push
+The canonical release command works on both Windows and Linux:
+
+```bash
+./release.sh --skip-publish   # build only — no git push
 ```
 
-This:
+This wrapper:
+- Auto-detects your platform (Windows/Linux)
+- Dispatches to the native builder (`build-release.ps1` on Windows, `build-release.sh` on Linux)
+- Normalizes flag syntax across platforms
 - Patches `Version.h` with the build timestamp and git hash
 - Auto-increments the patch version (e.g. 1.2.85 → 1.2.86)
-- Builds Core and GUI via MSYS2 MinGW64
-- Builds the Inno Setup installer
 
-**Output:**
+**Windows Output:**
 - `application/Core/output/release/DG-LAN.Core.exe`
 - `application/GUI/output/release/DG-LAN.GUI.exe`
 - `application/Setups/Windows/Installations/DG-LAN-<version>-Setup.exe`
 
+**Linux Output:**
+- `application/Core/output/release/DG-LAN.Core`
+- `application/GUI/output/release/DG-LAN.GUI`
+- `dist/DG-LAN-<version>-<tag>-linux-x86_64.tar.gz`
+
 ### Build + Publish (Release)
 
-```powershell
-.\build-release.ps1               # default: build + commit + tag + push + GitHub Release
+```bash
+./release.sh               # default: build + commit + tag + push + GitHub Release
 ```
 
 This does everything above, plus:
 - Commits `Version.h`, tags with `v<version>`, pushes to origin
-- Creates a GitHub Release and uploads the installer `.exe`
+- Creates/updates a GitHub Release and uploads the platform-specific asset
 
-### Build Script Flags
+### Unified Flags
 
 | Flag | Effect |
 |------|--------|
 | *(no flags)* | Build + publish to GitHub Releases |
-| `-SkipPublish` | Build locally, no git push or release |
-| `-SkipBuild` | Skip compilation, rebuild installer only |
-| `-Version 2.0.0` | Override the version number |
+| `--skip-publish` | Build locally, no git push or release |
+| `--skip-build` | Skip compilation, re-package existing binaries |
+| `--version 2.0.0` | Override the version number |
+
+### Platform-Native Builders (Advanced)
+
+For direct control, use the platform-specific scripts:
+
+**Windows (PowerShell):**
+```powershell
+.\build-release.ps1 -SkipPublish   # build only
+```
+
+**Linux (Bash):**
+```bash
+./build-release.sh -SkipPublish    # build only
+```
+
+The native scripts use PowerShell-style flags on Windows (`-SkipPublish`) and support the same flags on Linux. Use `./release.sh` for a consistent cross-platform experience on Windows and Linux.
 
 ### Manual Build (MSYS2 Shell)
 
@@ -141,20 +165,29 @@ gcc --version            # Should show 9.x+
 
 ### One-Command Build (Linux)
 
+The cross-platform wrapper works on Linux too:
+
+```bash
+./release.sh --skip-publish      # build only (no publish)
+./release.sh                     # build + tag + GitHub release
+./release.sh --version 2.0.0     # override version
+```
+
+Or use the native Linux builder directly:
+
 ```bash
 ./build-release.sh -SkipPublish      # build only (no publish)
 ./build-release.sh                   # build + tag + GitHub release
 ./build-release.sh -Version 2.0.0    # override version
 ./build-release.sh -SkipBuild        # package from last build
-./build-linux.sh                     # compatibility alias for local build/package only
 ```
 
-This:
-- Auto-detects your architecture (x86_64, aarch64, armhf)
-- Patches `Version.h` with build timestamp and git hash
-- Builds Core and GUI via qmake + make
-- Creates a release tarball: `dist/DG-LAN-X.Y.Z-Alpha-linux-x86_64.tar.gz`
-- Restores `Version.h` after local `-SkipPublish` builds so validation/builds do not leave the worktree dirty
+Both commands:
+- Auto-detect your architecture (x86_64, aarch64, armhf)
+- Patch `Version.h` with build timestamp and git hash
+- Build Core and GUI via qmake + make
+- Create a release tarball: `dist/DG-LAN-X.Y.Z-Alpha-linux-x86_64.tar.gz`
+- Restore `Version.h` after local `-SkipPublish` builds so validation/builds do not leave the worktree dirty
 
 **Output:**
 ```
@@ -163,16 +196,7 @@ application/GUI/output/release/DG-LAN.GUI
 dist/DG-LAN-X.Y.Z-Alpha-linux-x86_64.tar.gz  ← Release tarball
 ```
 
-### Build Script Flags (Linux)
-
-| Flag | Effect |
-|------|--------|
-| *(no flags)* | Build + commit + tag + create/update GitHub Release |
-| `-SkipPublish` | Build locally without git push or release upload |
-| `-SkipBuild` | Skip compilation and re-package existing binaries |
-| `-Version 2.0.0` | Override version number |
-
-`build-linux.sh` remains as a compatibility wrapper for older docs/scripts. It forwards to `build-release.sh` and only publishes when passed `--publish`.
+**Legacy wrapper:** `build-linux.sh` remains as a compatibility wrapper that forwards to `build-release.sh` with `-SkipPublish` by default.
 
 ### Manual Build (Linux)
 
@@ -339,14 +363,28 @@ Follow [Linux Build](#linux-build-experimental-native-only) for similar gotchas 
 
 ## Dual-Release Strategy
 
-Target state for v1.3+ is two platform-specific release artifacts per version:
+DG-LAN supports two platform-specific release artifacts per version, built with a unified release command:
 
 | Platform | Release Type | Built With | Auto-Update | Installer |
 |----------|--------------|-----------|-------------|-----------|
-| **Windows** | `.exe` installer | PowerShell: `.\build-release.ps1` | ✅ GitHub Releases API | Inno Setup 6 |
-| **Linux** | `.tar.gz` tarball | Bash: `./build-release.sh` | ❌ Manual | systemd unit + install.sh |
+| **Windows** | `.exe` installer | `./release.sh` (via `build-release.ps1`) | ✅ GitHub Releases API | Inno Setup 6 |
+| **Linux** | `.tar.gz` tarball | `./release.sh` (via `build-release.sh`) | ❌ Manual | systemd unit + install.sh |
 
 ### Release Workflow
+
+**Cross-Platform (Recommended):**
+
+Use the unified release command on either platform:
+
+```bash
+./release.sh
+# → Windows: Outputs DG-LAN-X.Y.Z-Setup.exe, uploads to GitHub Release
+# → Linux:   Outputs dist/DG-LAN-X.Y.Z-Alpha-linux-x86_64.tar.gz, uploads to GitHub Release
+```
+
+**Platform-Native (Advanced):**
+
+For direct control of the underlying scripts:
 
 **Windows Release (on Windows machine):**
 ```powershell
@@ -362,7 +400,7 @@ Target state for v1.3+ is two platform-specific release artifacts per version:
 # → Uploads to GitHub Release (attaches alongside Windows .exe)
 ```
 
-Both scripts are intended to:
+All release commands:
 - Read/patch the same `Version.h`
 - Auto-increment patch version
 - Commit, tag, and push to GitHub

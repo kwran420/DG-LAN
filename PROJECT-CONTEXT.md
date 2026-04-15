@@ -14,7 +14,7 @@ C++17 with Qt5, built with MSYS2 MinGW64 on Windows.
 - **GitHub**: https://github.com/kwran420/DG-LAN
 - **Upstream**: https://github.com/Ummon/D-LAN
 - **Branch**: `master`
-- **Version**: Defined in `application/Common/Version.h` (auto-incremented by `build-release.ps1`)
+- **Version**: Defined in `application/Common/Version.h` (auto-incremented by release scripts)
 
 ---
 
@@ -46,7 +46,19 @@ dglan-api/       → Python HTTP bridge (serves file listings as JSON)
 
 ### Build Commands
 
-**Windows (primary):**
+**Cross-Platform (Recommended):**
+```bash
+./release.sh                     # build + publish to GitHub Releases (detects platform)
+./release.sh --skip-publish      # build only, no git push
+./release.sh --skip-build        # re-package existing binaries
+./release.sh --version 2.0.0     # override version number
+```
+
+The `release.sh` wrapper auto-detects Windows vs. Linux and dispatches to the appropriate native builder.
+
+**Platform-Native (Advanced):**
+
+**Windows:**
 ```powershell
 .\build-release.ps1                  # build + publish (default)
 .\build-release.ps1 -SkipPublish     # build only, no git push
@@ -54,7 +66,7 @@ dglan-api/       → Python HTTP bridge (serves file listings as JSON)
 .\build-release.ps1 -Version 2.0.0   # override version number
 ```
 
-**Linux (experimental build path):**
+**Linux:**
 ```bash
 ./build-release.sh                   # build + publish (default)
 ./build-release.sh -SkipPublish      # build only, no git push
@@ -80,7 +92,7 @@ dglan-api/       → Python HTTP bridge (serves file listings as JSON)
 1. Auto-increments patch version in `Version.h` (unless `-Version` overrides)
 2. Patches `BUILD_TIME` and `GIT_VERSION` in `Version.h`
 3. Builds Core + GUI via system qmake + top-level recursive make (`-j1` for Linux reliability)
-4. Creates release tarball: `DG-LAN-vX.Y.Z-linux-x86_64.tar.gz` (or your arch)
+4. Creates release tarball: `dist/DG-LAN-X.Y.Z-<tag>-linux-x86_64.tar.gz` (or your arch)
 5. If publishing (default): commits `Version.h`, tags `v<version>`, pushes, creates GitHub Release with `.tar.gz` attached
 
 **Qualification note:** the script existing is not the same as Linux support being proven. Ubuntu 24.04 x86_64 now builds in this workspace, but each distro/arch still needs native build + smoke evidence before the tarball should be attached to a release.
@@ -95,7 +107,7 @@ dglan-api/       → Python HTTP bridge (serves file listings as JSON)
 **Linux:**
 - `application/Core/output/release/DG-LAN.Core`
 - `application/GUI/output/release/DG-LAN.GUI`
-- `DG-LAN-vX.Y.Z-linux-x86_64.tar.gz` ← Release artifact
+- `dist/DG-LAN-X.Y.Z-<tag>-linux-x86_64.tar.gz` ← Release artifact
 
 ### Dual-Release Strategy (v1.3+ target)
 
