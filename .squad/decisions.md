@@ -208,6 +208,27 @@
 
 ---
 
+
+### ID-6: Linux Native Release Bring-up (Hicks)
+
+**Decision**: Treat Linux release output as native, smoke-verified tarballs built by `build-release.sh` on the target distro/arch, and keep the top-level recursive qmake build serial (`make -j1`).
+
+**Rationale**:
+- Hicks now has direct evidence in this Linux environment: `build-release.sh` built both `DG-LAN.Core` and `DG-LAN.GUI`, staged Linux runtime/service assets, produced `dist/DG-LAN-1.2.113-Alpha-linux-x86_64.tar.gz`, passed `DG-LAN.Core --version`, and completed an offscreen GUI smoke launch.
+- Parallel top-level make is not reliable in this recursive qmake tree on Linux; serial top-level make avoids archive/moc races.
+- Linux compatibility claims must stay evidence-based because distro/arch/runtime differences matter (Qt/protobuf ABI, service model, desktop environment).
+- `python3 validate.py` is still red on stale legacy Qt suites, so release confidence comes from native build + smoke evidence today, not from the legacy desktop test harness.
+
+**Release Rules**:
+1. Linux artifacts stay native per distro/arch; do not claim Ubuntu, RedHat-family, or Raspberry Pi support from a different host build.
+2. Windows `.exe` and Linux `.tar.gz` may share the same GitHub Release tag, but the Linux asset is attached only after native smoke passes on that exact platform.
+3. Keep `build-release.sh` on the serial top-level qmake path (`make -j1`) unless the recursive race is eliminated.
+4. Track legacy Qt suites as validation debt, with `TestsDownloadManager` the current known blocker because it still targets removed `SharedDir` / `setSharedDirs` APIs.
+
+**Status**: ✅ RECORDED 2026-04-15
+
+---
+
 ## Governance
 
 - All meaningful changes require team consensus

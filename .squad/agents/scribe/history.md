@@ -51,3 +51,12 @@ Initial setup complete with cast roster and project context.
 - Vasquez: Python baseline (59 tests) is north star
 - Dallas: Safe removal patterns documented; backend coordination ready
 - Ralph: Not yet engaged (Phase 1+ role)
+
+### 2026-04-15 — Hicks Linux Build Bring-up Recorded
+
+**Status**: ✅ RECORDED
+
+- Native `build-release.sh` is now proven on this Linux environment: it builds Core/GUI, stages Linux runtime + service assets, emits `dist/DG-LAN-1.2.113-Alpha-linux-x86_64.tar.gz`, passes `DG-LAN.Core --version`, and the GUI survives an offscreen smoke launch.
+- Keep the top-level Linux qmake path serial (`make -j1`) because recursive parallel make races in this tree.
+- Linux release artifacts remain native evidence only: publish per exact distro/arch after smoke; do not generalize one host build across Ubuntu/RHEL/Raspberry Pi claims.
+- `python3 validate.py` is still not a Linux release-green gate because stale legacy Qt suites remain broken, notably `TestsDownloadManager` against removed `SharedDir` / `setSharedDirs` APIs.
