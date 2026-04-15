@@ -17,6 +17,67 @@ Bishop owns documentation review, modernization notes, and pruning guidance.
 
 ## Learnings
 
+### 2026-04-16 Release & Operations Guidance Hardening (Phase 1 Continuation)
+
+**Phase**: Phase 1 Continuation (Ops documentation + cross-platform release guidance)
+
+**Deliverables:**
+- ✅ **OPERATIONS.md**: Dual-platform expansion (Linux systemd/standalone + Windows service guidance)
+  - New: Platform-Specific Setup section (release artifacts, workflow diagram)
+  - New: Running on Linux section (~200 lines, systemd + tarball install)
+  - New: Release & Upgrade Procedures section (pre-release testing, upgrade steps, validation)
+  - Updated: Logging, Troubleshooting, Backup/Recovery (Linux parallel commands)
+  - Updated: Known Limitations (platform column, Linux-specific issues: SELinux, user service lifecycle, ABI)
+- ✅ **Decision document**: `.squad/decisions/inbox/bishop-release-ops.md` (ops strategy, remaining gaps, next steps)
+
+**Work performed:**
+1. Reviewed Hicks Linux bring-up logs (2026-04-15) for smoke-test evidence + gotchas
+2. Analyzed unified build scripts (`build-release.sh`, `build-release.ps1`) for workflow consistency
+3. Expanded OPERATIONS.md from Windows-only to dual-platform guidance
+4. Added systemd service integration (user service, start/stop, logs via journalctl)
+5. Added Linux installation procedures (tarball extract, manual vs. scripted install, paths)
+6. Coded platform-specific troubleshooting + diagnostics (netstat, firewall, SELinux, multicast)
+7. Added Release & Upgrade Procedures section (pre-release checklist, post-upgrade validation)
+8. Updated Known Limitations table with platform column + Linux-specific issues
+
+**Quality checklist:**
+- ✅ All section anchors match TOC
+- ✅ Paths verified against build-release.sh + systemd patterns
+- ✅ No contradictions with BUILD.md (firewall, multicast TTL, ZeroTier)
+- ✅ Honest about gotchas (SELinux, parallel builds, distro ABI, user service lifecycle)
+- ✅ Actionable: every troubleshooting step has specific command
+- ✅ No scope creep: BUILD.md, README.md, ARCHITECTURE.md untouched per Ripley ownership
+- ✅ Links verified (BUILD.md, TESTING.md, HTTP-SERVER.md cross-refs)
+
+**Metrics:**
+- OPERATIONS.md completeness: Windows-only → dual-platform ✅
+- Operator workflow clarity: Unknown → explicit for both platforms ✅
+- Release validation: Codified smoke test checklist ✅
+- Linux documentation: Zero → comprehensive (systemd, XDG paths, distro gotchas) ✅
+
+**Known remaining gaps:**
+1. Systemd system service (non-user) — deferred to Phase 1b
+2. Cross-distro testing evidence — Ubuntu 20.04 baseline only; Fedora/RPI TBD Phase 2
+3. Performance metrics + capacity planning — deferred to OPERATIONS-ADVANCED.md
+4. Multi-peer disaster recovery runbook — deferred to Phase 2
+
+**Effort:** 4 hours (analysis: 1h, writing: 2.5h, validation: 0.5h)
+
+**Next priorities (Phase 1b+):**
+1. Test systemd integration on Ubuntu 20.04 LTS (target baseline)
+2. Test on Fedora 36+ (distro ABI differences)
+3. Test on Raspberry Pi OS ARM64 (if applicable)
+4. Gather operator feedback from production deployments
+5. Create OPERATIONS-ADVANCED.md for multi-peer recovery + capacity planning
+
+**Phase 2 readiness**: 🎯 CROSS-PLATFORM OPS GUIDANCE COMPLETE
+- Both Windows and Linux operators have deployment, troubleshooting, backup, and upgrade procedures
+- Platform-specific gotchas documented (SELinux, systemd user service, distro ABI)
+- Release & validation procedures codified
+- Only missing piece: system service setup, distro-specific testing, performance benchmarks
+
+---
+
 ### 2026-04-16 Linux Support & Dual-Release Documentation (Phase 1 Foundation)
 
 **Phase**: Phase 1 Foundation (Modernization & Cross-Platform Support)

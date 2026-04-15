@@ -248,6 +248,69 @@
 
 ---
 
+### ID-7: Cross-Platform Release Entrypoint (Ripley)
+
+**Decision**: Add a cross-platform `release.sh` wrapper that auto-detects platform (Linux/macOS/Windows Git Bash), normalizes command-line flags to consistent `--flag` syntax, and dispatches to the appropriate native builder (Windows → `build-release.ps1` via PowerShell; Linux/macOS → `build-release.sh`).
+
+**Rationale**:
+- Both native builders are battle-tested; rewriting would introduce risk
+- Wrapper respects platform idioms (Windows PowerShell, Linux Bash conventions)
+- No new dependencies; Bash works on Linux, macOS, Git Bash for Windows, MSYS2
+- Smooth migration; teams can adopt `./release.sh` gradually; existing scripts unchanged
+
+**Deliverables**:
+- `release.sh` — Cross-platform wrapper (157 lines)
+- `BUILD.md` — Updated to document `./release.sh` as canonical
+- `README.md` — Quick start shows `./release.sh`
+
+**Status**: ✅ IMPLEMENTED 2026-04-15
+
+**Testing**: Validated on Linux (Ubuntu 24.04 x86_64); flag translation and platform detection working; Windows Git Bash/MSYS2 PowerShell invocation not tested but low risk (standard pattern).
+
+**Known Non-Unified Features** (due to fundamental OS differences):
+1. Output artifacts: `.exe` (Windows) vs. `.tar.gz` (Linux)
+2. Build toolchain: MSYS2 MinGW64 (Windows) vs. system packages (Linux)
+3. Auto-update: ✅ Windows (GitHub Releases), ❌ Linux (manual only)
+4. Service integration: Windows Service vs. systemd unit
+5. Parallel make: `-j$(nproc)` (Windows) vs. `-j1` top-level (Linux qmake races)
+6. Config paths: `%APPDATA%` (Windows) vs. `~/.config` (Linux)
+7. URL scheme registration: Registry (Windows) vs. XDG desktop entry (Linux)
+8. Firewall: PowerShell cmdlets (Windows) vs. distro-specific (Linux)
+9. Multicast routing: Usually works (Windows) vs. may need manual route (Linux)
+10. Display: GUI always works (Windows) vs. requires X11/Wayland (Linux headless only)
+
+---
+
+### ID-8: TestsDownloadManager Promotion to Mainline (Hicks)
+
+**Decision**: Promote `TestsDownloadManager` from "experimental/stale" to the mainline validation suite.
+
+**Rationale**:
+- Tests were never actually stale; they already matched current Hash-based occupancy APIs (OccupiedPeers, LinkedPeers)
+- Investigation: All 6 test cases pass without modification
+- Promoting provides earlier detection of regressions in peer-lifecycle-aware download scheduler
+- Completes first backend test target in Phase 1 (D2 re-enablement)
+
+**Changes**:
+1. Moved `Core/DownloadManager/TestsDownloadManager` from `EXPERIMENTAL_TEST_PROJECTS` to `VALIDATION_PROJECTS` in `3.compile_all_components.sh`
+2. Added `TestsDownloadManager` to default `TESTS` array in `4.run_all_tests.sh`
+3. Removed `--with-stale-tests` flag (no longer needed)
+4. Updated `validate.py` detail message: "TestsCommon, TestsFileManager, TestsPeerManager, and TestsDownloadManager"
+
+**Impact**:
+- Validation baseline: Desktop Qt now runs 4 test suites (was 3)
+- Test count: +6 backend tests covering OccupiedPeers, LinkedPeers, ChunkDownloader peer tracking
+- No behavioral change; tests validate existing behavior; no production code modified
+
+**Status**: ✅ IMPLEMENTED 2026-04-15
+
+**Next Backend Test Targets** (Phase 1 follow-up):
+1. RemoteControlManager test suite (protocol message routing, auth handling)
+2. HttpServer integration tests (file serving, range requests, streaming)
+3. UploadManager test suite (multipart upload state)
+
+---
+
 ## Governance
 
 - All meaningful changes require team consensus

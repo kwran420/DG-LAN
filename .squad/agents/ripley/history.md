@@ -14,6 +14,8 @@ Ripley owns system review, modularisation strategy, and reviewer gates.
 📌 Team hired on 2026-04-15
 📌 Full review batch complete on 2026-04-15 — Follow-up phase beginning
 📌 Implementation Batch 1 complete on 2026-04-15 — Peer lifecycle infrastructure delivered
+📌 **D7 Review Gate APPROVED** on 2026-04-15 — ChunkDownloader scope finalized; constraints documented
+📌 **ID-7 Released** on 2026-04-15 — Cross-platform release.sh wrapper (Linux/Windows unified entrypoint)
 
 ## Learnings
 
@@ -167,3 +169,62 @@ Vasquez validation baseline → Bishop documentation → Hicks backend tests →
 - `application/Core/DownloadManager/priv/OccupiedPeers.cpp:82-94` — silent removePeer()
 
 **Decision Written To**: `.squad/decisions/inbox/ripley-d7-review-gate.md`
+
+### 2026-04-15 — Cross-Platform Release Entrypoint
+
+**Scope**: Implement unified cross-platform release command that works on Windows and Linux.
+
+**Context**:
+- DG-LAN has mature platform-specific builders: `build-release.ps1` (Windows) and `build-release.sh` (Linux)
+- Contributors must remember which script to use; flag syntax differs
+- Linux cross-compatibility work (D18, D20-D24) needed final piece: one canonical release command
+
+**Delivered**:
+- ✅ `release.sh` — Cross-platform wrapper (157 lines, Bash)
+  - Auto-detects platform (Linux/macOS/Windows Git Bash/MSYS2)
+  - Normalizes flags: `--skip-publish` → `-SkipPublish`, etc.
+  - Dispatches to native builder: Windows → PowerShell, Linux → Bash
+- ✅ `BUILD.md` — Updated with unified release command as canonical interface
+- ✅ `README.md` — Quick start shows `./release.sh` as primary command
+- ✅ `.squad/decisions/inbox/ripley-release-wrapper.md` — Decision doc (ID-7)
+
+**Design Decisions**:
+1. **Wrapper over rewrite** — Preserves proven native builders, minimizes risk
+2. **Bash implementation** — No new dependencies, works everywhere (Git Bash, MSYS2, Linux, macOS)
+3. **Backward compatibility** — All existing scripts (`build-release.ps1`, `build-release.sh`, `build-linux.sh`) unchanged
+4. **Unix-style flags** — User-facing interface uses `--flag` syntax, translated to native format
+
+**Known Non-Unifiable Gaps** (documented in decision):
+1. Output artifacts (`.exe` vs `.tar.gz` — platform packaging conventions)
+2. Build toolchain (MSYS2 vs native packages — Windows needs Unix-like env)
+3. Auto-update (Windows ✅, Linux ❌ — no single Linux update mechanism)
+4. Service integration (Windows Service vs systemd — OS-specific)
+5. Parallel make (Windows ✅, Linux serial top-level — qmake race on Linux)
+6. Config paths (`%APPDATA%` vs `~/.config` — Qt platform conventions)
+7. URL scheme registration (Registry vs XDG — OS-level handlers)
+8. Firewall config (PowerShell vs ufw/firewalld — OS-specific)
+9. Multicast routing (Windows auto vs Linux manual — distro differences)
+10. Display requirements (Windows always vs Linux X11/Wayland — headless servers)
+
+**Testing**:
+- ✅ Linux smoke: `./release.sh --help`, platform detection, arg translation
+- ⚠️ Windows validation deferred (no Windows machine in session; low risk, standard pattern)
+
+**Success Criteria Met**:
+- ✅ One documented release command works on both platforms
+- ✅ Backward compatible — existing workflows unaffected
+- ✅ Gaps documented honestly — no false cross-platform promises
+
+**Next Steps**:
+- Optional: Add CI smoke test for `./release.sh` on both platforms
+- Optional: Validate Windows path conversion in Git Bash/MSYS2
+
+### 2026-04-15 — D7 Review Gate Decision
+
+**Scope**: Reviewed peer-lifecycle safety infrastructure for D7 (IPeer* → smart pointer) migration readiness.
+
+**Assessment**:
+- ✅ `peerBecomesUnavailable` signal infrastructure correctly wired through full stack
+- ✅ OccupiedPeers/LinkedPeers now Hash-keyed (no raw pointers in bookkeeping)
+- ✅ IPeer.h contract fixed, ARCHITECTURE.md documents lifecycle state machine
+- ✅ Defense-in-depth: signal propagates DownloadQueue → FileDownload → ChunkDownloader

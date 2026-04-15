@@ -13,6 +13,7 @@ Dallas owns Qt UI review, interaction flow cleanup, and presentation-layer modul
 
 📌 Team hired on 2026-04-15
 📌 Full GUI review complete on 2026-04-15 — Stage 1 deadlines assigned
+📌 **GUI Pruning Stage 1 COMPLETE** on 2026-04-15 — Chat + Emoticons removed (21 files, ~48 KB); validation PASS; backend ChatSystem preserved
 
 ## Learnings
 

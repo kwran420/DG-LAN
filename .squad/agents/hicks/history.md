@@ -14,6 +14,7 @@ Hicks owns networking, service decomposition, and backend modernization analysis
 📌 Team hired on 2026-04-15
 📌 Backend review complete on 2026-04-15 — Follow-up sprint assigned
 📌 Implementation Batch 1 complete on 2026-04-15 — Occupancy hardening delivered
+📌 **ID-8 Implemented** on 2026-04-15 — TestsDownloadManager promoted to mainline (all 6 tests pass with new Hash-based occupancy APIs)
 
 ## Learnings
 
@@ -106,3 +107,25 @@ Peer discovery uses multicast, directed broadcast, subnet scan, and gossip fallb
 - The least-risk Linux release path here is a native per-arch tarball, not cross-distro binary promises: `build-release.sh` should build on the target Linux distro/arch, use top-level `make -j1` to avoid recursive qmake races, and attach the tarball to the same version tag as the Windows installer only after native smoke passes.
 - Linux local build/package helpers should not dirty `application/Common/Version.h`: release-only metadata changes belong in `build-release.sh`, while validation/local compile scripts should stay path-safe and restore or skip version rewrites.
 - Linux tarball installs must rewrite prefix-sensitive assets at install time (`dglan-core.service`, `dglan.desktop`) and ship provenance (`RELEASE-METADATA.txt`) instead of assuming `/usr/local` or claiming generic cross-distro compatibility.
+
+### 2026-04-15 — Phase 1: DownloadManager Test Suite Repair
+
+**Outcome**: ✅ COMPLETE — TestsDownloadManager promoted to mainline validation suite.
+
+**Investigation**: The legacy `TestsDownloadManager` suite (marked "stale" and opt-in only) was fully compatible with current Hash-based occupancy APIs. All 6 test cases pass without modification:
+- `peerUnavailableRemovesOccupiedPeers`
+- `occupiedPeerRemovalDoesNotEmitNewFreePeer`
+- `occupiedPeersTrackIdentityByPeerID`
+- `chunkDownloaderTracksPeerIdentityByPeerID`
+
+**Action**: Promoted suite from `EXPERIMENTAL_TEST_PROJECTS` to `VALIDATION_PROJECTS`, removed `--with-stale-tests` flag, updated validation script messaging.
+
+**Validation baseline**: Desktop Qt validation now runs 4 suites (+6 backend tests): TestsCommon, TestsFileManager, TestsPeerManager, TestsDownloadManager.
+
+**Next backend test targets** (Phase 1 follow-up sprint):
+1. RemoteControlManager test suite (protocol message routing, auth handling)
+2. HttpServer integration tests (file serving, range requests)
+3. UploadManager test suite (multipart upload state)
+
+TestsDownloadManager is the **first completed** backend test target in Phase 1.
+

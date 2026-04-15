@@ -14,6 +14,8 @@ Vasquez owns test strategy, evaluation design, and change-safety recommendations
 📌 Team hired on 2026-04-15
 📌 Test infrastructure review complete on 2026-04-15 — Validation sprint begins
 📌 Implementation Batch 1 complete on 2026-04-15 — Validation entrypoint delivered
+📌 **Phase 1 QA Plan COMPLETE** on 2026-04-15 — DownloadManager repair + HttpServer/RemoteControlManager suite priorities finalized
+📌 **ID-8 Implemented** on 2026-04-15 — TestsDownloadManager promoted from experimental to mainline validation (4 suites baseline)
 
 ## Learnings
 
