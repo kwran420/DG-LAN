@@ -24,6 +24,7 @@ Peer discovery uses multicast, directed broadcast, subnet scan, and gossip fallb
 - Safe backend pruning in this repo needs two proofs before deletion: zero in-repo references to the candidate path, and a current implementation that already supersedes any one-shot migration helper (for example `ProtoHelper::setStr` already uses `mutable_*`, making `fix-protohelper.ps1` dead).
 - In the DownloadManager path, the safest incremental ownership hardening is to move long-lived bookkeeping (`OccupiedPeers`, `LinkedPeers`) to peer IDs while keeping raw `IPeer*` only as short-lived execution handles that are cleared on `peerBecomesUnavailable`.
 - The next safe step after peer-ID bookkeeping is to canonicalise every remaining ChunkDownloader peer insert/remove by `Common::Hash`; pointer-equality removal misses rediscovered peer instances and leaves stale transfer handles behind.
+- Release automation here is Windows-first: `build-release.ps1` assumes PowerShell plus MSYS2 at `C:\msys64`, MinGW Qt DLLs, and Inno Setup, so Linux containers can only validate via prerequisite checks and `python3 validate.py` before declaring the release build blocked.
 
 ### 2026-04-15 — Follow-Up Sprint Assignment
 
