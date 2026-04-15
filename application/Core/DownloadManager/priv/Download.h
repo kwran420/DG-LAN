@@ -21,8 +21,10 @@
 #include <QSharedPointer>
 #include <QTimer>
 #include <QFlags>
+#include <QString>
 
 #include <Common/Uncopyable.h>
+#include <Common/Hash.h>
 #include <Core/FileManager/IFileManager.h>
 #include <Core/PeerManager/IPeer.h>
 
@@ -58,7 +60,8 @@ namespace DM
 
       virtual bool pause(bool) { return false; }
 
-      virtual void peerSourceBecomesAvailable() {}
+       virtual void peerSourceBecomesAvailable(PM::IPeer* peer);
+       virtual void peerBecomesUnavailable(PM::IPeer* peer);
 
       virtual void populateQueueEntry(Protos::Queue::Queue::Entry* entry) const;
 
@@ -67,9 +70,11 @@ namespace DM
 
       inline bool isStatusErroneous() const { return this->status >= 0x20; }
 
-      virtual quint64 getDownloadedBytes() const;
-      PM::IPeer* getPeerSource() const;
-      QSet<PM::IPeer*> getPeers() const;
+       virtual quint64 getDownloadedBytes() const;
+       PM::IPeer* getPeerSource() const;
+       const Common::Hash& getPeerSourceID() const;
+       const QString& getPeerSourceNick() const;
+       QSet<PM::IPeer*> getPeers() const;
 
       const Protos::Common::Entry& getRemoteEntry() const;
       const Protos::Common::Entry& getLocalEntry() const;
@@ -96,7 +101,9 @@ namespace DM
 
       const quint64 ID;
 
-      PM::IPeer* peerSource;
+       PM::IPeer* peerSource;
+       Common::Hash peerSourceID;
+       QString peerSourceNick;
 
       Protos::Common::Entry remoteEntry; ///< From.
       Protos::Common::Entry localEntry; ///< To.

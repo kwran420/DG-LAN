@@ -21,6 +21,7 @@ using namespace PM;
 
 #include <QtDebug>
 #include <QStringList>
+#include <QSignalSpy>
 
 #include <Protos/core_protocol.pb.h>
 #include <Protos/core_settings.pb.h>
@@ -36,6 +37,8 @@ using namespace PM;
 #include <IGetEntriesResult.h>
 #include <IGetHashesResult.h>
 
+Q_DECLARE_METATYPE(PM::IPeer*)
+
 const int Tests::PORT = 59487;
 
 /**
@@ -50,6 +53,7 @@ Tests::Tests()
 
 void Tests::initTestCase()
 {
+   qRegisterMetaType<PM::IPeer*>("PM::IPeer*");
    LM::Builder::initMsgHandler();
    qDebug() << "===== initTestCase() =====";
    try
@@ -153,6 +157,41 @@ void Tests::updatePeers()
 
          QVERIFY(found);
       }
+   }
+}
+
+void Tests::peerRemovalEmitsUnavailableSignal()
+{
+   qDebug() << "===== peerRemovalEmitsUnavailableSignal() =====";
+
+   this->peerUpdater->stop();
+
+   QSignalSpy unavailableSpy(this->peerManagers[0].data(), SIGNAL(peerBecomesUnavailable(PM::IPeer*)));
+   QVERIFY(unavailableSpy.isValid());
+
+   IPeer* remotePeer = this->peerManagers[0]->getPeer(this->peerManagers[1]->getSelf()->getID());
+   QVERIFY(remotePeer != 0);
+
+   this->peerManagers[0]->removePeer(this->peerManagers[1]->getSelf()->getID(), remotePeer->getIP());
+
+   QCOMPARE(unavailableSpy.count(), 1);
+   QCOMPARE(unavailableSpy.takeFirst().at(0).value<PM::IPeer*>(), remotePeer);
+   QVERIFY(!remotePeer->isAlive());
+   QVERIFY(!remotePeer->isAvailable());
+   QCOMPARE(this->peerManagers[0]->getNbOfPeers(), 0);
+
+   QSignalSpy availableSpy(this->peerManagers[0].data(), SIGNAL(peerBecomesAvailable(PM::IPeer*)));
+   QVERIFY(availableSpy.isValid());
+
+   this->peerUpdater->start();
+
+   QElapsedTimer timer;
+   timer.start();
+   while (this->peerManagers[0]->getNbOfPeers() != 1 || availableSpy.count() != 1)
+   {
+      QTest::qWait(100);
+      if (timer.elapsed() > 3000)
+         QFAIL("Peer did not become available again after updater restart.");
    }
 }
 

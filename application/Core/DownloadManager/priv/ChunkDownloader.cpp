@@ -36,12 +36,24 @@ using namespace DM;
 
 const int ChunkDownloader::MINIMUM_DELTA_TIME_TO_COMPUTE_SPEED(100); // [ms]
 
+namespace
+{
+   int indexOfPeerByID(const QList<PM::IPeer*>& peers, const Common::Hash& peerID)
+   {
+      for (int i = 0; i < peers.size(); ++i)
+         if (peers[i] && peers[i]->getID() == peerID)
+            return i;
+      return -1;
+   }
+}
+
 ChunkDownloader::ChunkDownloader(LinkedPeers& linkedPeers, OccupiedPeers& occupiedPeersDownloadingChunk, Common::TransferRateCalculator& transferRateCalculator, Common::ThreadPool& threadPool, Common::Hash chunkHash) :
    linkedPeers(linkedPeers),
    occupiedPeersDownloadingChunk(occupiedPeersDownloadingChunk),
    transferRateCalculator(transferRateCalculator),
    threadPool(threadPool),
    chunkHash(chunkHash),
+   currentDownloadingPeer(nullptr),
    socket(0),
    downloading(false),
    closeTheSocket(false),
@@ -101,13 +113,7 @@ void ChunkDownloader::addPeer(PM::IPeer* peer)
    if (this->isComplete())
       return;
 
-   if (!this->peers.contains(peer))
-   {
-      this->peers << peer;
-      this->linkedPeers.addLink(peer);
-      emit numberOfPeersChanged();
-      this->occupiedPeersDownloadingChunk.newPeer(peer);
-   }
+   this->rememberPeer(peer, true);
 }
 
 void ChunkDownloader::rmPeer(PM::IPeer* peer)
@@ -119,9 +125,9 @@ void ChunkDownloader::rmPeer(PM::IPeer* peer)
    if (this->peers.isEmpty())
       return;
 
-   if (this->peers.removeOne(peer))
+   if (PM::IPeer* removedPeer = this->takePeer(peer->getID()))
    {
-      this->linkedPeers.rmLink(peer);
+      this->linkedPeers.rmLink(removedPeer);
       emit numberOfPeersChanged();
    }
 }
@@ -304,15 +310,30 @@ QSharedPointer<FM::IChunk> ChunkDownloader::getChunk() const
 
 void ChunkDownloader::setPeerSource(PM::IPeer* peer, bool informOccupiedPeers)
 {
-   QMutexLocker locker(&this->mutex);
-   if (!this->peers.contains(peer))
-   {
-      this->peers << peer;
-      this->linkedPeers.addLink(peer);
-      emit numberOfPeersChanged();
+   if (!peer)
+      return;
 
-      if (informOccupiedPeers && peer->isAvailable())
-         this->occupiedPeersDownloadingChunk.newPeer(peer);
+   QMutexLocker locker(&this->mutex);
+   this->rememberPeer(peer, informOccupiedPeers);
+}
+
+void ChunkDownloader::peerBecomesUnavailable(PM::IPeer* peer)
+{
+   if (!peer)
+      return;
+
+   bool wasCurrent = false;
+   {
+      QMutexLocker locker(&this->mutex);
+      wasCurrent = this->currentDownloadingPeer && this->currentDownloadingPeer->getID() == peer->getID();
+   }
+
+   this->rmPeer(peer);
+
+   if (wasCurrent)
+   {
+      this->lastTransferStatus = TRANSFER_ERROR;
+      this->stop();
    }
 }
 
@@ -463,9 +484,14 @@ void ChunkDownloader::result(const Protos::Core::GetChunksResult& result)
    if (result.status() != Protos::Core::GetChunksResult::OK)
    {
       L_WARN(QString("Status error from GetChunkResult: %1. Download aborted.").arg(result.status()));
-      if (this->peers.removeOne(this->currentDownloadingPeer))
+      PM::IPeer* removedPeer = nullptr;
       {
-         this->linkedPeers.rmLink(this->currentDownloadingPeer);
+         QMutexLocker locker(&this->mutex);
+         removedPeer = this->takePeer(this->currentDownloadingPeer->getID());
+      }
+      if (removedPeer)
+      {
+         this->linkedPeers.rmLink(removedPeer);
          emit numberOfPeersChanged();
       }
       this->downloadingEnded();
@@ -519,9 +545,10 @@ void ChunkDownloader::downloadingEnded()
    this->downloading = false;
    emit downloadFinished();
 
-   // occupiedPeersDownloadingChunk can relaunch the download, so we have to set this->currentDownloadingPeer to 0 before.
+   // occupiedPeersDownloadingChunk can relaunch the download, so we have to clear
+   // this pointer before notifying it that the peer is free again.
    PM::IPeer* currentPeer = this->currentDownloadingPeer;
-   this->currentDownloadingPeer = 0;
+   this->currentDownloadingPeer = nullptr;
 
    // When a chunk is finished we don't care to know the associated peers.
    if (this->isComplete())
@@ -581,4 +608,32 @@ int ChunkDownloader::getNumberOfFreePeer()
       emit numberOfPeersChanged();
 
    return n;
+}
+
+bool ChunkDownloader::rememberPeer(PM::IPeer* peer, bool informOccupiedPeers)
+{
+   const int existingIndex = indexOfPeerByID(this->peers, peer->getID());
+   if (existingIndex != -1)
+   {
+      this->peers[existingIndex] = peer;
+      return false;
+   }
+
+   this->peers << peer;
+   this->linkedPeers.addLink(peer);
+   emit numberOfPeersChanged();
+
+   if (informOccupiedPeers && peer->isAvailable())
+      this->occupiedPeersDownloadingChunk.newPeer(peer);
+
+   return true;
+}
+
+PM::IPeer* ChunkDownloader::takePeer(const Common::Hash& peerID)
+{
+   const int existingIndex = indexOfPeerByID(this->peers, peerID);
+   if (existingIndex == -1)
+      return nullptr;
+
+   return this->peers.takeAt(existingIndex);
 }

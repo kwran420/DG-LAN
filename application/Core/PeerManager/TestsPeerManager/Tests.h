@@ -50,6 +50,7 @@ public:
 private slots:
    void initTestCase();
    void updatePeers();
+   void peerRemovalEmitsUnavailableSignal();
    void getPeerFromID();
    void askForRootEntries();
    void askForSomeEntries();

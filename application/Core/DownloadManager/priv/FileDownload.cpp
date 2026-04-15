@@ -59,7 +59,7 @@ FileDownload::FileDownload(
    transferRateCalculator(transferRateCalculator)
 {
    L_DEBU(QString("New FileDownload: peer source = %1, remoteEntry: \n%2\nlocalEntry: \n%3").
-      arg(this->peerSource->toStringLog()).
+      arg(this->peerSource ? this->peerSource->toStringLog() : QString("<none>")).
       arg(Common::ProtoHelper::getDebugStr(this->remoteEntry)).
       arg(Common::ProtoHelper::getDebugStr(this->localEntry))
    );
@@ -90,7 +90,8 @@ FileDownload::~FileDownload()
    if (!this->getHashesResult.isNull())
    {
       this->getHashesResult.clear();
-      this->occupiedPeersAskingForHashes.setPeerAsFree(this->peerSource);
+      if (this->peerSource)
+         this->occupiedPeersAskingForHashes.setPeerAsFree(this->peerSource);
    }
 
    this->chunksWithoutDownloader.clear();
@@ -102,7 +103,7 @@ void FileDownload::start()
    this->tryToLinkToAnExistingFile();
 
    if (this->hasAValidPeerSource())
-      this->peerSourceBecomesAvailable();
+      this->peerSourceBecomesAvailable(this->peerSource);
 
    this->updateStatus();
 
@@ -119,7 +120,8 @@ void FileDownload::stop()
    if (!this->getHashesResult.isNull())
    {
       this->getHashesResult.clear();
-      this->occupiedPeersAskingForHashes.setPeerAsFree(this->peerSource);
+      if (this->peerSource)
+         this->occupiedPeersAskingForHashes.setPeerAsFree(this->peerSource);
    }
 
    for (QListIterator<QSharedPointer<ChunkDownloader>> i(this->chunkDownloaders); i.hasNext();)
@@ -151,8 +153,12 @@ bool FileDownload::pause(bool pause)
    return false;
 }
 
-void FileDownload::peerSourceBecomesAvailable()
+void FileDownload::peerSourceBecomesAvailable(PM::IPeer* peer)
 {
+   Download::peerSourceBecomesAvailable(peer);
+   if (!this->peerSource)
+      return;
+
    if (this->status == UNKNOWN_PEER_SOURCE)
       this->setStatus(QUEUED);
 
@@ -162,6 +168,30 @@ void FileDownload::peerSourceBecomesAvailable()
       if (!chunkDownloader.isNull())
          chunkDownloader->setPeerSource(this->peerSource, false); // 'false' : to avoid to send unnecessary 'newFreePeer'.
    }
+}
+
+void FileDownload::peerBecomesUnavailable(PM::IPeer* peer)
+{
+   if (!peer)
+      return;
+
+   const bool isSourcePeer = peer->getID() == this->getPeerSourceID();
+   if (isSourcePeer && !this->getHashesResult.isNull())
+   {
+      this->getHashesResult.clear();
+      this->occupiedPeersAskingForHashes.removePeer(peer);
+      if (this->status == GETTING_THE_HASHES)
+         this->setStatus(UNKNOWN_PEER_SOURCE);
+   }
+
+   for (QListIterator<QSharedPointer<ChunkDownloader>> i(this->chunkDownloaders); i.hasNext();)
+   {
+      auto chunkDownloader = i.next();
+      if (!chunkDownloader.isNull())
+         chunkDownloader->peerBecomesUnavailable(peer);
+   }
+
+   Download::peerBecomesUnavailable(peer);
 }
 
 /**
@@ -363,6 +393,12 @@ bool FileDownload::retrieveHashes()
    )
       return false;
 
+   if (!this->peerSource)
+   {
+      this->setStatus(UNKNOWN_PEER_SOURCE);
+      return false;
+   }
+
    this->getHashesResult = this->peerSource->getHashes(this->remoteEntry);
 
    if (this->getHashesResult.isNull())
@@ -484,7 +520,8 @@ void FileDownload::result(const Protos::Core::GetHashesResult& result)
       }
 
       this->getHashesResult.clear();
-      this->occupiedPeersAskingForHashes.setPeerAsFree(this->peerSource);
+      if (this->peerSource)
+         this->occupiedPeersAskingForHashes.setPeerAsFree(this->peerSource);
 
       // Retry after a delay, like DirDownload does.
       QTimer::singleShot(RETRY_PEER_GET_HASHES_PERIOD, this, &FileDownload::retryRetrieveHashes);
@@ -540,7 +577,8 @@ void FileDownload::nextHash(const Protos::Core::HashResult& hashResult)
    {
       this->nbHashesKnown = this->NB_CHUNK;
       this->getHashesResult.clear();
-      this->occupiedPeersAskingForHashes.setPeerAsFree(this->peerSource);
+      if (this->peerSource)
+         this->occupiedPeersAskingForHashes.setPeerAsFree(this->peerSource);
       this->updateStatus();
    }
 
@@ -558,7 +596,8 @@ void FileDownload::getHashTimeout()
    L_DEBU("Unable to retrieve the hashes: timeout");
    this->getHashesResult.clear();
    this->setStatus(UNABLE_TO_RETRIEVE_THE_HASHES);
-   this->occupiedPeersAskingForHashes.setPeerAsFree(this->peerSource);
+   if (this->peerSource)
+      this->occupiedPeersAskingForHashes.setPeerAsFree(this->peerSource);
 
    QTimer::singleShot(RETRY_PEER_GET_HASHES_PERIOD, this, &FileDownload::retryRetrieveHashes);
 }

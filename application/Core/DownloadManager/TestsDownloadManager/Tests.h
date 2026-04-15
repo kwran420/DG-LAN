@@ -46,8 +46,10 @@ public:
 
 private slots:
    void initTestCase();
-
-
+   void peerUnavailableRemovesOccupiedPeers();
+   void occupiedPeerRemovalDoesNotEmitNewFreePeer();
+   void occupiedPeersTrackIdentityByPeerID();
+   void chunkDownloaderTracksPeerIdentityByPeerID();
    void cleanupTestCase();
 
 private:

@@ -13,7 +13,7 @@ TESTS=(
    Common/TestsCommon/output/release/TestsCommon$EXTENSION
    Core/FileManager/TestsFileManager/output/release/TestsFileManager$EXTENSION
    Core/PeerManager/TestsPeerManager/output/release/TestsPeerManager$EXTENSION
-   # Core/DownloadManager/TestsDownloadManager/output/release/TestsDownloadManager$EXTENSION
+   Core/DownloadManager/TestsDownloadManager/output/release/TestsDownloadManager$EXTENSION
 )
 
 for i in ${TESTS[@]}

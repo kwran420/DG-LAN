@@ -14,6 +14,7 @@ PROJECTS=(
    Core/PeerManager/TestsPeerManager
    Core/UploadManager
    Core/DownloadManager
+   Core/DownloadManager/TestsDownloadManager
    Core/NetworkListener
    Core/ChatSystem
    Core/HttpServer

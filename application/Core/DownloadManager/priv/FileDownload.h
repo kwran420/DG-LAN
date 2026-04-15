@@ -62,7 +62,8 @@ namespace DM
 
       bool pause(bool pause);
 
-      void peerSourceBecomesAvailable();
+      void peerSourceBecomesAvailable(PM::IPeer* peer);
+      void peerBecomesUnavailable(PM::IPeer* peer);
 
       void populateQueueEntry(Protos::Queue::Queue::Entry* entry) const;
 

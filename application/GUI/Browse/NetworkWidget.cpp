@@ -11,12 +11,9 @@ using namespace GUI;
 #include <QPainter>
 #include <QStyleOptionProgressBar>
 #include <QMessageBox>
-#include <QFileInfo>
 #include <QVersionNumber>
 #include <QDesktopServices>
 
-#include <Common/ProtoHelper.h>
-#include <Common/Global.h>
 #include <Common/Version.h>
 
 #include <Log.h>
@@ -156,6 +153,7 @@ NetworkWidget::NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection
    coreConnection(coreConnection),
    peerListModel(peerListModel),
    sharedEntryListModel(sharedEntryListModel),
+   networkFileModel(sharedEntryListModel),
    downloadMenu(sharedEntryListModel){
    QVBoxLayout* mainLayout = new QVBoxLayout(this);
    mainLayout->setContentsMargins(0, 0, 0, 0);
@@ -255,8 +253,8 @@ NetworkWidget::NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection
    this->fileTableView->verticalHeader()->setDefaultSectionSize(QApplication::fontMetrics().height() + 4);
    this->fileTableView->setSortingEnabled(true);
 
-   this->fileModel.setHorizontalHeaderLabels({ tr("Name"), tr("Size"), tr("Status"), tr("#"), tr("Progress"), tr("DL Speed"), tr("UL Speed"), tr("Peers") });
-   this->fileSortProxy.setSourceModel(&this->fileModel);
+   this->networkFileModel.itemModel().setHorizontalHeaderLabels({ tr("Name"), tr("Size"), tr("Status"), tr("#"), tr("Progress"), tr("DL Speed"), tr("UL Speed"), tr("Peers") });
+   this->fileSortProxy.setSourceModel(&this->networkFileModel.itemModel());
    this->fileSortProxy.setFilterCaseSensitivity(Qt::CaseInsensitive);
    this->fileSortProxy.setFilterKeyColumn(0);
    this->fileTableView->setModel(&this->fileSortProxy);
@@ -434,25 +432,17 @@ void NetworkWidget::onNewState(const Protos::GUI::State& state)
        && this->browsesPendingThisGen == 0)
    {
       this->lastPrunedGeneration = this->browseGeneration;
-      for (int row = this->fileModel.rowCount() - 1; row >= 0; --row)
-      {
-         QStandardItem* item = this->fileModel.item(row, COL_NAME);
-         if (!item)
-            continue;
-         quint32 masterGen = item->data(ROLE_MASTER_GEN).toUInt();
-         if (masterGen < this->browseGeneration && item->data(ROLE_DOWNLOAD_ID).toULongLong() == 0)
-            this->fileModel.removeRow(row);
-      }
+      this->networkFileModel.pruneStaleRows(this->browseGeneration);
       if (this->lastLoggedGeneration < this->browseGeneration)
       {
          this->lastLoggedGeneration = this->browseGeneration;
          L_USER(QString("[Network] File index updated — %1 files from %2 peers")
-            .arg(this->fileModel.rowCount()).arg(this->browsedPeers.size()));
+            .arg(this->networkFileModel.rowCount()).arg(this->browsedPeers.size()));
       }
    }
 
    // Update download/upload columns from the state.
-   this->updateFileFromState(state);
+   this->networkFileModel.updateFromState(state, this->browseGeneration);
 }
 
 void NetworkWidget::coreDisconnected()
@@ -460,9 +450,7 @@ void NetworkWidget::coreDisconnected()
    this->activeBrowseResults.clear();
    this->masterPeerID = Common::Hash();
    this->browsedPeers.clear();
-   this->prevDownloadedBytes.clear();
-   this->prevUploadByFile.clear();
-   this->fileModel.removeRows(0, this->fileModel.rowCount());
+   this->networkFileModel.clear();
 }
 
 // ── Browse peers ─────────────────────────────────────────────────────────────
@@ -569,403 +557,7 @@ void NetworkWidget::browseSubResult(const google::protobuf::RepeatedPtrField<Pro
 
 void NetworkWidget::addFileEntry(const Protos::Common::Entry& entry, const Common::Hash& peerID, bool fromMaster)
 {
-   const QString name = Common::ProtoHelper::getStr(entry, &Protos::Common::Entry::name);
-   quint64 size = entry.size();
-
-   // Only the master can create new file rows. Non-master peers can only
-   // enrich existing rows with peer counts and ownership info.
-   QStandardItem* item = this->findFile(name, size);
-   if (!item)
-   {
-      if (!fromMaster)
-         return;
-      item = this->addFile(name, size);
-   }
-
-   QVariant existingEntry = item->data(ROLE_ENTRY);
-   if (!existingEntry.isValid())
-   {
-      QByteArray entryData;
-      entryData.resize(entry.ByteSizeLong());
-      entry.SerializeToArray(entryData.data(), entryData.size());
-      item->setData(entryData, ROLE_ENTRY);
-      item->setData(static_cast<qulonglong>(size), ROLE_SIZE);
-   }
-
-   QByteArray peerIdBytes(peerID.getData(), Common::Hash::HASH_SIZE);
-   // Prefer a remote peer for ROLE_PEER_ID (used as download source).
-   if (peerID != this->localPeerID || !item->data(ROLE_PEER_ID).isValid())
-      item->setData(peerIdBytes, ROLE_PEER_ID);
-
-   // Stamp master generation when the master confirms this file.
-   if (fromMaster)
-      item->setData(this->browseGeneration, ROLE_MASTER_GEN);
-
-   // Reset peer list when entering a new browse generation.
-   quint32 itemGen = item->data(ROLE_BROWSE_GEN).toUInt();
-   QStringList peerIds;
-   if (itemGen == this->browseGeneration)
-      peerIds = item->data(ROLE_PEER_IDS).toStringList();
-   item->setData(this->browseGeneration, ROLE_BROWSE_GEN);
-
-   QString peerIdStr = QString::fromLatin1(peerIdBytes.toHex());
-   if (!peerIds.contains(peerIdStr))
-      peerIds.append(peerIdStr);
-   item->setData(peerIds, ROLE_PEER_IDS);
-
-   // Update peers column.
-   QStandardItem* peersItem = this->fileModel.item(item->row(), COL_PEERS);
-   if (peersItem)
-      peersItem->setText(QString::number(peerIds.size()));
-
-   // Green if owned locally.
-   if (entry.owned_locally())
-   {
-      item->setData(true, ROLE_OWNED);
-      QBrush green(QColor(0, 140, 0));
-      for (int col = 0; col < COL_COUNT; ++col)
-      {
-         QStandardItem* colItem = this->fileModel.item(item->row(), col);
-         if (colItem)
-            colItem->setForeground(green);
-      }
-      QStandardItem* statusItem = this->fileModel.item(item->row(), COL_STATUS);
-      if (statusItem && statusItem->text().isEmpty())
-         statusItem->setText(tr("Owned"));
-   }
-}
-
-QStandardItem* NetworkWidget::findFile(const QString& name, quint64 size)
-{
-   const int rowCount = this->fileModel.rowCount();
-   for (int i = 0; i < rowCount; ++i)
-   {
-      QStandardItem* item = this->fileModel.item(i, 0);
-      if (item && item->text() == name && item->data(ROLE_SIZE).toULongLong() == size)
-         return item;
-   }
-   return nullptr;
-}
-
-QStandardItem* NetworkWidget::addFile(const QString& name, quint64 size)
-{
-   QList<QStandardItem*> row;
-   for (int col = 0; col < COL_COUNT; ++col)
-   {
-      QStandardItem* item = new QStandardItem();
-      item->setEditable(false);
-      row.append(item);
-   }
-
-   row[COL_NAME]->setText(name);
-   row[COL_SIZE]->setText(size > 0 ? Common::Global::formatByteSize(size) : QString());
-   row[COL_SIZE]->setData(static_cast<qulonglong>(size), Qt::UserRole);
-   row[COL_SIZE]->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-   row[COL_QUEUE]->setTextAlignment(Qt::AlignCenter);
-   row[COL_PEERS]->setTextAlignment(Qt::AlignCenter);
-   row[COL_PEERS]->setText("1");
-   row[COL_DL_SPEED]->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-   row[COL_UL_SPEED]->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-
-   this->fileModel.appendRow(row);
-   return row[COL_NAME];
-}
-
-// ── State-driven update (download/upload tracking) ───────────────────────────
-
-void NetworkWidget::updateFileFromState(const Protos::GUI::State& state)
-{
-   // Build a set of active download IDs for cleanup later.
-   QSet<quint64> activeDownloadIds;
-
-   // Track current downloaded_bytes for speed calculation.
-   QMap<quint64, qint64> currentDownloadedBytes;
-
-   // Build the ordered queue of non-complete download IDs (for move operations and numbering).
-   this->downloadQueue.clear();
-   for (int d = 0; d < state.download_size(); ++d)
-   {
-      const auto& dl = state.download(d);
-      if (dl.status() != Protos::GUI::State::Download::COMPLETE)
-         this->downloadQueue.append(dl.id());
-   }
-
-   for (int d = 0; d < state.download_size(); ++d)
-   {
-      const auto& dl = state.download(d);
-      const quint64 dlId = dl.id();
-      activeDownloadIds.insert(dlId);
-      currentDownloadedBytes[dlId] = dl.downloaded_bytes();
-
-      // Match to file row by name + size.
-      const QString name = Common::ProtoHelper::getStr(dl.local_entry(), &Protos::Common::Entry::name);
-      const quint64 size = dl.local_entry().size();
-
-      for (int row = 0; row < this->fileModel.rowCount(); ++row)
-      {
-         QStandardItem* item = this->fileModel.item(row, COL_NAME);
-         if (!item || item->text() != name || item->data(ROLE_SIZE).toULongLong() != size)
-            continue;
-
-         item->setData(static_cast<qulonglong>(dlId), ROLE_DOWNLOAD_ID);
-
-         // Queue position — stored on both COL_NAME (for move methods reading
-         // selectedRows column 0) and COL_QUEUE (for display).
-         {
-            const int queuePos = (dl.status() != Protos::GUI::State::Download::COMPLETE)
-               ? this->downloadQueue.indexOf(dlId) + 1
-               : 0;
-            item->setData(queuePos, ROLE_QUEUE_POS);
-
-            QStandardItem* queueItem = this->fileModel.item(row, COL_QUEUE);
-            if (queueItem)
-            {
-               queueItem->setText(queuePos > 0 ? QString::number(queuePos) : QString());
-               queueItem->setData(queuePos, ROLE_QUEUE_POS);
-            }
-         }
-
-         // Status column.
-         QStandardItem* statusItem = this->fileModel.item(row, COL_STATUS);
-         if (statusItem)
-         {
-            if (dl.status() == Protos::GUI::State::Download::COMPLETE)
-               statusItem->setText(tr("Owned"));
-            else
-               statusItem->setText(statusText(dl.status()));
-         }
-
-         // Progress column.
-         int progress = 0;
-         if (dl.status() != Protos::GUI::State::Download::COMPLETE && size > 0)
-            progress = static_cast<int>(dl.downloaded_bytes() * 10000 / size);
-
-         QStandardItem* progressItem = this->fileModel.item(row, COL_PROGRESS);
-         if (progressItem)
-            progressItem->setData(progress, ROLE_PROGRESS);
-
-         // DL Speed column: delta from previous state.
-         QStandardItem* dlSpeedItem = this->fileModel.item(row, COL_DL_SPEED);
-         if (dlSpeedItem)
-         {
-            qint64 speed = 0;
-            if (this->prevDownloadedBytes.contains(dlId) && dl.status() == Protos::GUI::State::Download::DOWNLOADING)
-               speed = dl.downloaded_bytes() - this->prevDownloadedBytes[dlId];
-
-            if (speed > 0)
-               dlSpeedItem->setText(Common::Global::formatByteSize(speed) + "/s");
-            else
-               dlSpeedItem->setText(QString());
-         }
-
-         // Mark error states with orange and tooltip.
-         {
-            bool isError = false;
-            switch (dl.status())
-            {
-            case Protos::GUI::State::Download::UNABLE_TO_RETRIEVE_THE_HASHES:
-            case Protos::GUI::State::Download::HASH_MISMATCH:
-            case Protos::GUI::State::Download::TRANSFER_ERROR:
-            case Protos::GUI::State::Download::UNABLE_TO_OPEN_THE_FILE:
-            case Protos::GUI::State::Download::FILE_IO_ERROR:
-            case Protos::GUI::State::Download::FILE_NON_EXISTENT:
-            case Protos::GUI::State::Download::GOT_TOO_MUCH_DATA:
-            case Protos::GUI::State::Download::UNABLE_TO_GET_ENTRIES:
-            case Protos::GUI::State::Download::NO_SOURCE:
-            case Protos::GUI::State::Download::ENTRY_NOT_FOUND:
-               isError = true;
-               break;
-            default:
-               break;
-            }
-            if (isError)
-            {
-               QBrush orange(QColor(200, 120, 0));
-               for (int col = 0; col < COL_COUNT; ++col)
-               {
-                  QStandardItem* colItem = this->fileModel.item(row, col);
-                  if (colItem)
-                  {
-                     colItem->setForeground(orange);
-                     colItem->setToolTip(tr("Download stuck — right-click or use Redownload button"));
-                  }
-               }
-            }
-            else if (!item->data(ROLE_OWNED).toBool())
-            {
-               // Reset color for non-error, non-owned rows.
-               for (int col = 0; col < COL_COUNT; ++col)
-               {
-                  QStandardItem* colItem = this->fileModel.item(row, col);
-                  if (colItem)
-                  {
-                     colItem->setForeground(QBrush());
-                     colItem->setToolTip(QString());
-                  }
-               }
-            }
-         }
-
-         // Mark green on completion.
-         if (dl.status() == Protos::GUI::State::Download::COMPLETE && !item->data(ROLE_OWNED).toBool())
-         {
-            item->setData(true, ROLE_OWNED);
-            QBrush green(QColor(0, 140, 0));
-            for (int col = 0; col < COL_COUNT; ++col)
-            {
-               QStandardItem* colItem = this->fileModel.item(row, col);
-               if (colItem)
-                  colItem->setForeground(green);
-            }
-         }
-
-         // Enrich peer count from download sources, but only within the current browse generation
-         // to avoid re-inflating counts after a generation reset.
-         if (dl.peer_id_size() > 0 && item->data(ROLE_BROWSE_GEN).toUInt() == this->browseGeneration)
-         {
-            QStringList peerIds = item->data(ROLE_PEER_IDS).toStringList();
-            for (int p = 0; p < dl.peer_id_size(); ++p)
-            {
-               QString pid = QString::fromLatin1(QByteArray(dl.peer_id(p).hash().data(), Common::Hash::HASH_SIZE).toHex());
-               if (!peerIds.contains(pid))
-                  peerIds.append(pid);
-            }
-            item->setData(peerIds, ROLE_PEER_IDS);
-            QStandardItem* peersItem = this->fileModel.item(row, COL_PEERS);
-            if (peersItem)
-               peersItem->setText(QString::number(peerIds.size()));
-         }
-
-         break;
-      }
-   }
-
-   // Update upload speeds.
-   // First clear all UL speed cells.
-   for (int row = 0; row < this->fileModel.rowCount(); ++row)
-   {
-      QStandardItem* ulItem = this->fileModel.item(row, COL_UL_SPEED);
-      if (ulItem)
-         ulItem->setText(QString());
-   }
-
-   // Aggregate estimated uploaded bytes per file (name+size) across all active chunk uploaders.
-   // ChunkUploader IDs change with every chunk, so we key by file identity instead.
-   QMap<QPair<QString, quint64>, qint64> currentUploadByFile;
-   for (int u = 0; u < state.upload_size(); ++u)
-   {
-      const auto& ul = state.upload(u);
-      const QString name = Common::ProtoHelper::getStr(ul.file(), &Protos::Common::Entry::name);
-      const quint64 size = ul.file().size();
-
-      qint64 estimatedBytes = 0;
-      if (ul.nb_part() > 0 && ul.current_part() > 0)
-      {
-         double fraction = (static_cast<double>(ul.current_part() - 1) + static_cast<double>(ul.progress()) / 10000.0) / static_cast<double>(ul.nb_part());
-         estimatedBytes = static_cast<qint64>(fraction * static_cast<double>(size));
-      }
-      currentUploadByFile[qMakePair(name, size)] += estimatedBytes;
-   }
-
-   for (auto it = currentUploadByFile.constBegin(); it != currentUploadByFile.constEnd(); ++it)
-   {
-      const QString& name = it.key().first;
-      const quint64 size = it.key().second;
-      const qint64 estimatedBytes = it.value();
-
-      for (int row = 0; row < this->fileModel.rowCount(); ++row)
-      {
-         QStandardItem* item = this->fileModel.item(row, COL_NAME);
-         if (!item || item->text() != name || item->data(ROLE_SIZE).toULongLong() != size)
-            continue;
-
-         QStandardItem* ulItem = this->fileModel.item(row, COL_UL_SPEED);
-         if (ulItem)
-         {
-            qint64 speed = 0;
-            auto key = it.key();
-            if (this->prevUploadByFile.contains(key))
-               speed = estimatedBytes - this->prevUploadByFile[key];
-            if (speed > 0)
-               ulItem->setText(Common::Global::formatByteSize(speed) + "/s");
-            else
-               ulItem->setText(tr("Uploading"));
-         }
-         break;
-      }
-   }
-
-   // Clear status/progress/speed for downloads that are no longer active.
-   for (int row = 0; row < this->fileModel.rowCount(); ++row)
-   {
-      QStandardItem* item = this->fileModel.item(row, COL_NAME);
-      if (!item)
-         continue;
-      quint64 dlId = item->data(ROLE_DOWNLOAD_ID).toULongLong();
-      if (dlId == 0 || activeDownloadIds.contains(dlId))
-         continue;
-
-      // This download is no longer in state — clear transient columns.
-      QStandardItem* statusItem = this->fileModel.item(row, COL_STATUS);
-      if (statusItem)
-      {
-         if (item->data(ROLE_OWNED).toBool())
-            statusItem->setText(tr("Owned"));
-         else
-            statusItem->setText(QString());
-      }
-
-      QStandardItem* queueItem = this->fileModel.item(row, COL_QUEUE);
-      if (queueItem)
-      {
-         queueItem->setText(QString());
-         queueItem->setData(0, ROLE_QUEUE_POS);
-      }
-
-      QStandardItem* progressItem = this->fileModel.item(row, COL_PROGRESS);
-      if (progressItem)
-         progressItem->setData(0, ROLE_PROGRESS);
-
-      QStandardItem* dlSpeedItem = this->fileModel.item(row, COL_DL_SPEED);
-      if (dlSpeedItem)
-         dlSpeedItem->setText(QString());
-
-      item->setData(QVariant(), ROLE_DOWNLOAD_ID);
-      item->setData(0, ROLE_QUEUE_POS);
-   }
-
-   this->prevDownloadedBytes = currentDownloadedBytes;
-   this->prevUploadByFile = currentUploadByFile;
-}
-
-QString NetworkWidget::statusText(Protos::GUI::State::Download::Status status)
-{
-   switch (status)
-   {
-   case Protos::GUI::State::Download::QUEUED:                       return tr("Queued");
-   case Protos::GUI::State::Download::GETTING_THE_HASHES:           return tr("Hashing...");
-   case Protos::GUI::State::Download::DOWNLOADING:                  return tr("Downloading");
-   case Protos::GUI::State::Download::COMPLETE:                     return tr("Complete");
-   case Protos::GUI::State::Download::PAUSED:                       return tr("Paused");
-   case Protos::GUI::State::Download::UNKNOWN_PEER_SOURCE:          return tr("Peer offline");
-   case Protos::GUI::State::Download::ENTRY_NOT_FOUND:              return tr("Not found");
-   case Protos::GUI::State::Download::NO_SOURCE:                    return tr("No source");
-   case Protos::GUI::State::Download::NO_SHARED_DIRECTORY_TO_WRITE: return tr("No incoming dir");
-   case Protos::GUI::State::Download::NO_ENOUGH_FREE_SPACE:         return tr("No space");
-   case Protos::GUI::State::Download::UNABLE_TO_CREATE_THE_FILE:    return tr("Can't create file");
-   case Protos::GUI::State::Download::UNABLE_TO_CREATE_THE_DIRECTORY: return tr("Can't create dir");
-   case Protos::GUI::State::Download::TRANSFER_ERROR:               return tr("Transfer error");
-   case Protos::GUI::State::Download::HASH_MISMATCH:                return tr("Hash mismatch");
-   case Protos::GUI::State::Download::REMOTE_SCANNING_IN_PROGRESS:  return tr("Remote scanning...");
-   case Protos::GUI::State::Download::LOCAL_SCANNING_IN_PROGRESS:   return tr("Local scanning...");
-   case Protos::GUI::State::Download::UNABLE_TO_RETRIEVE_THE_HASHES: return tr("Stale hashes — Redownload");
-   case Protos::GUI::State::Download::UNABLE_TO_OPEN_THE_FILE:     return tr("Can't open file");
-   case Protos::GUI::State::Download::FILE_IO_ERROR:                return tr("File I/O error");
-   case Protos::GUI::State::Download::FILE_NON_EXISTENT:            return tr("File missing");
-   case Protos::GUI::State::Download::GOT_TOO_MUCH_DATA:            return tr("Excess data");
-   case Protos::GUI::State::Download::UNABLE_TO_GET_ENTRIES:        return tr("Can't get entries");
-   default:                                                          return tr("Error");
-   }
+   this->networkFileModel.addBrowseEntry(entry, peerID, this->localPeerID, fromMaster, this->browseGeneration);
 }
 
 // ── Context menu & download actions ──────────────────────────────────────────
@@ -985,9 +577,9 @@ void NetworkWidget::displayContextMenuDownload(const QPoint& point)
    bool canOpenLocation = false;
    for (const QModelIndex& proxyIndex : selectedRows)
    {
-      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
-      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
-      if (item && item->data(ROLE_OWNED).toBool() && !this->getLocalPath(item).isEmpty())
+       QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+       QStandardItem* item = this->networkFileModel.itemFromIndex(sourceIndex);
+       if (item && item->data(ROLE_OWNED).toBool() && !this->networkFileModel.getLocalPath(item).isEmpty())
       {
          canOpenLocation = true;
          break;
@@ -1002,8 +594,8 @@ void NetworkWidget::displayContextMenuDownload(const QPoint& point)
    bool hasActiveDownload = false;
    for (const QModelIndex& proxyIndex : selectedRows)
    {
-      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
-      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+       QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+       QStandardItem* item = this->networkFileModel.itemFromIndex(sourceIndex);
       if (item && item->data(ROLE_QUEUE_POS).toInt() > 0)
       {
          hasActiveDownload = true;
@@ -1045,12 +637,12 @@ void NetworkWidget::openFileLocation()
    QModelIndexList selectedRows = this->fileTableView->selectionModel()->selectedRows();
    for (const QModelIndex& proxyIndex : selectedRows)
    {
-      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
-      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+       QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+       QStandardItem* item = this->networkFileModel.itemFromIndex(sourceIndex);
       if (!item || !item->data(ROLE_OWNED).toBool())
          continue;
 
-      QString path = this->getLocalPath(item);
+       QString path = this->networkFileModel.getLocalPath(item);
       if (!path.isEmpty())
          Utils::openLocation(path);
    }
@@ -1059,14 +651,14 @@ void NetworkWidget::openFileLocation()
 void NetworkWidget::fileDoubleClicked(const QModelIndex& index)
 {
    QModelIndex sourceIndex = this->fileSortProxy.mapToSource(index);
-   QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+   QStandardItem* item = this->networkFileModel.itemFromIndex(sourceIndex);
    if (!item)
       return;
 
    // If owned locally, open the file's location in Explorer.
    if (item->data(ROLE_OWNED).toBool())
    {
-      QString path = this->getLocalPath(item);
+       QString path = this->networkFileModel.getLocalPath(item);
       if (!path.isEmpty())
       {
          Utils::openLocation(path);
@@ -1104,15 +696,16 @@ void NetworkWidget::openFolder()
 
 void NetworkWidget::moveToTop()
 {
-   if (this->downloadQueue.isEmpty())
+   const QList<quint64>& downloadQueue = this->networkFileModel.downloadQueue();
+   if (downloadQueue.isEmpty())
       return;
 
    QModelIndexList selectedRows = this->fileTableView->selectionModel()->selectedRows();
    QList<quint64> idsToMove;
    for (const QModelIndex& proxyIndex : selectedRows)
    {
-      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
-      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+       QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+       QStandardItem* item = this->networkFileModel.itemFromIndex(sourceIndex);
       if (item)
       {
          quint64 dlId = item->data(ROLE_DOWNLOAD_ID).toULongLong();
@@ -1123,12 +716,13 @@ void NetworkWidget::moveToTop()
    if (idsToMove.isEmpty())
       return;
 
-   this->coreConnection->moveDownloads(this->downloadQueue.first(), idsToMove, Protos::GUI::MoveDownloads::BEFORE);
+   this->coreConnection->moveDownloads(downloadQueue.first(), idsToMove, Protos::GUI::MoveDownloads::BEFORE);
 }
 
 void NetworkWidget::moveUp()
 {
-   if (this->downloadQueue.size() < 2)
+   const QList<quint64>& downloadQueue = this->networkFileModel.downloadQueue();
+   if (downloadQueue.size() < 2)
       return;
 
    QModelIndexList selectedRows = this->fileTableView->selectionModel()->selectedRows();
@@ -1136,8 +730,8 @@ void NetworkWidget::moveUp()
    QList<quint64> idsToMove;
    for (const QModelIndex& proxyIndex : selectedRows)
    {
-      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
-      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+       QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+       QStandardItem* item = this->networkFileModel.itemFromIndex(sourceIndex);
       if (item)
       {
          int pos = item->data(ROLE_QUEUE_POS).toInt();
@@ -1154,13 +748,14 @@ void NetworkWidget::moveUp()
       return;
 
    // The item just above the topmost selected is at downloadQueue index minPos-2.
-   quint64 refId = this->downloadQueue.at(minPos - 2);
+   quint64 refId = downloadQueue.at(minPos - 2);
    this->coreConnection->moveDownloads(refId, idsToMove, Protos::GUI::MoveDownloads::BEFORE);
 }
 
 void NetworkWidget::moveDown()
 {
-   if (this->downloadQueue.size() < 2)
+   const QList<quint64>& downloadQueue = this->networkFileModel.downloadQueue();
+   if (downloadQueue.size() < 2)
       return;
 
    QModelIndexList selectedRows = this->fileTableView->selectionModel()->selectedRows();
@@ -1168,8 +763,8 @@ void NetworkWidget::moveDown()
    QList<quint64> idsToMove;
    for (const QModelIndex& proxyIndex : selectedRows)
    {
-      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
-      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+       QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+       QStandardItem* item = this->networkFileModel.itemFromIndex(sourceIndex);
       if (item)
       {
          int pos = item->data(ROLE_QUEUE_POS).toInt();
@@ -1182,25 +777,26 @@ void NetworkWidget::moveDown()
          }
       }
    }
-   if (idsToMove.isEmpty() || maxPos >= this->downloadQueue.size())
+   if (idsToMove.isEmpty() || maxPos >= downloadQueue.size())
       return;
 
    // The item just below the bottommost selected is at downloadQueue index maxPos.
-   quint64 refId = this->downloadQueue.at(maxPos);
+   quint64 refId = downloadQueue.at(maxPos);
    this->coreConnection->moveDownloads(refId, idsToMove, Protos::GUI::MoveDownloads::AFTER);
 }
 
 void NetworkWidget::moveToBottom()
 {
-   if (this->downloadQueue.isEmpty())
+   const QList<quint64>& downloadQueue = this->networkFileModel.downloadQueue();
+   if (downloadQueue.isEmpty())
       return;
 
    QModelIndexList selectedRows = this->fileTableView->selectionModel()->selectedRows();
    QList<quint64> idsToMove;
    for (const QModelIndex& proxyIndex : selectedRows)
    {
-      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
-      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+       QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+       QStandardItem* item = this->networkFileModel.itemFromIndex(sourceIndex);
       if (item)
       {
          quint64 dlId = item->data(ROLE_DOWNLOAD_ID).toULongLong();
@@ -1211,43 +807,7 @@ void NetworkWidget::moveToBottom()
    if (idsToMove.isEmpty())
       return;
 
-   this->coreConnection->moveDownloads(this->downloadQueue.last(), idsToMove, Protos::GUI::MoveDownloads::AFTER);
-}
-
-QString NetworkWidget::getLocalPath(QStandardItem* item) const
-{
-   QByteArray entryData = item->data(ROLE_ENTRY).toByteArray();
-   if (entryData.isEmpty())
-      return QString();
-
-   Protos::Common::Entry entry;
-   if (!entry.ParseFromArray(entryData.constData(), entryData.size()))
-      return QString();
-
-   const QString entryName = Common::ProtoHelper::getStr(entry, &Protos::Common::Entry::name);
-   const QString entryPath = Common::ProtoHelper::getStr(entry, &Protos::Common::Entry::path);
-
-   for (const Common::SharedEntry& localDir : this->sharedEntryListModel.getSharedDirectories())
-   {
-      QString candidatePath = localDir.path.getPath();
-      if (!candidatePath.endsWith('/'))
-         candidatePath.append('/');
-
-      if (!entryPath.isEmpty())
-      {
-         QString rel = entryPath;
-         if (rel.startsWith('/'))
-            rel = rel.mid(1);
-         candidatePath.append(rel);
-      }
-
-      candidatePath.append(entryName);
-
-      if (QFileInfo::exists(candidatePath))
-         return candidatePath;
-   }
-
-   return QString();
+   this->coreConnection->moveDownloads(downloadQueue.last(), idsToMove, Protos::GUI::MoveDownloads::AFTER);
 }
 
 void NetworkWidget::download()
@@ -1258,8 +818,8 @@ void NetworkWidget::download()
 
    for (const QModelIndex& proxyIndex : selectedRows)
    {
-      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
-      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+       QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+       QStandardItem* item = this->networkFileModel.itemFromIndex(sourceIndex);
       if (!item)
          continue;
 
@@ -1294,8 +854,8 @@ void NetworkWidget::downloadTo(const QString& path, const Common::Hash& sharedDi
    QModelIndexList selectedRows = this->fileTableView->selectionModel()->selectedRows();
    for (const QModelIndex& proxyIndex : selectedRows)
    {
-      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
-      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+       QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+       QStandardItem* item = this->networkFileModel.itemFromIndex(sourceIndex);
       if (!item)
          continue;
 
@@ -1328,8 +888,8 @@ void NetworkWidget::redownload()
    QList<quint64> toCancel;
    for (const QModelIndex& proxyIndex : selectedRows)
    {
-      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
-      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+       QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+       QStandardItem* item = this->networkFileModel.itemFromIndex(sourceIndex);
       if (!item)
          continue;
       quint64 dlId = item->data(ROLE_DOWNLOAD_ID).toULongLong();
@@ -1353,8 +913,8 @@ void NetworkWidget::cancelDownload()
    QStringList names;
    for (const QModelIndex& proxyIndex : selectedRows)
    {
-      QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
-      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+       QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
+       QStandardItem* item = this->networkFileModel.itemFromIndex(sourceIndex);
       if (!item)
          continue;
       quint64 dlId = item->data(ROLE_DOWNLOAD_ID).toULongLong();
@@ -1392,7 +952,7 @@ void NetworkWidget::updateButtonStates()
    for (const QModelIndex& proxyIndex : selectedRows)
    {
       QModelIndex sourceIndex = this->fileSortProxy.mapToSource(proxyIndex);
-      QStandardItem* item = this->fileModel.itemFromIndex(sourceIndex);
+       QStandardItem* item = this->networkFileModel.itemFromIndex(sourceIndex);
       if (!item)
          continue;
 

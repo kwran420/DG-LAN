@@ -45,7 +45,7 @@ DirDownload::DirDownload(
    occupiedPeersAskingForEntries(occupiedPeersAskingForEntries)
 {
    L_DEBU(QString("New DirDownload: source = %1, remoteEntry : \n%2\nlocalEntry : \n%3").
-      arg(this->peerSource->toStringLog()).
+      arg(this->peerSource ? this->peerSource->toStringLog() : QString("<none>")).
       arg(Common::ProtoHelper::getDebugStr(this->remoteEntry)).
       arg(Common::ProtoHelper::getDebugStr(this->localEntry))
    );
@@ -55,7 +55,8 @@ DirDownload::~DirDownload()
 {
    this->setStatus(DELETED);
 
-   this->occupiedPeersAskingForEntries.setPeerAsFree(this->peerSource);
+   if (this->peerSource)
+      this->occupiedPeersAskingForEntries.setPeerAsFree(this->peerSource);
 
    this->getEntriesResult.clear();
 }
@@ -75,6 +76,12 @@ bool DirDownload::retrieveEntries()
 {
    if (this->isStatusErroneous() || this->status == ENTRY_NOT_FOUND || this->status == DELETED)
       return false;
+
+   if (!this->peerSource)
+   {
+      this->setStatus(UNKNOWN_PEER_SOURCE);
+      return false;
+   }
 
    Protos::Core::GetEntries getEntries;
    getEntries.mutable_dirs()->add_entry()->CopyFrom(this->remoteEntry);
@@ -98,7 +105,7 @@ bool DirDownload::updateStatus()
    if (Download::updateStatus())
       return true;
 
-   if (!this->peerSource->isAvailable())
+   if (!this->peerSource || !this->peerSource->isAvailable())
       this->setStatus(UNKNOWN_PEER_SOURCE);
    else
       this->setStatus(QUEUED);
@@ -149,7 +156,8 @@ void DirDownload::result(const Protos::Core::GetEntriesResult& entries)
       }
 
       this->getEntriesResult.clear();
-      this->occupiedPeersAskingForEntries.setPeerAsFree(this->peerSource);
+      if (this->peerSource)
+         this->occupiedPeersAskingForEntries.setPeerAsFree(this->peerSource);
       QTimer::singleShot(RETRY_GET_ENTRIES_PERIOD, this, SLOT(retryToGetEntries()));
    }
 }
@@ -160,8 +168,26 @@ void DirDownload::resultTimeout()
    this->setStatus(UNABLE_TO_GET_ENTRIES);
 
    this->getEntriesResult.clear();
-   this->occupiedPeersAskingForEntries.setPeerAsFree(this->peerSource);
+   if (this->peerSource)
+      this->occupiedPeersAskingForEntries.setPeerAsFree(this->peerSource);
    QTimer::singleShot(RETRY_GET_ENTRIES_PERIOD, this, SLOT(retryToGetEntries()));
+}
+
+void DirDownload::peerBecomesUnavailable(PM::IPeer* peer)
+{
+   if (!peer)
+      return;
+
+   const bool isSourcePeer = peer->getID() == this->getPeerSourceID();
+   if (isSourcePeer && !this->getEntriesResult.isNull())
+   {
+      this->getEntriesResult.clear();
+      this->occupiedPeersAskingForEntries.removePeer(peer);
+      if (!this->isStatusErroneous() && this->status != DELETED)
+         this->setStatus(UNKNOWN_PEER_SOURCE);
+   }
+
+   Download::peerBecomesUnavailable(peer);
 }
 
 void DirDownload::createDirectory()

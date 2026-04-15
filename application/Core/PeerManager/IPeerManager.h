@@ -53,7 +53,9 @@ namespace PM
       virtual int getNbOfPeers() const = 0;
 
       /**
-        * Return all alive peers. A peer is never deleted but can become inactive.
+        * Return all currently alive peers.
+        * Peer identities normally stay allocated until PeerManager teardown, but callers
+        * must still drop cached raw pointers when 'peerBecomesUnavailable' fires.
         * @remarks This list doesn't include us ('getSelf()').
         */
       virtual QList<IPeer*> getPeers() const = 0;

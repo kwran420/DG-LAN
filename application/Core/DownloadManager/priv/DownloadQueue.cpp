@@ -24,6 +24,7 @@ using namespace DM;
 #include <Common/PersistentData.h>
 #include <Common/Constants.h>
 #include <Common/ProtoHelper.h>
+#include <Core/PeerManager/IPeer.h>
 
 #include <priv/Download.h>
 #include <priv/FileDownload.h>
@@ -63,7 +64,7 @@ void DownloadQueue::insert(int position, Download* download)
    this->updateMarkersInsert(position, download);
 
    this->downloads.insert(position, download);
-   this->downloadsIndexedBySourcePeer.insert(download->getPeerSource(), download);
+   this->downloadsIndexedBySourcePeer.insert(download->getPeerSourceID(), download);
 
    if (FileDownload* fileDownload = dynamic_cast<FileDownload*>(download))
    {
@@ -93,20 +94,33 @@ void DownloadQueue::remove(int position)
       this->downloadsSortedByTime.remove(fileDownload->getLastTimeGetAllUnfinishedChunks(), fileDownload);
 
    this->downloadsIndexedByName.remove(download->getLocalEntry().name(), download);
-   this->downloadsIndexedBySourcePeer.remove(download->getPeerSource(), download);
+   this->downloadsIndexedBySourcePeer.remove(download->getPeerSourceID(), download);
    this->downloads.removeAt(position);
    this->erroneousDownloads.removeOne(download);
 }
 
 void DownloadQueue::peerBecomesAvailable(PM::IPeer* peer)
 {
-   for (QMultiHash<PM::IPeer*, Download*>::iterator i = this->downloadsIndexedBySourcePeer.find(peer); i != this->downloadsIndexedBySourcePeer.end() && i.key() == peer; ++i)
-      i.value()->peerSourceBecomesAvailable();
+   if (!peer)
+      return;
+
+   const Common::Hash peerID = peer->getID();
+   for (QMultiHash<Common::Hash, Download*>::iterator i = this->downloadsIndexedBySourcePeer.find(peerID); i != this->downloadsIndexedBySourcePeer.end() && i.key() == peerID; ++i)
+      i.value()->peerSourceBecomesAvailable(peer);
+}
+
+void DownloadQueue::peerBecomesUnavailable(PM::IPeer* peer)
+{
+   if (!peer)
+      return;
+
+   for (QListIterator<Download*> i(this->downloads); i.hasNext();)
+      i.next()->peerBecomesUnavailable(peer);
 }
 
 bool DownloadQueue::isAPeerSource(PM::IPeer* peer) const
 {
-   return this->downloadsIndexedBySourcePeer.contains(peer);
+   return peer && this->downloadsIndexedBySourcePeer.contains(peer->getID());
 }
 
 void DownloadQueue::moveDownloads(const QList<quint64>& downloadIDRefs, const QList<quint64>& downloadIDs, Protos::GUI::MoveDownloads::Position position)
@@ -208,7 +222,7 @@ bool DownloadQueue::removeDownloads(const DownloadPredicate& predicate)
             this->downloadsIndexedByName.remove((*j)->getLocalEntry().name(), *j);
             this->downloadsSortedByTime.remove(fileDownload->getLastTimeGetAllUnfinishedChunks(), fileDownload);
          }
-         this->downloadsIndexedBySourcePeer.remove((*j)->getPeerSource(), *j);
+         this->downloadsIndexedBySourcePeer.remove((*j)->getPeerSourceID(), *j);
          downloadsToDelete << *j;
          this->erroneousDownloads.removeOne(*j);
          ++j;

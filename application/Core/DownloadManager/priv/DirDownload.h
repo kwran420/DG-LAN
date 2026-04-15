@@ -49,6 +49,8 @@ namespace DM
 
       bool retrieveEntries();
 
+      void peerBecomesUnavailable(PM::IPeer* peer);
+
    public slots:
       bool updateStatus();
 

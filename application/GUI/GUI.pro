@@ -63,10 +63,10 @@ SOURCES += main.cpp\
     Log.cpp \
     CheckBoxList.cpp \
     Browse/BrowseModel.cpp \
+    Browse/NetworkFileModel.cpp \
     Downloads/DownloadsFlatModel.cpp \
     Log/LogModel.cpp \
     Search/SearchModel.cpp \
-    Uploads/UploadsModel.cpp \
     Settings/RemoteFileDialog.cpp \
     DownloadMenu.cpp \
     D-LAN_GUI.cpp \
@@ -92,7 +92,6 @@ SOURCES += main.cpp\
     Downloads/DownloadsWidget.cpp \
     Search/SearchWidget.cpp \
     Settings/SettingsWidget.cpp \
-    Uploads/UploadsWidget.cpp \
     MDI/MdiWidget.cpp \
     ColorBox.cpp \
     Constants.cpp \
@@ -113,10 +112,10 @@ HEADERS  += MainWindow.h \
     CheckBoxModel.h \
     IFilter.h \
     Browse/BrowseModel.h \
+    Browse/NetworkFileModel.h \
     Downloads/DownloadFilterStatus.h \
     Log/LogModel.h \
     Search/SearchModel.h \
-    Uploads/UploadsModel.h \
     Settings/RemoteFileDialog.h \
     DownloadMenu.h \
     D-LAN_GUI.h \
@@ -147,7 +146,6 @@ HEADERS  += MainWindow.h \
     Downloads/DownloadsWidget.h \
     Search/SearchWidget.h \
     Settings/SettingsWidget.h \
-    Uploads/UploadsWidget.h \
     ColorBox.h \
     Constants.h \
     Search/SearchUtils.h
@@ -163,10 +161,7 @@ FORMS    += MainWindow.ui \
     Browse/BrowseWidget.ui \
     Downloads/DownloadsWidget.ui \
     Search/SearchWidget.ui \
-    Settings/SettingsWidget.ui \
-    Uploads/UploadsWidget.ui
+    Settings/SettingsWidget.ui
 
 RESOURCES += \
     ressources.qrc
-
-

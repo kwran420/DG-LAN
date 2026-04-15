@@ -22,6 +22,7 @@
 #include <QSet>
 #include <QMutex>
 
+#include <Common/Hash.h>
 #include <Common/Uncopyable.h>
 
 namespace PM
@@ -43,13 +44,13 @@ namespace DM
       void removePeer(PM::IPeer* peer);
       void newPeer(PM::IPeer* peer);
       int nbOccupiedPeers() const;
-      const QSet<PM::IPeer*>& getOccupiedPeers() const;
+      QSet<Common::Hash> getOccupiedPeers() const;
 
    signals:
       void newFreePeer(PM::IPeer*);
 
    private:
-      QSet<PM::IPeer*> occupiedPeers; // Peers currently occupied.
+      QSet<Common::Hash> occupiedPeers; // Peer IDs currently occupied.
       mutable QMutex mutex;
    };
 }

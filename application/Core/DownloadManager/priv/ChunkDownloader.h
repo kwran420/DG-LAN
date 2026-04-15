@@ -70,6 +70,7 @@ namespace DM
       QSharedPointer<FM::IChunk> getChunk() const;
 
       void setPeerSource(PM::IPeer* peer, bool informOccupiedPeers = true);
+      void peerBecomesUnavailable(PM::IPeer* peer);
 
       int isReadyToDownload();
       bool isDownloading() const;
@@ -105,6 +106,8 @@ namespace DM
    private:
       PM::IPeer* getTheFastestFreePeer();
       int getNumberOfFreePeer();
+      bool rememberPeer(PM::IPeer* peer, bool informOccupiedPeers);
+      PM::IPeer* takePeer(const Common::Hash& peerID);
 
       LinkedPeers& linkedPeers;
       OccupiedPeers& occupiedPeersDownloadingChunk; // The peers from where we downloading.

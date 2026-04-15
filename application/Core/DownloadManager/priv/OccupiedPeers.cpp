@@ -21,14 +21,19 @@ using namespace DM;
 
 #include <QMutexLocker>
 
+#include <Core/PeerManager/IPeer.h>
+
 OccupiedPeers::OccupiedPeers()
 {
 }
 
 bool OccupiedPeers::isPeerFree(PM::IPeer* peer) const
 {
+   if (!peer)
+      return false;
+
    QMutexLocker locker(&this->mutex);
-   return !this->occupiedPeers.contains(peer);
+   return !this->occupiedPeers.contains(peer->getID());
 }
 
 bool OccupiedPeers::setPeerAsOccupied(PM::IPeer* peer)
@@ -37,10 +42,11 @@ bool OccupiedPeers::setPeerAsOccupied(PM::IPeer* peer)
       return false;
 
    QMutexLocker locker(&this->mutex);
-   if (this->occupiedPeers.contains(peer))
+   const Common::Hash peerID = peer->getID();
+   if (this->occupiedPeers.contains(peerID))
       return false;
 
-   this->occupiedPeers.insert(peer);
+   this->occupiedPeers.insert(peerID);
    return true;
 }
 
@@ -49,11 +55,13 @@ void OccupiedPeers::setPeerAsFree(PM::IPeer* peer)
    if (!peer)
       return;
 
+   const bool shouldNotify = peer->isAvailable();
    {
       QMutexLocker locker(&this->mutex);
-      this->occupiedPeers.remove(peer);
+      this->occupiedPeers.remove(peer->getID());
    }
-   emit newFreePeer(peer);
+   if (shouldNotify)
+      emit newFreePeer(peer);
 }
 
 void OccupiedPeers::newPeer(PM::IPeer* peer)
@@ -62,7 +70,7 @@ void OccupiedPeers::newPeer(PM::IPeer* peer)
       return;
 
    this->mutex.lock();
-   if (!this->occupiedPeers.contains(peer))
+   if (!this->occupiedPeers.contains(peer->getID()))
    {
       this->mutex.unlock();
       emit newFreePeer(peer);
@@ -82,7 +90,7 @@ void OccupiedPeers::removePeer(PM::IPeer* peer)
       return;
 
    QMutexLocker locker(&this->mutex);
-   this->occupiedPeers.remove(peer);
+   this->occupiedPeers.remove(peer->getID());
 }
 
 int OccupiedPeers::nbOccupiedPeers() const
@@ -91,9 +99,8 @@ int OccupiedPeers::nbOccupiedPeers() const
    return this->occupiedPeers.size();
 }
 
-const QSet<PM::IPeer*>& OccupiedPeers::getOccupiedPeers() const
+QSet<Common::Hash> OccupiedPeers::getOccupiedPeers() const
 {
    QMutexLocker locker(&this->mutex);
    return this->occupiedPeers;
 }
-

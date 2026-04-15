@@ -35,7 +35,14 @@ Download::Download(
    const Protos::Common::Entry& remoteEntry,
    const Protos::Common::Entry& localEntry
 ) :
-   fileManager(fileManager), ID(currentID++), peerSource(peerSource), remoteEntry(remoteEntry), localEntry(localEntry), status(QUEUED)
+   fileManager(fileManager),
+   ID(currentID++),
+   peerSource(peerSource),
+   peerSourceID(peerSource ? peerSource->getID() : Common::Hash()),
+   peerSourceNick(peerSource ? peerSource->getNick() : QString()),
+   remoteEntry(remoteEntry),
+   localEntry(localEntry),
+   status(QUEUED)
 {
    // Special case when downloading the root of a drive like "C:/". In this case "C:" is the name of the entry and it becomes a part of the local entry path.
    std::replace(this->localEntry.mutable_path()->begin(), this->localEntry.mutable_path()->end(), ':', '_');
@@ -58,8 +65,8 @@ void Download::populateQueueEntry(Protos::Queue::Queue::Entry* entry) const
    if (this->status == QUEUED || this->status == COMPLETE || this->status == PAUSED)
       entry->set_status(static_cast<Protos::Queue::Queue::Entry::Status>(this->status));
 
-   entry->mutable_peer_source_id()->set_hash(this->peerSource->getID().getData(), Common::Hash::HASH_SIZE);
-   Common::ProtoHelper::setStr(*entry, &Protos::Queue::Queue::Entry::mutable_peer_source_nick, this->peerSource->getNick());
+   entry->mutable_peer_source_id()->set_hash(this->peerSourceID.getData(), Common::Hash::HASH_SIZE);
+   Common::ProtoHelper::setStr(*entry, &Protos::Queue::Queue::Entry::mutable_peer_source_nick, this->peerSourceNick);
 }
 
 quint64 Download::getID() const
@@ -75,6 +82,16 @@ quint64 Download::getDownloadedBytes() const
 PM::IPeer* Download::getPeerSource() const
 {
    return this->peerSource;
+}
+
+const Common::Hash& Download::getPeerSourceID() const
+{
+   return this->peerSourceID;
+}
+
+const QString& Download::getPeerSourceNick() const
+{
+   return this->peerSourceNick;
 }
 
 QSet<PM::IPeer*> Download::getPeers() const
@@ -126,7 +143,28 @@ void Download::setStatus(Status newStatus)
    this->status = newStatus;
 }
 
+void Download::peerSourceBecomesAvailable(PM::IPeer* peer)
+{
+   if (!peer)
+      return;
+
+   if (peer->getID() != this->peerSourceID)
+      return;
+
+   this->peerSource = peer;
+   this->peerSourceNick = peer->getNick();
+}
+
+void Download::peerBecomesUnavailable(PM::IPeer* peer)
+{
+   if (!peer)
+      return;
+
+   if (this->peerSource && peer->getID() == this->peerSourceID)
+      this->peerSource = nullptr;
+}
+
 bool Download::hasAValidPeerSource()
 {
-   return this->peerSource->isAvailable();
+   return this->peerSource && this->peerSource->isAvailable();
 }

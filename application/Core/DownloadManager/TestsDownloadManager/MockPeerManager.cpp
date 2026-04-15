@@ -58,7 +58,8 @@ void MockPeerManager::updatePeer(
    quint32 uploadRate,
    quint32 protocolVersion,
    quint32 lanSpeed,
-   bool isMaster
+   bool isMaster,
+   quint32 httpPort
 )
 {
    // Never called by the download manager.
@@ -77,4 +78,26 @@ void MockPeerManager::removeAllPeers()
 void MockPeerManager::newConnection(QTcpSocket* tcpSocket)
 {
    // Never called by the download manager.
+}
+
+
+void MockPeerManager::addGossipCandidate(const QHostAddress& address, quint16 port)
+{
+   // Never called by the download manager.
+}
+
+QList<QPair<QHostAddress, quint16>> MockPeerManager::takeGossipCandidates()
+{
+   // Never called by the download manager.
+   return QList<QPair<QHostAddress, quint16>>();
+}
+
+void MockPeerManager::emitPeerAvailable(PM::IPeer* peer)
+{
+   emit peerBecomesAvailable(peer);
+}
+
+void MockPeerManager::emitPeerUnavailable(PM::IPeer* peer)
+{
+   emit peerBecomesUnavailable(peer);
 }

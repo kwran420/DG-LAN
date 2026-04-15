@@ -289,6 +289,7 @@ void DownloadManager::peerBecomesAvailable(PM::IPeer* peer)
   */
 void DownloadManager::peerBecomesUnavailable(PM::IPeer* peer)
 {
+   this->downloadQueue.peerBecomesUnavailable(peer);
    this->occupiedPeersAskingForHashes.removePeer(peer);
    this->occupiedPeersAskingForEntries.removePeer(peer);
    this->occupiedPeersDownloadingChunk.removePeer(peer);
@@ -399,8 +400,7 @@ void DownloadManager::scanTheQueue()
    FileDownload* fileDownload = nullptr;
 
    // To know the number of peers not occupied that own at least one chunk in the queue.
-   auto peers = this->linkedPeers.getPeers();
-   QSet<PM::IPeer*> linkedPeersNotOccupied(peers.begin(), peers.end());
+   QSet<Common::Hash> linkedPeersNotOccupied = this->linkedPeers.getPeerIDs();
    linkedPeersNotOccupied -= this->occupiedPeersDownloadingChunk.getOccupiedPeers();
 
    DownloadQueue::ScanningIterator<IsDownloadable> i(this->downloadQueue);
@@ -422,7 +422,7 @@ void DownloadManager::scanTheQueue()
       if (PM::IPeer* currentPeer = chunkDownloader->startDownloading())
       {
          connect(chunkDownloader.data(), &ChunkDownloader::downloadFinished, this, &DownloadManager::chunkDownloaderFinished, Qt::DirectConnection);
-         linkedPeersNotOccupied -= currentPeer;
+         linkedPeersNotOccupied.remove(currentPeer->getID());
          this->numberOfDownloadThreadRunning++;
          numberOfDownloadThreadRunningCopy = this->numberOfDownloadThreadRunning;
       }

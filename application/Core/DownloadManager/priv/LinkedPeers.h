@@ -18,9 +18,10 @@
   
 #pragma once
 
-#include <QMap>
-#include <QList>
+#include <QHash>
+#include <QSet>
 
+#include <Common/Hash.h>
 #include <Core/PeerManager/IPeer.h>
 
 #include <priv/Log.h>
@@ -31,28 +32,47 @@ namespace DM
      * @class LinkedPeers
      * Count the number of chunks that each peer owns. If a peer has no chunk he is not referenced.
      */
-   class LinkedPeers : private QMap<PM::IPeer*, quint32>
+   class LinkedPeers
    {
    public:
-      inline QList<PM::IPeer*> getPeers()
+      inline QSet<Common::Hash> getPeerIDs() const
       {
-         return this->keys();
+         QSet<Common::Hash> peerIDs;
+         for (QHash<Common::Hash, quint32>::const_iterator i = this->peerLinks.constBegin(); i != this->peerLinks.constEnd(); ++i)
+            peerIDs.insert(i.key());
+         return peerIDs;
       }
 
       inline void addLink(PM::IPeer* peer)
       {
-         quint32& n = (*this)[peer];
+         if (!peer)
+            return;
+
+         quint32& n = this->peerLinks[peer->getID()];
          n++;
          // L_DEBU(QString("addLink(..): peer: %1, n = %2").arg(peer->toStringLog()).arg(n));
       }
 
       inline void rmLink(PM::IPeer* peer)
       {
-         quint32& n = (*this)[peer];
-         n--;
-         if (n == 0)
-            this->remove(peer);
+         if (!peer)
+            return;
+
+         auto it = this->peerLinks.find(peer->getID());
+         if (it == this->peerLinks.end())
+            return;
+
+         if (it.value() > 1)
+         {
+            --it.value();
+            return;
+         }
+
+         this->peerLinks.erase(it);
          // L_DEBU(QString("rmLink(..): peer: %1, n = %2").arg(peer->toStringLog()).arg(n));
       }
+
+   private:
+      QHash<Common::Hash, quint32> peerLinks;
    };
 }

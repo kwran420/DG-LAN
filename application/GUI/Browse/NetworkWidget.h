@@ -5,18 +5,17 @@
 #include <QSplitter>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QStandardItemModel>
 #include <QSortFilterProxyModel>
 #include <QSet>
 #include <QIdentityProxyModel>
 #include <QStyledItemDelegate>
 #include <QTimer>
-#include <QMap>
 
 #include <Common/Hash.h>
 #include <Common/RemoteCoreController/ICoreConnection.h>
 #include <Common/RemoteCoreController/IBrowseResult.h>
 
+#include <Browse/NetworkFileModel.h>
 #include <Peers/PeerListModel.h>
 #include <Settings/SharedEntryListModel.h>
 #include <DownloadMenu.h>
@@ -60,9 +59,20 @@ namespace GUI
       explicit NetworkWidget(QSharedPointer<RCC::ICoreConnection> coreConnection, PeerListModel& peerListModel, const SharedEntryListModel& sharedEntryListModel, QWidget* parent = nullptr);
 
       // Column indices for the file model.
-      enum FileColumn { COL_NAME = 0, COL_SIZE, COL_STATUS, COL_QUEUE, COL_PROGRESS, COL_DL_SPEED, COL_UL_SPEED, COL_PEERS, COL_COUNT };
+      enum FileColumn
+      {
+         COL_NAME = NetworkFileList::COL_NAME,
+         COL_SIZE = NetworkFileList::COL_SIZE,
+         COL_STATUS = NetworkFileList::COL_STATUS,
+         COL_QUEUE = NetworkFileList::COL_QUEUE,
+         COL_PROGRESS = NetworkFileList::COL_PROGRESS,
+         COL_DL_SPEED = NetworkFileList::COL_DL_SPEED,
+         COL_UL_SPEED = NetworkFileList::COL_UL_SPEED,
+         COL_PEERS = NetworkFileList::COL_PEERS,
+         COL_COUNT = NetworkFileList::COL_COUNT
+      };
 
-      static const int ROLE_PROGRESS = Qt::UserRole + 5;    // int 0-10000
+      static constexpr int ROLE_PROGRESS = NetworkFileList::ROLE_PROGRESS;
 
    protected:
       void changeEvent(QEvent* event) override;
@@ -91,25 +101,19 @@ namespace GUI
    private:
       void browsePeer(const Common::Hash& peerID);
       void browseDir(const Common::Hash& peerID, const Protos::Common::Entry& dirEntry);
-      QStandardItem* findFile(const QString& name, quint64 size);
-      QStandardItem* addFile(const QString& name, quint64 size);
       void addFileEntry(const Protos::Common::Entry& entry, const Common::Hash& peerID, bool fromMaster);
-      void updateFileFromState(const Protos::GUI::State& state);
-      static QString statusText(Protos::GUI::State::Download::Status status);
-      QString getLocalPath(QStandardItem* item) const;
 
-      static const int ROLE_ENTRY = Qt::UserRole + 1;
-      static const int ROLE_PEER_IDS = Qt::UserRole + 2;
-      static const int ROLE_PEER_ID = Qt::UserRole + 3;
-      static const int ROLE_SIZE = Qt::UserRole + 4;
-      // ROLE_PROGRESS is declared public above.
-      static const int ROLE_DL_SPEED = Qt::UserRole + 6;    // qint64 bytes/s
-      static const int ROLE_UL_SPEED = Qt::UserRole + 7;    // qint64 bytes/s
-      static const int ROLE_DOWNLOAD_ID = Qt::UserRole + 8;  // quint64
-      static const int ROLE_OWNED = Qt::UserRole + 9;        // bool
-      static const int ROLE_BROWSE_GEN = Qt::UserRole + 10;  // quint32
-      static const int ROLE_MASTER_GEN = Qt::UserRole + 11;  // quint32 — generation when master last confirmed this file
-      static const int ROLE_QUEUE_POS = Qt::UserRole + 12;   // int — 1-based queue position (0 = not queued)
+      static constexpr int ROLE_ENTRY = NetworkFileList::ROLE_ENTRY;
+      static constexpr int ROLE_PEER_IDS = NetworkFileList::ROLE_PEER_IDS;
+      static constexpr int ROLE_PEER_ID = NetworkFileList::ROLE_PEER_ID;
+      static constexpr int ROLE_SIZE = NetworkFileList::ROLE_SIZE;
+      static constexpr int ROLE_DL_SPEED = NetworkFileList::ROLE_DL_SPEED;
+      static constexpr int ROLE_UL_SPEED = NetworkFileList::ROLE_UL_SPEED;
+      static constexpr int ROLE_DOWNLOAD_ID = NetworkFileList::ROLE_DOWNLOAD_ID;
+      static constexpr int ROLE_OWNED = NetworkFileList::ROLE_OWNED;
+      static constexpr int ROLE_BROWSE_GEN = NetworkFileList::ROLE_BROWSE_GEN;
+      static constexpr int ROLE_MASTER_GEN = NetworkFileList::ROLE_MASTER_GEN;
+      static constexpr int ROLE_QUEUE_POS = NetworkFileList::ROLE_QUEUE_POS;
 
       QSharedPointer<RCC::ICoreConnection> coreConnection;
       PeerListModel& peerListModel;
@@ -128,7 +132,7 @@ namespace GUI
       QPushButton* moveBottomButton;
       QPushButton* openFolderButton;
       QTableView* fileTableView;
-      QStandardItemModel fileModel;
+      NetworkFileModel networkFileModel;
       FileSortProxy fileSortProxy;
       ProgressDelegate progressDelegate;
 
@@ -142,14 +146,6 @@ namespace GUI
       quint32 lastLoggedGeneration = 0;
       quint32 lastPrunedGeneration = 0;
       int browsesPendingThisGen = 0;
-
-      // Per-download speed tracking: download ID → previous downloaded_bytes
-      QMap<quint64, qint64> prevDownloadedBytes;
-      // Per-file upload speed tracking: (name, size) → previous total estimated bytes
-      QMap<QPair<QString, quint64>, qint64> prevUploadByFile;
       bool updatePromptShown = false;
-
-      // Ordered list of non-complete download IDs from latest state (index 0 = first in queue).
-      QList<quint64> downloadQueue;
    };
 }

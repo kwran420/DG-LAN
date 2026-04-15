@@ -111,9 +111,15 @@ The streaming endpoint lets you download or play files directly in the browser.
 The streamer has a comprehensive test suite (59 tests). No running Core needed.
 
 ```bash
-pip install pytest
+python3 ../validate.py
+```
+
+To run just the bridge suite directly:
+
+```bash
+pip install pytest protobuf
 cd dglan-api
-pytest test_streamer.py -v
+python3 -m pytest test_streamer.py -v
 ```
 
 Tests cover:
