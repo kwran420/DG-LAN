@@ -15,10 +15,12 @@ Hicks owns networking, service decomposition, and backend modernization analysis
 📌 Backend review complete on 2026-04-15 — Follow-up sprint assigned
 📌 Implementation Batch 1 complete on 2026-04-15 — Occupancy hardening delivered
 📌 **ID-8 Implemented** on 2026-04-15 — TestsDownloadManager promoted to mainline (all 6 tests pass with new Hash-based occupancy APIs)
+📌 **ID-9 Implemented** on 2026-04-15 — HTTP load-balancing semantics corrected (local-file streaming only; native `dglan://` is multi-source path)
 
 ## Learnings
 
 Peer discovery uses multicast, directed broadcast, subnet scan, and gossip fallback.
+- Built-in `HttpConnection` had been overstating decentralisation in two ways: `/api/v1/files` only emitted root entries with unusable `/files/{hash}/` links, and missing files triggered blind redirects to any HTTP-enabled master without proof that the requested file existed there. The safe seam is to treat plain HTTP as confirmed local-file serving only, then expose `launch_url` / `dglan_url` handoff links so browsers can enter DG-LAN's real multi-source downloader when installed.
 - Core startup is a tightly coupled service graph rooted in `application/Core/Core.cpp`; the `SETTINGS` singleton macro in `application/Common/Settings.h` still bleeds configuration state directly into backend modules.
 - Automated backend coverage is uneven: `application/4.run_all_tests.sh` skips DownloadManager, and there are no sibling test projects for `RemoteControlManager`, `HttpServer`, `UploadManager`, or `ChatSystem`.
 - The Python bridge is currently the easiest safe-validation surface here: `dglan-api/test_streamer.py` passed all 59 tests in this workspace, while C++ validation is blocked by missing Qt/qmake/protoc tooling.
@@ -129,3 +131,43 @@ Peer discovery uses multicast, directed broadcast, subnet scan, and gossip fallb
 
 TestsDownloadManager is the **first completed** backend test target in Phase 1.
 
+### 2026-04-15 — HTTP Load-Balancing Semantics Hardening
+
+**Outcome**: ✅ COMPLETE — Built-in HTTP server redesigned for honest local-file semantics.
+
+**Investigation**: `HttpConnection::handleFileRequest()` had been overstating decentralization:
+- `/api/v1/files` endpoint only emitted root shared-entry listings with unusable `/files/{hash}/` links
+- Missing files triggered blind redirects to any HTTP-enabled master without proof of file ownership
+- This contradicted the design intent: plain HTTP should be a local-file streaming surface, not a peer-to-peer load balancer
+
+**Implementation** (ID-9):
+1. Removed blind cross-peer HTTP redirect fallback from `HttpConnection`
+2. `/api/v1/files` now returns actual local file rows with `http_url`, `launch_url`, and `dglan_url` fields
+3. Updated `HTTP-SERVER.md`, `README.md`, and `dglan-api/README.md` to reflect honest HTTP behavior
+
+**Design Decision**:
+- **Built-in HTTP**: Local-file streaming only, optional master-peer fallback (not full decentralization)
+- **Python bridge HTTP**: Single-Core facade; no peer redirect; returns 404 on miss
+- **Native `dglan://`**: Only code-backed multi-source path (via DownloadManager chunk scheduling)
+
+**Team Language** (consensus with Vasquez):
+- ✅ Say: "decentralized native downloads" + "peer-redirected HTTP"
+- ❌ Avoid: "full decentralized HTTP load balancing" (misleading until acceptance matrix passes)
+
+**Validation**:
+- Python bridge tests: 59/59 ✅ (unchanged)
+- HttpServer recompiles cleanly
+- Unrelated baseline failure: `TestsCommon::messageHeader()` (pre-existing)
+
+**Documentation corrections applied**:
+- `HTTP-SERVER.md` title updated from "Load Balancing (Already Done)" to reflect honest semantics
+- `HTTP-SERVER.md` clarified: master-only fallback, not full decentralization
+- `README.md` HTTP description updated
+- `dglan-api/README.md` distinguished HTTP bridge from native download path
+
+**Next Gate**: Phase 1 should add HttpServer integration tests (5+ tests) covering range requests, streaming, and error cases before considering this fully validated.
+
+**Cross-team impact**:
+- Vasquez QA (ID-10): Acceptance matrix now in decisions.md; Hicks implementation accepted
+- Dallas GUI: No changes to GUI-affecting HTTP paths; built-in HTTP surface remains stable
+- Team messaging: HTTP marketing language corrected in documentation

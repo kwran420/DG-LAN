@@ -23,3 +23,4 @@ Use this skill when reviewing DG-LAN backend safety, modularisation seams, or te
 
 - When a backend path still needs raw `IPeer*` execution handles, first move any long-lived indexes, occupancy sets, and scheduler bookkeeping to stable peer IDs (`Common::Hash`), then use `peerBecomesUnavailable` / `peerBecomesAvailable` only to clear or refresh the transient raw handles.
 - In transition code that still keeps raw `IPeer*` lists (for example transfer workers), canonicalise inserts/removals by peer ID instead of pointer equality so a rediscovered peer instance refreshes the slot instead of duplicating or leaking stale handles.
+- For DG-LAN HTTP surfaces, only claim behaviour the server can prove locally. If a request path cannot verify remote ownership, do not blind-redirect; instead expose a `dglan://` handoff (`launch_url` / native link) so browsers can enter the real chunk-balanced downloader without overstating HTTP-layer decentralisation.

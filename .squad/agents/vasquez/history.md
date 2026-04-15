@@ -16,6 +16,7 @@ Vasquez owns test strategy, evaluation design, and change-safety recommendations
 📌 Implementation Batch 1 complete on 2026-04-15 — Validation entrypoint delivered
 📌 **Phase 1 QA Plan COMPLETE** on 2026-04-15 — DownloadManager repair + HttpServer/RemoteControlManager suite priorities finalized
 📌 **ID-8 Implemented** on 2026-04-15 — TestsDownloadManager promoted from experimental to mainline validation (4 suites baseline)
+📌 **ID-10 Implemented** on 2026-04-15 — HTTP load-balancing QA acceptance matrix recorded; team language corrected (native decentralization vs. peer-redirected HTTP)
 
 ## Learnings
 
@@ -158,6 +159,12 @@ The repo already documents Python bridge testing separately from the main deskto
 
 ## Learnings
 
+- HTTP capability audit finding: the built-in C++ server is currently local-disk HTTP plus master-only redirect; it does not prove decentralized HTTP load balancing because `HttpConnection` redirects only to peers where `isMaster()` and `getHttpPort()>0`, ignoring client rehosters.
+- The Python bridge is a single-Core HTTP view, not a decentralized HTTP layer: it streams only files resolvable from the connected Core's shared-entry path index and returns 404 on misses instead of redirecting to other peers.
+- `dglan://` is the only path with code evidence for decentralized sourcing today: the URL queues one peer in the GUI, then `DownloadManager`/`UDPListener` can add more peers to chunk downloaders from `CORE_CHUNKS_OWNED` replies, enabling multi-source transfer after handoff.
+- QA priority for Hicks' HTTP work should be owner-selection truthfulness before performance language: prove which peers are eligible (master-only vs any rehoster), prevent redirect loops, and validate failover with at least a 3-node master+client+client matrix.
+- Current validation gap remains real for this slice: `python3 validate.py` passed the 59 Python bridge tests but desktop validation failed in `TestsCommon::messageHeader()`, so no automated repo gate currently protects built-in HTTP or `dglan://` behavior.
+
 **Pattern 1: Suite Status Terminology**
 - Mixed-legacy repos need clear terminology: Wired (in validation profile) vs. Unwired (opt-in) vs. Discovered (found but unassigned) vs. Out-of-scope (intentionally excluded).
 - Ambiguous terms like "experimental" or "stale" confuse contributors; explicit phase assignment (Phase 1, Phase 2) is clearer.
@@ -185,3 +192,57 @@ The repo already documents Python bridge testing separately from the main deskto
 - Define Phase 1 target (4 wired C++), Phase 2 target (6 wired C++), etc.
 - Track test count growth per phase; use metrics to validate prioritization (should see high-risk suites first).
 - Python bridge baseline (59 tests) provides parity target; C++ should reach 80%+ of Python coverage before feature development.
+
+### 2026-04-15 — HTTP Load-Balancing QA Acceptance Criteria
+
+**Outcome**: ✅ COMPLETE — QA acceptance matrix recorded for HTTP and `dglan://` semantics.
+
+**Investigation**: Audited current DG-LAN HTTP behavior across three paths:
+1. **Built-in HTTP (C++)**: Local file streaming + master-only fallback redirect (not full decentralization)
+2. **Python bridge HTTP**: Single-Core facade with no peer redirect logic (returns 404 on miss)
+3. **Native `dglan://`**: Only code-backed multi-source decentralized path (via DownloadManager chunk scheduling)
+
+**Decision (ID-10)**: Establish explicit QA acceptance criteria for HTTP and `dglan://` load-balancing to prevent semantic drift.
+
+**Documentation issues identified**:
+- `HTTP-SERVER.md` title "Load Balancing (Already Done)" overstates evidence
+- "Distribute load across multiple peers" claim not supported by master-only redirect
+- Python bridge docs recommend HEAD support; code rejects non-GET (except OPTIONS)
+- README language acceptable narrowly but shouldn't be cited as proof
+
+**Acceptance Matrix**:
+
+**Built-in HTTP (6 criteria)**:
+1. Local-hit: GET `/files/{hash}/{path}` returns 200/206 with correct body, no redirect when file exists locally
+2. Remote-owner selection: Redirect/forward succeeds when file absent locally but present on eligible peer; clarify: masters-only vs. all HTTP-capable
+3. Client rehost coverage: Plain HTTP link works with copies rehosted by client peers
+4. Redirect loop prevention: No bouncing 302s; dead peer target fails over or returns deterministic error
+5. Owner list truthfulness: `/api/v1/files` `peer_urls` matches actual eligible owners (no narrower subset than docs claim)
+6. `dglan://` multi-source retention: Native downloader chunk ownership updates continue adding peers; transfer survives seed peer disappearance
+
+**Python Bridge HTTP (4 criteria)**:
+1. GET `/api/v1/files/{hash}/{path}` local success, range success, 416, 304
+2. 404 behavior remains explicit (no peer redirect unless explicitly added)
+3. Route-level tests for GET/OPTIONS/405 (current 59 tests exercise streamer helpers)
+4. Clarify HEAD support in docs or implement if promised
+
+**Team Language** (immediate adoption):
+- ✅ Say: "decentralized native downloads" + "peer-redirected HTTP"
+- ❌ Avoid: "full decentralized HTTP load balancing" (misleading until acceptance matrix passes)
+
+**Validation Status Observed**:
+- `python3 validate.py`: Python bridge PASS (59/59), Desktop Qt FAIL in baseline `TestsCommon::messageHeader()`
+- Consequence: No passing automated desktop gate for HTTP/`dglan://` changes yet
+- Recommendation: Hicks' work should land with new targeted tests or manual acceptance checklist
+
+**Next Steps** (Phase 1):
+1. Create HttpServer integration test suite (5+ tests covering Range, streaming, error cases)
+2. Update documentation language to reflect honest semantics
+3. Consider native `dglan://` download smoke test
+4. Use acceptance matrix in PR reviews for HTTP/download path changes
+
+**Cross-team impact**:
+- Hicks implementation (ID-9): HTTP redesigned per this matrix; acceptance pending new tests
+- Dallas GUI: No changes to GUI HTTP paths; surface remains stable for dead code removal
+- Bishop documentation: Added HTTP-SERVER.md corrections per QA findings
+- Team communication: Language standardization prevents future semantic overstatement

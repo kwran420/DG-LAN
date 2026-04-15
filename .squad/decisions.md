@@ -311,6 +311,90 @@
 
 ---
 
+### ID-9: Built-in HTTP Server Semantics — Local Serving Only (Hicks)
+
+**Decision**: Treat the built-in HTTP server as a **local-file HTTP surface**, not as a peer-to-peer load balancer. Implement honest streaming semantics and optional `dglan://` handoff.
+
+**Rationale**:
+- Previous HTTP implementation overstated decentralization in two ways: `/api/v1/files` endpoint only emitted root entries with unusable `/files/{hash}/` links, and missing files triggered blind redirects to first HTTP-enabled master without proof of file ownership
+- DG-LAN's real decentralized load balancing already exists in the native downloader (DownloadManager chunk scheduling)
+- GUI already accepts `dglan://download?...` handoffs into the native multi-source downloader
+- Honest HTTP semantics enable better design decisions: HTTP layer stays simple (local files only), users who want multi-source downloads get the superior native path
+
+**Deliverables**:
+1. Removed blind cross-peer HTTP redirects from `HttpConnection::handleFileRequest()`
+2. `/api/v1/files` now returns actual local file rows with `http_url` (local streaming), `launch_url` (browser handoff), and `dglan_url` (native downloader entry)
+3. Updated `HTTP-SERVER.md` section title and content to reflect honest local-file semantics
+4. Updated `README.md` HTTP description to clarify local-only model
+5. Updated `dglan-api/README.md` to distinguish HTTP bridge behavior from native download path
+
+**Design Model** (Hicks + Vasquez consensus):
+- **Built-in HTTP (C++)**: Local file streaming + optional master-peer fallback (not full decentralization)
+- **Python bridge HTTP**: Single-Core facade; no peer redirect logic; returns 404 on miss
+- **`dglan://` native download**: Code-backed multi-source path via DownloadManager chunk scheduling (only true decentralized load balancing)
+
+**Status**: ✅ IMPLEMENTED 2026-04-15
+
+**Validation**:
+- Python bridge tests: 59/59 ✅ (unchanged)
+- HttpServer recompiles cleanly
+- Unrelated baseline failure: `TestsCommon::messageHeader()` (pre-existing, not caused by this change)
+
+**Next Gate**: Consider adding new HTTP integration tests covering local-hit, remote-owner selection, client rehost scenarios before Phase 1 delivery
+
+---
+
+### ID-10: HTTP Load-Balancing Semantics — QA Acceptance Matrix (Vasquez)
+
+**Decision**: Establish explicit QA acceptance criteria for HTTP and `dglan://` load-balancing behavior to prevent future semantic drift.
+
+**Rationale**:
+- Current DG-LAN HTTP behavior differs significantly from "full decentralized HTTP load balancing" marketing language
+- Documentation language inconsistency (e.g., `HTTP-SERVER.md` title overstates decentralization, Python bridge docs recommend HEAD but code rejects it)
+- No automated desktop gate currently validates HTTP or `dglan://` flows (Python bridge tests pass, but Qt tests blocked on missing toolchain)
+- Team needs clear distinctions in language: decentralized **native downloads** vs. peer-**redirected HTTP** vs. **single-Core HTTP facade**
+
+**Acceptance Matrix**:
+
+**Built-in HTTP**:
+1. Local-hit: GET `/files/{hash}/{path}` returns 200/206 with correct body, no redirect when file exists locally
+2. Remote-owner selection: Redirect/forward succeeds when file absent locally but present on eligible peer; clarify eligible scope (masters-only vs. all HTTP-capable)
+3. Client rehost coverage: Plain HTTP link works with copies rehosted by client peers
+4. Redirect loop prevention: No bouncing 302s; dead/stale peer target fails over or returns deterministic error
+5. Owner list truthfulness: `/api/v1/files` `peer_urls` matches actual eligible owners (no narrower subset than docs claim)
+6. `dglan://` multi-source retention: Native downloader chunk ownership updates continue adding peers; transfer survives seed peer disappearance
+
+**Python Bridge HTTP**:
+1. GET `/api/v1/files/{hash}/{path}` local success, range success, 416 (Range Not Satisfiable), 304 (Not Modified)
+2. 404 behavior remains explicit (no peer redirect unless explicitly added)
+3. Route-level tests for GET/OPTIONS/405 (current 59 tests exercise streamer helpers, not live HTTP router)
+4. Clarify HEAD support in docs or implement if promised
+
+**Team Language** (immediate adoption):
+- ✅ Say: "decentralized native downloads" + "peer-redirected HTTP"
+- ❌ Avoid: "full decentralized HTTP load balancing" (misleading until proven by acceptance matrix)
+
+**Documentation Corrections Needed**:
+- `HTTP-SERVER.md` title "Load Balancing (Already Done)" reads stronger than code evidence; update to "HTTP Local Serving + Optional Peer Fallback"
+- `HTTP-SERVER.md` "distribute load across multiple peers" → clarify master-only fallback behavior
+- Python bridge docs: Either add HEAD support or remove recommendation
+- README: Current language acceptable narrowly, but do not cite as proof of HTTP decentralization
+
+**Status**: ✅ RECORDED 2026-04-15 (Hicks implementation complete; tests + full acceptance deferred to Phase 1)
+
+**Validation Status Observed**:
+- `python3 validate.py`: Python bridge PASS (59/59), Desktop Qt FAIL in baseline `TestsCommon::messageHeader()`
+- Consequence: Repo currently lacks passing automated desktop gate for HTTP/`dglan://` changes
+- Recommendation: Hicks' work should land with either new targeted tests or manual acceptance checklist
+
+**Next Steps**:
+1. Phase 1: Create HttpServer integration test suite (5+ tests covering Range, streaming, error cases)
+2. Phase 1: Update documentation language to reflect honest semantics
+3. Phase 1: Consider native `dglan://` download smoke test
+4. Ongoing: Use acceptance matrix in PR reviews for HTTP/download path changes
+
+---
+
 ## Governance
 
 - All meaningful changes require team consensus
