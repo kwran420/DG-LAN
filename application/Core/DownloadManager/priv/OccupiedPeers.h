@@ -40,6 +40,7 @@ namespace DM
       bool isPeerFree(PM::IPeer* peer) const;
       bool setPeerAsOccupied(PM::IPeer* peer);
       void setPeerAsFree(PM::IPeer* peer);
+      void removePeer(PM::IPeer* peer);
       void newPeer(PM::IPeer* peer);
       int nbOccupiedPeers() const;
       const QSet<PM::IPeer*>& getOccupiedPeers() const;

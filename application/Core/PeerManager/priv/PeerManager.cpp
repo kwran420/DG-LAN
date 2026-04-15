@@ -111,6 +111,7 @@ IPeer* PeerManager::createPeer(const Common::Hash& ID, const QString& nick)
 
    Peer* peer = new Peer(this, this->fileManager, ID, nick);
    connect(peer, &Peer::unblocked, this, &PeerManager::peerUnblocked);
+   connect(peer, &Peer::becameDead, this, &PeerManager::peerBecameDead);
    this->peers.insert(peer->getID(), peer);
 
    return peer;
@@ -144,6 +145,7 @@ void PeerManager::updatePeer(
    {
       peer = new Peer(this, this->fileManager, ID);
       connect(peer, &Peer::unblocked, this, &PeerManager::peerUnblocked);
+      connect(peer, &Peer::becameDead, this, &PeerManager::peerBecameDead);
       this->peers.insert(peer->getID(), peer);
    }
 
@@ -270,6 +272,12 @@ void PeerManager::peerUnblocked()
    Peer* peer = static_cast<Peer*>(this->sender());
    if (peer->isAvailable())
       emit peerBecomesAvailable(peer);
+}
+
+void PeerManager::peerBecameDead()
+{
+   Peer* peer = static_cast<Peer*>(this->sender());
+   emit peerBecomesUnavailable(peer);
 }
 
 // DG-LAN: Store an address received via gossip PEX. UDPListener drains this

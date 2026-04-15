@@ -71,6 +71,20 @@ void OccupiedPeers::newPeer(PM::IPeer* peer)
       this->mutex.unlock();
 }
 
+/**
+  * Silently remove a dead peer from the occupied set.
+  * Unlike setPeerAsFree, this does NOT emit newFreePeer because the peer
+  * is no longer usable.
+  */
+void OccupiedPeers::removePeer(PM::IPeer* peer)
+{
+   if (!peer)
+      return;
+
+   QMutexLocker locker(&this->mutex);
+   this->occupiedPeers.remove(peer);
+}
+
 int OccupiedPeers::nbOccupiedPeers() const
 {
    QMutexLocker locker(&this->mutex);

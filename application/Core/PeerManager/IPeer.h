@@ -45,7 +45,11 @@ namespace PM
      *  - The hashes of a given entry. This entry must be a file.
      *  - The data of a given chunk hash.
      *
-     * A peer is never deleted, it's safe to keep a pointer on it.
+     * WARNING: A peer object is never deleted during normal operation, but it CAN
+     * become dead (isAlive() == false). Always check isAvailable() before use.
+     * Peer objects are only deleted when PeerManager is destroyed at shutdown.
+     * Do NOT assume a raw IPeer* is permanently valid — prefer listening to
+     * IPeerManager::peerBecomesUnavailable to react to peer death.
      */
    class IPeer : public LM::ILoggable
    {

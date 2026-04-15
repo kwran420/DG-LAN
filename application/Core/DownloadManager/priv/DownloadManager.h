@@ -79,6 +79,7 @@ namespace DM
 
    private slots:
       void peerBecomesAvailable(PM::IPeer* peer);
+      void peerBecomesUnavailable(PM::IPeer* peer);
 
       void fileCacheLoaded();
 

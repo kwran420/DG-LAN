@@ -253,7 +253,10 @@ void Peer::consideredDead()
 {
    L_DEBU(QString("Peer is dead: %1").arg(this->toStringLog()));
    this->connectionPool.closeAllSocket();
+   const bool wasAlive = this->alive;
    this->alive = false;
+   if (wasAlive)
+      emit becameDead();
 }
 
 void Peer::unblock()

@@ -98,6 +98,7 @@ namespace PM
 
    signals:
       void unblocked();
+      void becameDead();
 
    protected slots:
       void consideredDead();

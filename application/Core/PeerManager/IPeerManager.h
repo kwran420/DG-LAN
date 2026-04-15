@@ -123,5 +123,11 @@ namespace PM
         * Emitted when a peer becomes alive or is not blocked anymore.
         */
       void peerBecomesAvailable(PM::IPeer* peer);
+
+      /**
+        * Emitted when a previously alive peer becomes unavailable (dead or timed out).
+        * Listeners should remove any cached references to this peer.
+        */
+      void peerBecomesUnavailable(PM::IPeer* peer);
    };
 }

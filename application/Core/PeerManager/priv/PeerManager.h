@@ -101,6 +101,7 @@ namespace PM
       void disconnected(QTcpSocket* tcpSocket = nullptr);
       void checkIdlePendingSockets();
       void peerUnblocked();
+      void peerBecameDead();
 
    private:
       void removeFromPending(QTcpSocket* socket);

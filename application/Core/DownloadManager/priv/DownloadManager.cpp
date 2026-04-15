@@ -62,6 +62,7 @@ DownloadManager::DownloadManager(QSharedPointer<FM::IFileManager> fileManager, Q
    connect(&this->saveTimer, &QTimer::timeout, this, &DownloadManager::saveQueueToFile);
 
    connect(this->peerManager.data(), &PM::IPeerManager::peerBecomesAvailable, this, &DownloadManager::peerBecomesAvailable);
+   connect(this->peerManager.data(), &PM::IPeerManager::peerBecomesUnavailable, this, &DownloadManager::peerBecomesUnavailable);
 }
 
 DownloadManager::~DownloadManager()
@@ -279,6 +280,18 @@ void DownloadManager::peerBecomesAvailable(PM::IPeer* peer)
    this->occupiedPeersAskingForEntries.newPeer(peer);
    this->occupiedPeersAskingForHashes.newPeer(peer);
    this->occupiedPeersDownloadingChunk.newPeer(peer);
+}
+
+/**
+  * Proactively clean up references when a peer dies, rather than relying on
+  * lazy isAvailable() checks. This prevents stale peer pointers from lingering
+  * in occupied-peer tracking sets.
+  */
+void DownloadManager::peerBecomesUnavailable(PM::IPeer* peer)
+{
+   this->occupiedPeersAskingForHashes.removePeer(peer);
+   this->occupiedPeersAskingForEntries.removePeer(peer);
+   this->occupiedPeersDownloadingChunk.removePeer(peer);
 }
 
 void DownloadManager::fileCacheLoaded()
