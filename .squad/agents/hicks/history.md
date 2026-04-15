@@ -23,6 +23,7 @@ Peer discovery uses multicast, directed broadcast, subnet scan, and gossip fallb
 - The Python bridge is currently the easiest safe-validation surface here: `dglan-api/test_streamer.py` passed all 59 tests in this workspace, while C++ validation is blocked by missing Qt/qmake/protoc tooling.
 - Safe backend pruning in this repo needs two proofs before deletion: zero in-repo references to the candidate path, and a current implementation that already supersedes any one-shot migration helper (for example `ProtoHelper::setStr` already uses `mutable_*`, making `fix-protohelper.ps1` dead).
 - In the DownloadManager path, the safest incremental ownership hardening is to move long-lived bookkeeping (`OccupiedPeers`, `LinkedPeers`) to peer IDs while keeping raw `IPeer*` only as short-lived execution handles that are cleared on `peerBecomesUnavailable`.
+- The next safe step after peer-ID bookkeeping is to canonicalise every remaining ChunkDownloader peer insert/remove by `Common::Hash`; pointer-equality removal misses rediscovered peer instances and leaves stale transfer handles behind.
 
 ### 2026-04-15 — Follow-Up Sprint Assignment
 
@@ -76,3 +77,27 @@ Peer discovery uses multicast, directed broadcast, subnet scan, and gossip fallb
 - Python bridge tests (59) provide reference implementation for C++ server behavior
 - Backend tests act as early warning for any dead code removal side effects
 - Incremental extraction (RemoteConnection first) reduces refactoring risk
+
+### 2026-04-15 — Phase 0 Closeout Complete
+
+**Status**: ✅ PHASE 0 BACKEND MODERNIZATION COMPLETE
+
+**Orchestration log**: 2026-04-15T04:15:17Z-hicks-backend-modernization.md
+
+**Phase 0 outcomes:**
+- ✅ Occupancy refactoring (Hash-keyed OccupiedPeers/LinkedPeers) landed
+- ✅ Peer lifecycle signal foundation validated (peerBecomesUnavailable working)
+- ✅ Test infrastructure planning complete (RemoteControlManager, HttpServer phases 1–2)
+- ✅ Python baseline (59 tests) validates backend safety infrastructure
+- 🎯 READY FOR LEAD REVIEW: Peer signal contract + IPeerManager changes
+
+**Phase 1 readiness**: 🎯 TEST INFRASTRUCTURE NEXT
+- RemoteControlManager suite (smoke tests, protocol routing, auth handling)
+- HttpServer integration tests (file serving, range requests, slow-client detection)
+- Validation baseline gates Phase 1 start
+
+**Cross-agent notes**:
+- Ripley lead review pending on peerBecomesUnavailable signal contract
+- Bishop documentation now complete: CODE-STYLE.md guides safe test harness design
+- Vasquez validation baseline (59/59 Python PASS) unblocks C++ test execution
+- Dallas GUI analysis done: backend owns test infrastructure, GUI owns dead code removal

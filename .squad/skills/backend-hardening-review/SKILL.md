@@ -22,3 +22,4 @@ Use this skill when reviewing DG-LAN backend safety, modularisation seams, or te
 ## Reusable pattern
 
 - When a backend path still needs raw `IPeer*` execution handles, first move any long-lived indexes, occupancy sets, and scheduler bookkeeping to stable peer IDs (`Common::Hash`), then use `peerBecomesUnavailable` / `peerBecomesAvailable` only to clear or refresh the transient raw handles.
+- In transition code that still keeps raw `IPeer*` lists (for example transfer workers), canonicalise inserts/removals by peer ID instead of pointer equality so a rediscovered peer instance refreshes the slot instead of duplicating or leaking stale handles.

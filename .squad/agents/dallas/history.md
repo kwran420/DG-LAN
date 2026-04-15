@@ -76,3 +76,13 @@ GUI is a Qt5 Widgets application connected to Core over localhost TCP.
 **Why this slice**:
 - It is the safest reviewable win before larger `NetworkWidget` extraction work.
 - It reduces misleading maintenance surface without changing any reachable user workflow.
+
+### 2026-04-15 — NetworkWidget File-State Extraction
+
+**What shipped**:
+- Extracted the file-index and transfer-state bookkeeping from `Browse/NetworkWidget.cpp` into a dedicated `Browse/NetworkFileModel` helper and wired it through `GUI.pro`.
+- Kept `NetworkWidget` focused on widget composition, browse orchestration, and user actions while preserving the existing file list behavior, queue controls, and local-path resolution flow.
+
+**Validation**:
+- `python3 validate.py` still passes the 59 Python bridge tests.
+- Desktop Qt/C++ validation remains blocked in this Linux workspace because `qmake`/`protoc` are unavailable, so the GUI refactor is structurally reviewed but not desktop-built here.
