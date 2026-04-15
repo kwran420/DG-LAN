@@ -60,3 +60,28 @@ Initial squad context seeded from README.md and PROJECT-CONTEXT.md.
 
 **Cross-agent Dependency Map**: 
 Vasquez validation baseline → Bishop documentation → Hicks backend tests → Dallas GUI dead code removal
+
+### 2026-04-15 — First Implementation Slice: Peer Death Notification
+
+**Scope:** Added `peerBecomesUnavailable` signal infrastructure across PeerManager → DownloadManager (10 files, 53 lines net).
+
+**What was done:**
+1. Fixed dangerous IPeer.h contract comment ("A peer is never deleted" — wrong)
+2. Added `Peer::becameDead()` signal, emitted on alive→dead transition
+3. Added `IPeerManager::peerBecomesUnavailable` signal (paired with existing `peerBecomesAvailable`)
+4. PeerManager forwards `becameDead` from individual peers to the manager-level signal
+5. OccupiedPeers gained `removePeer()` for silent dead-peer removal (no queue-scan trigger)
+6. DownloadManager connects to `peerBecomesUnavailable` and proactively cleans occupied-peer sets
+
+**Why this first:**
+- Highest-risk gap: no event-driven notification when a peer dies
+- Enables D7 (Hicks's QSharedPointer migration) — the signal is the foundation
+- Advances all 3 goals: modernization (event-driven), modularization (clean interface), risk reduction (proactive cleanup)
+- Small and safe: no behavior change for working downloads, only adds notification path
+
+**Reviewer gate:** Before Hicks starts D7 (IPeer* → QSharedPointer migration), this signal infrastructure must be in place. ✅ Done.
+
+**Follow-up work for next agents:**
+- **Hicks (D7):** Migrate IPeer* → QSharedPointer<IPeer> in DownloadManager/ChunkDownloader, using peerBecomesUnavailable as lifecycle hook
+- **Hicks (D8):** Add RemoteControlManager test suite (independent, can start now)
+- **Dallas (D10-D13):** Dead code removal (Chat/Emoticons/Activity/Hashing) — can start after Vasquez validation baseline
