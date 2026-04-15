@@ -13,6 +13,7 @@ Ripley owns system review, modularisation strategy, and reviewer gates.
 
 📌 Team hired on 2026-04-15
 📌 Full review batch complete on 2026-04-15 — Follow-up phase beginning
+📌 Implementation Batch 1 complete on 2026-04-15 — Peer lifecycle infrastructure delivered
 
 ## Learnings
 
@@ -28,6 +29,24 @@ Initial squad context seeded from README.md and PROJECT-CONTEXT.md.
 - GUI has zero test coverage (121 files, 56 Q_OBJECT classes, 0 tests)
 - Core has existing QTest suites for FileManager, PeerManager, DownloadManager, HashCache, Common, LogManager
 - Python API bridge (dglan-api/) is the quality exemplar: 59 tests, security-first, excellent docs
+
+### 2026-04-15 — Implementation Batch 1: Peer Lifecycle Infrastructure
+
+**Delivered:**
+- ✅ `peerBecomesUnavailable` signal added to IPeerManager (symmetric to `peerBecomesAvailable`)
+- ✅ IPeer.h contract fixed (removed misleading "peers are never deleted" statement)
+- ✅ Peer::becameDead signal emits on state transition; PeerManager forwards to subscribers
+- ✅ ARCHITECTURE.md created (536 lines) — comprehensive design, concurrency model, peer lifecycle state machine
+- ✅ OccupiedPeers: Silent removePeer() for signal-based cleanup integration
+
+**Implementation commits:**
+- 613c26d5: Add peer death notification signal for proactive cleanup
+- 759cc7be: Document peer lifecycle signals in ARCHITECTURE.md
+- 821679d2: Update squad artifacts (orchestration logs + implementation decisions)
+
+**Reviewer gate**: D7 (IPeer* → QSharedPointer migration) now unblocked; Lead review required for IPeerManager return type changes
+
+**Next**: Dallas GUI modularization slice (Stage 1); Hicks continues with ChunkDownloader migration
 - 7 prototype directories are obsolete and safe to prune
 - Generated protobuf files compiled twice (Common + RemoteCoreController) — needs Protos library extraction
 - Dependency graph is acyclic (good!) but internal classes violate SRP

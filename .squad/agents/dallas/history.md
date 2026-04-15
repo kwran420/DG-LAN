@@ -66,3 +66,13 @@ GUI is a Qt5 Widgets application connected to Core over localhost TCP.
 - Exhaustive reference search before any file deletion
 - Build verification after each removed component
 - Feature testing (Browse, Download, Search, Settings, Peers) after Stage 1
+
+### 2026-04-15 — First GUI Pruning Slice
+
+**What shipped**:
+- Removed the orphaned `ActivityWidget` and `HashingProgressWidget` sources after confirming they were neither instantiated nor included by `GUI.pro`.
+- Stopped compiling the unused `Uploads` shell so the active GUI build no longer carries dead upload-surface code while the deferred implementation stays parked in-tree.
+
+**Why this slice**:
+- It is the safest reviewable win before larger `NetworkWidget` extraction work.
+- It reduces misleading maintenance surface without changing any reachable user workflow.

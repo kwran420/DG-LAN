@@ -18,3 +18,7 @@ Use this skill when reviewing DG-LAN backend safety, modularisation seams, or te
 - Cite concrete files and lines.
 - Call out highest-risk ownership problems first.
 - End with an ordered hardening plan: tests/evaluation, seams for extraction, modernization candidates, then pruning targets.
+
+## Reusable pattern
+
+- When a backend path still needs raw `IPeer*` execution handles, first move any long-lived indexes, occupancy sets, and scheduler bookkeeping to stable peer IDs (`Common::Hash`), then use `peerBecomesUnavailable` / `peerBecomesAvailable` only to clear or refresh the transient raw handles.

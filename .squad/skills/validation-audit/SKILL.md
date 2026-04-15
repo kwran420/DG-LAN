@@ -26,3 +26,5 @@ Use this pattern when auditing a mixed legacy repo before refactors or moderniza
 - Python bridge: `cd dglan-api && pytest test_streamer.py -v`
 - Legacy C++ path: `application/3.compile_all_components.sh` then `application/4.run_all_tests.sh`
 - Common audit finding: docs can claim CI/build paths that are no longer present, so always verify the files and commands directly.
+
+- When the main toolchain is blocked, it is still worth extending an existing native test suite in-place if the change is high-risk — but document it as pending execution until the real toolchain runs.

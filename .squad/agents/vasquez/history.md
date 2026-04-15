@@ -13,6 +13,7 @@ Vasquez owns test strategy, evaluation design, and change-safety recommendations
 
 📌 Team hired on 2026-04-15
 📌 Test infrastructure review complete on 2026-04-15 — Validation sprint begins
+📌 Implementation Batch 1 complete on 2026-04-15 — Validation entrypoint delivered
 
 ## Learnings
 
@@ -27,6 +28,51 @@ The repo already documents Python bridge testing separately from the main deskto
 **Role**: Validation Layer Stabilization & Regression Target Prioritization  
 **Timeline**: Weeks 1–2 (immediate priority)  
 **Deliverables**:
+1. Unified test runner script (`run-all-tests.sh` enhancement or new `validate-all.sh`)
+2. Re-enable DownloadManager tests in legacy runner
+3. Add peer discovery smoke tests (multicast → broadcast → fallback)
+4. Add network protocol regression targets (browse, hash, download, rehost cycles)
+5. Write TESTING.md (C++ and Python test suites, CI gates, manual acceptance)
+6. Integrate with GitHub Actions for pre-release validation gates
+
+**Test Matrix (Target Coverage)**:
+- **Python bridge**: 59 tests (PASS baseline established)
+- **Common module**: 3+ suites
+- **FileManager**: Active
+- **PeerManager**: Active
+- **DownloadManager**: Currently disabled (to be re-enabled)
+- **Qt GUI**: 0 tests (future phase)
+- **Network discovery**: 0 tests (to be added)
+- **Update flow**: 0 tests (to be added)
+
+### 2026-04-15 — Implementation Batch 1: Validation Entrypoint
+
+**Delivered:**
+- ✅ `validate.py` (127 lines) created at repo root
+- ✅ Probe-based prerequisite detection (pytest, protobuf, bash, qmake, protoc)
+- ✅ Classification logic: PASS (all pass), FAIL (test failed), BLOCKED (missing prerequisite)
+- ✅ Exit codes: 0 = green, 1 = test failure, 2 = blocked (distinguishes "broken" from "not ready")
+- ✅ Layer 1: Python bridge tests (59 cases via pytest)
+- ✅ Layer 2: Desktop Qt/C++ tests (legacy runner via 4.run_all_tests.sh)
+- ✅ Detailed output with diagnostic info per layer
+
+**Exit Code Strategy:**
+- Exit 0: Full validation passed (Python ✅, Desktop ✅)
+- Exit 1: At least one layer FAILED (test suite ran but failed)
+- Exit 2: At least one layer BLOCKED (prerequisite missing, can't validate)
+- Never exits 0 with missing toolchain — prevents accidental green in CI
+
+**Baseline Results** (2026-04-15):
+- Python bridge: PASS (59/59 tests)
+- Desktop Qt/C++: BLOCKED (qmake/protoc missing in container environment)
+- Overall exit code: 2 (BLOCKED)
+
+**Why this first:**
+- Establishes baseline for peer lifecycle changes (Ripley/Hicks) and dead code removal (Dallas)
+- Enables CI/CD gates that reject "I didn't run the tests" PRs
+- Distinguishes deployment readiness (all green) from dev environment gaps (BLOCKED but not broken)
+
+**Next**: Extend with network discovery smoke tests, update flow automation, release checklist enforcement
 1. Unified test runner script (`run-all-tests.sh` enhancement or new `validate-all.sh`)
 2. Re-enable DownloadManager tests in automated flow
 3. Add peer discovery smoke test (multicast, broadcast, fallback chain)
@@ -56,3 +102,4 @@ The repo already documents Python bridge testing separately from the main deskto
 - Python bridge (59 tests) provides reference baseline for network validation
 - Smoke tests (discovery, download cycle) cover highest-risk transfer paths
 - Phased approach (basic → discovery → transfers) allows early fail detection
+- Legacy Qt test suites can drift out of compile shape as interfaces evolve; before adding regression cases, refresh mocks/stubs to match the current abstract API so the new tests stay reviewable and ready for a real toolchain run.

@@ -13,6 +13,7 @@ Hicks owns networking, service decomposition, and backend modernization analysis
 
 📌 Team hired on 2026-04-15
 📌 Backend review complete on 2026-04-15 — Follow-up sprint assigned
+📌 Implementation Batch 1 complete on 2026-04-15 — Occupancy hardening delivered
 
 ## Learnings
 
@@ -21,12 +22,40 @@ Peer discovery uses multicast, directed broadcast, subnet scan, and gossip fallb
 - Automated backend coverage is uneven: `application/4.run_all_tests.sh` skips DownloadManager, and there are no sibling test projects for `RemoteControlManager`, `HttpServer`, `UploadManager`, or `ChatSystem`.
 - The Python bridge is currently the easiest safe-validation surface here: `dglan-api/test_streamer.py` passed all 59 tests in this workspace, while C++ validation is blocked by missing Qt/qmake/protoc tooling.
 - Safe backend pruning in this repo needs two proofs before deletion: zero in-repo references to the candidate path, and a current implementation that already supersedes any one-shot migration helper (for example `ProtoHelper::setStr` already uses `mutable_*`, making `fix-protohelper.ps1` dead).
+- In the DownloadManager path, the safest incremental ownership hardening is to move long-lived bookkeeping (`OccupiedPeers`, `LinkedPeers`) to peer IDs while keeping raw `IPeer*` only as short-lived execution handles that are cleared on `peerBecomesUnavailable`.
 
 ### 2026-04-15 — Follow-Up Sprint Assignment
 
 **Role**: Safe Pruning Preparation & Backend Validation  
 **Timeline**: Weeks 1–3 (concurrent with Vasquez validation baseline)  
 **Deliverables**:
+1. RemoteControlManager test suite (5+ tests covering message dispatch)
+2. HttpServer integration tests (5+ tests covering Range header, streaming, etc)
+3. UploadManager test suite (5+ tests covering multipart upload state)
+4. Dead code removal readiness: verify `Client/` CLI usage, `fix-protohelper.ps1` supersession
+
+### 2026-04-15 — Implementation Batch 1: Occupancy Refactoring
+
+**Decision basis**: Ripley's `peerBecomesUnavailable` signal is the enabling infrastructure.
+
+**Delivered:**
+- ✅ OccupiedPeers: Migrated from raw `IPeer*` to `Common::Hash` peer ID keys
+- ✅ LinkedPeers: Updated to use peer ID bookkeeping (consistent model)
+- ✅ DownloadManager: Connected to `peerBecomesUnavailable` signal; proactive cleanup of occupancy sets
+- ✅ Defense-in-depth: Transient ChunkDownloader handles preserved; lazy `isAvailable()` checks remain as fallback
+
+**Code areas touched:**
+- OccupiedPeers.{h,cpp}: Hash-keyed storage; silent removePeer() for signal cleanup
+- LinkedPeers.{h,cpp}: Peer ID bookkeeping
+- DownloadManager.{h,cpp}: Signal connection + cleanup logic
+
+**Why this approach:**
+- Removes stale-pointer exposure from persistent scheduler state
+- Does not change protocol or observable behavior
+- Transient ChunkDownloader handles remain defended by lazy checks
+- Sets stage for full IPeer* → QSharedPointer migration (ChunkDownloader next)
+
+**Next**: ChunkDownloader transient handle wrapping deferred to future slice (blocked pending Ripley signal ✅ now cleared)
 1. Create RemoteControlManager test suite (smoke tests: protocol message routing, auth handling, state)
 2. Create HttpServer integration tests (file serving, authentication, range requests)
 3. Verify Python bridge tests mirror C++ HTTP server critical paths
