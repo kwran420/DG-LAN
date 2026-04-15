@@ -129,6 +129,80 @@ Clients check for updates via the GitHub Releases API.
 
 ---
 
+## Modernization Timeline & Next Steps
+
+DG-LAN is transitioning from a stable but aging C++17 + Qt5 + qmake stack to a modern, modular codebase. This section documents the current phase and upcoming work.
+
+### Phase 0: Validation & Safety Net (v1.2.x — Current)
+
+**Status**: ✅ Complete (April 2026)
+
+**Deliverables:**
+- ✅ `validate.py`: Unified validation entrypoint (Python baseline 59 tests, legacy C++ tests gated)
+- ✅ `ARCHITECTURE.md`: Comprehensive design documentation with risk hotspots
+- ✅ `OPERATIONS.md`: Windows Service setup, logging, troubleshooting
+- ✅ Peer lifecycle signals: `peerBecomesUnavailable` for proactive cleanup
+- ✅ Occupancy refactoring: Hash-keyed peer bookkeeping (safer than raw pointers)
+
+**Quality baseline:** Python bridge (59 tests, security-first) is canonical; C++ should match
+
+### Phase 1: Test Infrastructure & Hardening (v1.3 — Weeks 2–3)
+
+**In progress / Upcoming:**
+
+- 🎯 **Re-enable DownloadManager tests**: Now that occupancy refactoring landed
+- 🎯 **Add RemoteControlManager tests**: GUI ↔ Core protocol coverage
+- 🎯 **Add HttpServer integration tests**: Range parsing, CORS, peer redirects
+- 🎯 **Log rotation**: Implement automatic cleanup (24/7 deployments unbounded logs)
+- 🎯 **Slow client detection**: HTTP timeout to prevent file descriptor exhaustion
+- 🎯 **CODE-STYLE.md**: ✅ Created (April 2026)
+- 🎯 **TESTING.md**: ✅ Expanded (April 2026)
+
+**Expected outcome**: C++ test coverage parity with Python (80%+), CI gates enabled
+
+### Phase 2: GUI Dead Code Removal (v1.3 — Weeks 1–2)
+
+**In progress:**
+
+- 🎯 Chat feature: 34 KB, never instantiated → remove
+- 🎯 Emoticons: 13.8 KB, depends on Chat → remove
+- 🎯 Activity widget: 9.3 KB, orphaned → remove
+- 🎯 Hashing widget: 11.8 KB, orphaned → remove
+- 🎯 Uploads widget: Mark as "Not Implemented" (may be planned for v2.0)
+
+**Expected outcome**: Cleaner codebase, faster builds, reduced maintenance surface
+
+### Phase 3: Modularization (v1.4+)
+
+**Design in progress:**
+
+- 🎯 **God class refactoring**: Split UDPListener, RemoteConnection, Cache
+- 🎯 **Control plane boundary**: Isolate RemoteConnection (command dispatch)
+- 🎯 **Data plane optimization**: Separate file serving from peer bookkeeping
+
+**Expected outcome**: Clearer module boundaries, easier testing, safer refactoring
+
+### Phase 4: Toolchain Modernization (v2.0+)
+
+**Long-term:**
+
+- 🎯 **CMake**: Replace qmake for cross-platform builds
+- 🎯 **Qt6**: Upgrade from Qt5 (modern signals, better threading, Qt6 QML compatibility)
+- 🎯 **Smart pointers**: Replace raw pointers with QSharedPointer, std::unique_ptr
+- 🎯 **TLS/HTTPS**: Peer-to-peer security (currently network-isolation-based)
+- 🎯 **C++20**: Coroutines, modules if feasible
+
+**Blocking dependencies**: None in v1.2–v1.3 (safe to keep Qt5 + qmake)
+
+### Key Constraints & Assumptions
+
+- **Windows-first**: All releases built locally via `build-release.ps1` (faster, more reliable than CI)
+- **Python bridge is quality baseline**: 59 tests cover protocol, security, edge cases — C++ should reach parity
+- **No breaking changes**: All modernization happens on feature branches, verified against validate.py
+- **Honest about timeline**: No promises on CMake/Qt6 until v2.0 planning is complete
+
+---
+
 ## Architecture Notes
 
 ### Core ↔ GUI Connection

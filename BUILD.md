@@ -19,7 +19,30 @@ DG-LAN decentralises a master file list across a network. It is built with **MSY
 3. **[Inno Setup 6](https://jrsoftware.org/isinfo.php)** — for building the Windows installer
 4. **[GitHub CLI](https://cli.github.com/)** (`gh`) — for publishing releases (optional)
 
-### One-Command Build
+---
+
+## Validating Your Build
+
+After building, run the repo's unified validation entrypoint:
+
+```bash
+python3 validate.py
+```
+
+This runs:
+1. **Python bridge tests** (59 automated tests) — Always attempted
+2. **Desktop C++ tests** (legacy Qt/C++ suites) — If `bash`, `qmake`, and `protoc` are available
+
+**Exit codes:**
+- `0` — All validations passed (or all attempted layers passed)
+- `1` — At least one validation failed
+- `2` — At least one required toolchain is missing (BLOCKED status; not a failure)
+
+For details, see [TESTING.md](TESTING.md).
+
+---
+
+## One-Command Build
 
 From PowerShell in the repo root:
 

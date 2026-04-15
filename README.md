@@ -43,6 +43,25 @@ The result: a single authoritative file list, distributed across every machine t
 
 ---
 
+## Documentation
+
+| Document | For | Purpose |
+|----------|-----|---------|
+| [BUILD.md](BUILD.md) | Contributors, release managers | How to build from source (Windows primary, Linux/macOS experimental) |
+| [TESTING.md](TESTING.md) | Contributors, CI/CD engineers | How to run tests and validation (Python baseline: 59 tests; legacy C++ tests gated) |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Core team, system designers | Subsystem design, concurrency patterns, high-risk areas, peer lifecycle, modernization roadmap |
+| [OPERATIONS.md](OPERATIONS.md) | Operators, sysadmins, DevOps | Windows Service setup, logging, troubleshooting, performance tuning, security |
+| [PROJECT-CONTEXT.md](PROJECT-CONTEXT.md) | Contributors, AI assistants | Project structure, build system, version scheme, auto-update flow, architecture notes |
+| [CODE-STYLE.md](CODE-STYLE.md) | Contributors | C++17 naming conventions, Qt patterns, error handling, logging standards, header guards |
+| [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md) | New contributors | Fork/branch/commit workflow, PR checklist, bug/feature templates |
+
+**Quick references:**
+- **Validate your build**: `python3 validate.py` (exit code: 0 = all pass, 1 = failure, 2 = blocked/missing toolchain)
+- **HTTP API**: See [dglan-api/](dglan-api/) for Python bridge and REST endpoints
+- **Source tree**: [PROJECT-CONTEXT.md](PROJECT-CONTEXT.md#project-structure) explains Core, GUI, Common, Protos, Setups
+
+---
+
 ## Quick Start
 
 ### Master (the machine with the files)
@@ -164,6 +183,29 @@ See the [comparison table](HTTP-SERVER.md#comparison-built-in-server-vs-python-b
 
 ---
 
+## Documentation
+
+| Document | Audience | Content |
+|----------|----------|---------|
+| **[ARCHITECTURE.md](ARCHITECTURE.md)** | Core contributors, designers | Module structure, concurrency model, subsystem boundaries, risk hotspots, state machines, design rationale |
+| **[OPERATIONS.md](OPERATIONS.md)** | System admins, operators | Windows Service setup, logging, troubleshooting, performance tuning, security, backup/recovery |
+| **[BUILD.md](BUILD.md)** | Contributors, release managers | Build prerequisites, compile steps, Windows/Linux/macOS, URL scheme registration, firewall rules |
+| **[PROJECT-CONTEXT.md](PROJECT-CONTEXT.md)** | AI assistants, contributors | Build system, version scheme, auto-update flow, CI/CD, file structure |
+
+---
+
+## Testing
+
+Run the repo validation entrypoint before submitting changes:
+
+```bash
+python3 validate.py
+```
+
+It reports each validation layer as pass, fail, or blocked. Full coverage details, manual smoke expectations, and current desktop-validation gaps are documented in [TESTING.md](TESTING.md).
+
+---
+
 ## Building from Source
 
 See **[BUILD.md](BUILD.md)** for full instructions.
@@ -181,7 +223,8 @@ See **[BUILD.md](BUILD.md)** for full instructions.
 
 1. Fork and clone the repo.
 2. Build with `.\build-release.ps1 -SkipPublish`.
-3. Open a PR describing what changed, why, and how it was tested.
+3. Run `python3 validate.py` and complete the relevant manual checks from [TESTING.md](TESTING.md).
+4. Open a PR describing what changed, why, and how it was tested.
 
 ---
 

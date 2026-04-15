@@ -4,6 +4,8 @@ DG-LAN decentralises a master file list across a network via a modular Core daem
 
 **Target audience:** Core contributors, system designers, future maintainers.
 
+**Phase:** Phase 0 (Validation & Safety Net) ✅ Complete; Phase 1 (Test Infrastructure) 🎯 In progress. See [PROJECT-CONTEXT.md#modernization-timeline--next-steps](PROJECT-CONTEXT.md#modernization-timeline--next-steps) for details.
+
 ---
 
 ## System Overview
@@ -167,13 +169,13 @@ DG-LAN decentralises a master file list across a network via a modular Core daem
 5. On completion, file is moved to shared folder and indexed by FileManager
 
 **High-risk areas:**
-- **Raw IPeer\* pointers:** DownloadManager and ChunkDownloader store raw `PM::IPeer*` pointers. Peers are not deleted during normal operation (only at shutdown), but the `peerBecomesUnavailable` signal now enables proactive cleanup. Full migration to `QSharedPointer<IPeer>` is planned (D7).
+- **Raw IPeer\* pointers:** DownloadManager still executes transfers through raw `PM::IPeer*` handles. Long-lived queue/occupancy state is now peer-ID keyed and ChunkDownloader refreshes/removes peer handles by ID, but full `QSharedPointer`/`QWeakPointer` migration is still planned (D7).
 - **Partial download resume:** If download interrupted mid-file, resume logic is not fully hardened. Checksums may not align.
 - **Disk space exhaustion:** No pre-flight disk space check. If target drive is full, download fails silently and queue stalls.
-- **Queue persistence:** Queue is not persisted; restart loses pending downloads. Mitigation: QSettings stores queue state but not file paths.
-- **Tests disabled:** DownloadManager tests are commented out; high regression risk. Re-enable in v1.3.
+- **Queue persistence edge cases:** Queue entries are persisted and recreated on startup from saved peer ID/nick metadata. Placeholder peers are rebound when the real peer becomes available again, so resume safety depends on keeping those identity contracts accurate.
+- **Legacy test/toolchain gap:** DownloadManager tests are wired into the legacy scripts now, but still require the Qt/qmake/protoc desktop toolchain to execute. In this Linux workspace they remain validation-blocked.
 
-**Tested:** TestsDownloadManager suite (DISABLED in current build).
+**Tested:** TestsDownloadManager suite (wired into legacy build/test scripts; blocked in this Linux workspace).
 
 ---
 
