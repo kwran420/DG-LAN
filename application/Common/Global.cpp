@@ -249,26 +249,6 @@ QString Global::formatByteSize(qint64 bytes, int precision)
    return QString();
 }
 
-QString Global::formatByteSizeDecimal(qint64 bytes, int precision)
-{
-   Q_ASSERT(precision >= 0);
-
-   static const char* prefixes[] = {"B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB"};
-
-   for (int i = 0; i < 8; i++)
-   {
-      qint64 size = 1;
-      for (int j = 0; j < i; j++)
-         size *= 1000;
-
-      if (bytes < 1000 * size)
-         return bytes < 1000 ?
-            QString::number(bytes <= 0 ? 0 : bytes).append(" ").append(prefixes[i]) :
-            QString::number((double)bytes / size, 'f', precision).append(" ").append(prefixes[i]);
-   }
-   return QString();
-}
-
 /**
   * Format the given time in a years / months / weeks / days / hours / minutes / seconds format.
   * Examples:

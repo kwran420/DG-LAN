@@ -51,7 +51,7 @@ using namespace GUI;
 
 const QString D_LAN_GUI::SHARED_MEMORY_KEYNAME("DG-LAN GUI instance");
 static const QString IPC_SERVER_NAME("DG-LAN-GUI-IPC");
-static const int AUTO_UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+static const int AUTO_UPDATE_CHECK_INTERVAL_MS = 60 * 1000;
 
 /**
   * @class GUI::D_LAN_GUI

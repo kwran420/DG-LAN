@@ -222,9 +222,8 @@ QVariant SharedEntryListModel::data(const QModelIndex& index, int role) const
          const qint64 bytes = index.column() == 2 ?
             this->sharedEntries[index.row()].size :
             this->sharedEntries[index.row()].freeSpace;
-         return tr("%1\n%2 decimal\n%3 bytes")
+         return tr("%1\n%2 bytes")
             .arg(Common::Global::formatByteSize(bytes, 2))
-            .arg(Common::Global::formatByteSizeDecimal(bytes, 2))
             .arg(QString::number(bytes));
       }
       return QVariant();
