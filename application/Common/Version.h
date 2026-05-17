@@ -18,9 +18,9 @@
 
 #pragma once
 
-#define VERSION "1.2.112"
+#define VERSION "1.2.113"
 #define VERSION_TAG "Alpha"
 
 // These two values are automatically updated during the release building process. See the script 'Application/Tools/update_version.sh'
-#define BUILD_TIME "2026-04-15_05-42"
-#define GIT_VERSION "6689677b91de8452091a3512040a57e6bfd27bb7"
+#define BUILD_TIME "2026-05-17_00-24"
+#define GIT_VERSION "6d2867f52fc5"
