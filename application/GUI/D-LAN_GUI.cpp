@@ -24,6 +24,15 @@ using namespace GUI;
 #include <QLocalSocket>
 #include <QUrlQuery>
 #include <QTimer>
+#include <QNetworkRequest>
+#include <QFile>
+#include <QDir>
+#include <QDesktopServices>
+#ifdef Q_OS_WIN
+#   include <windows.h>
+#else
+#   include <QProcess>
+#endif
 
 #include <Common/LogManager/Builder.h>
 #include <Common/Constants.h>
@@ -249,26 +258,117 @@ void D_LAN_GUI::checkForUpdates()
 
 void D_LAN_GUI::onUpdateAvailable(QString latestVersion, QString releaseUrl, QString downloadUrl)
 {
-   if (this->mainWindow)
+   if (this->manualUpdateCheck)
    {
-      this->mainWindow->showUpdateNotification(latestVersion, downloadUrl);
-
-      if (this->manualUpdateCheck)
+      if (this->mainWindow)
       {
+         this->mainWindow->showUpdateNotification(latestVersion, downloadUrl);
          UpdateDialog dlg(latestVersion, releaseUrl, downloadUrl, this->mainWindow);
          dlg.exec();
       }
+      this->manualUpdateCheck = false;
+      return;
    }
-   else
+
+   if (!downloadUrl.isEmpty())
    {
-      // No window open — show a tray notification.
+      this->startAutoUpdate(latestVersion, releaseUrl, downloadUrl);
+      return;
+   }
+
+   if (this->mainWindow)
+      this->mainWindow->showUpdateNotification(latestVersion, downloadUrl);
+   else
       this->trayIcon.showMessage(
          "DG-LAN Update Available",
          QString("Version %1 is ready. Right-click the tray icon → Check for Updates to download.")
             .arg(latestVersion),
          QSystemTrayIcon::Information, 8000);
-   }
+
    this->manualUpdateCheck = false;
+}
+
+void D_LAN_GUI::startAutoUpdate(const QString& latestVersion, const QString& releaseUrl, const QString& downloadUrl)
+{
+   if (this->autoUpdateInProgress)
+      return;
+
+   this->autoUpdateInProgress = true;
+   this->autoUpdateReleaseUrl = releaseUrl;
+   this->autoUpdateTempFile = QDir::temp().filePath(QString("DG-LAN-%1-Setup.exe").arg(latestVersion));
+
+   this->trayIcon.showMessage(
+      "DG-LAN Update",
+      QString("Downloading version %1. DG-LAN will restart through the installer when ready.").arg(latestVersion),
+      QSystemTrayIcon::Information, 5000);
+
+   QNetworkRequest req{QUrl(downloadUrl)};
+   req.setRawHeader("User-Agent", "DG-LAN-UpdateChecker/1.0");
+   req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                    QNetworkRequest::NoLessSafeRedirectPolicy);
+
+   this->autoUpdateReply = this->autoUpdateNam.get(req);
+   connect(this->autoUpdateReply, &QNetworkReply::finished,
+           this, &D_LAN_GUI::onAutoUpdateDownloadFinished);
+}
+
+void D_LAN_GUI::onAutoUpdateDownloadFinished()
+{
+   QNetworkReply* reply = this->autoUpdateReply;
+   this->autoUpdateReply = nullptr;
+
+   if (!reply)
+      return;
+
+   reply->deleteLater();
+
+   if (reply->error() != QNetworkReply::NoError)
+   {
+      this->autoUpdateInProgress = false;
+      this->trayIcon.showMessage(
+         "DG-LAN Update Failed",
+         QString("Could not download the update: %1").arg(reply->errorString()),
+         QSystemTrayIcon::Warning, 8000);
+      return;
+   }
+
+   QFile file(this->autoUpdateTempFile);
+   if (!file.open(QIODevice::WriteOnly))
+   {
+      this->autoUpdateInProgress = false;
+      this->trayIcon.showMessage(
+         "DG-LAN Update Failed",
+         "Could not save the installer. Use Check for Updates to download manually.",
+         QSystemTrayIcon::Warning, 8000);
+      return;
+   }
+
+   file.write(reply->readAll());
+   file.close();
+
+   if (!this->launchInstaller(this->autoUpdateTempFile))
+   {
+      this->autoUpdateInProgress = false;
+      QDesktopServices::openUrl(QUrl(this->autoUpdateReleaseUrl));
+      return;
+   }
+
+   this->exit(true);
+}
+
+bool D_LAN_GUI::launchInstaller(const QString& installerPath)
+{
+#ifdef Q_OS_WIN
+   const QString native = QDir::toNativeSeparators(installerPath);
+   HINSTANCE result = ShellExecuteW(
+      nullptr, L"open",
+      reinterpret_cast<LPCWSTR>(native.utf16()),
+      L"/VERYSILENT /NORESTART /CLOSEAPPLICATIONS",
+      nullptr, SW_SHOWNORMAL);
+   return reinterpret_cast<quintptr>(result) > 32;
+#else
+   return QProcess::startDetached(installerPath, {"/VERYSILENT", "/NORESTART"});
+#endif
 }
 
 void D_LAN_GUI::onUpToDate(QString currentVersion)

@@ -89,6 +89,7 @@ python validate.py
 | Core release build | PASS | `qmake-qt5 Core.pro` + `mingw32-make -f Makefile-Core` completed |
 | GUI release build | PASS | `qmake-qt5 GUI.pro` + `mingw32-make -f Makefile-GUI` completed |
 | Core rebuild after multi-master/shared-size fixes | PASS | `qmake-qt5 Core.pro` + `mingw32-make -f Makefile-Core -j4` completed |
+| GUI rebuild after background auto-update feature | PASS | `qmake-qt5 GUI.pro` + `mingw32-make -f Makefile-GUI -j4` completed |
 | Desktop Qt/C++ validation build | PASS | `bash 3.compile_all_components.sh --validation` completed with MSYS2 tools on `PATH` |
 | Desktop Qt/C++ validation tests | FAIL | `TestsCommon.exe` exited with code 1 and no diagnostic output before later suites ran |
 | FileManager test binary | FAIL | `TestsFileManager.exe` starts, then fails at `Tests::addInexistingSharedDirectory()` with an unhandled `FM::DirsNotFoundException` |

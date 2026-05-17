@@ -26,6 +26,8 @@
 #include <QLocalServer>
 #include <QStringList>
 #include <QUrl>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
 
 #include <MainWindow.h>
 #include <UpdateChecker.h>
@@ -62,6 +64,7 @@ namespace GUI
       void onUpdateAvailable(QString latestVersion, QString releaseUrl, QString downloadUrl);
       void onUpToDate(QString currentVersion);
       void onUpdateCheckFailed(QString error);
+      void onAutoUpdateDownloadFinished();
 
       // DG-LAN URL scheme (dglan://).
       void handleUrl(const QUrl& url);
@@ -69,6 +72,9 @@ namespace GUI
       void coreReadyForDownloads(); // Drain pending URL queue once connected
 
    private:
+      void startAutoUpdate(const QString& latestVersion, const QString& releaseUrl, const QString& downloadUrl);
+      bool launchInstaller(const QString& installerPath);
+
       QSharedMemory sharedMemory;
 
       MainWindow* mainWindow;
@@ -91,5 +97,11 @@ namespace GUI
 
       // True when a manual "Check for Updates" is in flight (show "up to date" dialog).
       bool manualUpdateCheck = false;
+
+      QNetworkAccessManager autoUpdateNam;
+      QNetworkReply* autoUpdateReply = nullptr;
+      QString autoUpdateReleaseUrl;
+      QString autoUpdateTempFile;
+      bool autoUpdateInProgress = false;
    };
 }
