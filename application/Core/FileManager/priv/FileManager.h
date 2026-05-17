@@ -60,6 +60,7 @@ namespace FM
       ~FileManager();
 
       void setSharedPaths(const QStringList& paths);
+      void rescanSharedPaths(bool fullScan);
       QPair<Common::SharedEntry, QString> addASharedPath(const QString& absolutePath);
       QList<Common::SharedEntry> getSharedEntries() const;
       QString getSharedEntry(const Common::Hash& ID) const;

@@ -101,6 +101,17 @@ Protos::Common::Entries Cache::getProtoSharedEntries() const
    return result;
 }
 
+QList<Entry*> Cache::getRootEntries() const
+{
+   QMutexLocker locker(&this->mutex);
+
+   QList<Entry*> roots;
+   foreach (SharedDirectory* sharedDir, this->sharedEntries)
+      roots << sharedDir->getRootEntry();
+
+   return roots;
+}
+
 Protos::Common::Entries Cache::getProtoEntries(const Protos::Common::Entry& dir, int maxNbHashesPerEntry) const
 {
    QMutexLocker locker(&this->mutex);

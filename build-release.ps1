@@ -26,7 +26,10 @@ $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
 # ── Paths ─────────────────────────────────────────────────────
-$msys2  = $env:MSYS2_ROOT ?? "C:\msys64"
+$msys2  = $env:MSYS2_ROOT
+if (-not $msys2) {
+    $msys2 = "C:\msys64"
+}
 $mingw  = "$msys2\mingw64"
 $bash   = "$msys2\usr\bin\bash.exe"
 $iscc   = $env:ISCC_PATH
@@ -92,11 +95,12 @@ if (-not $SkipBuild) {
         $appDir = $winPath
     }
 
+    $generateProtos = "(cd Protos && for proto in *.proto; do protoc --cpp_out . `"`$proto`"; done)"
     $buildCore = @"
-cd '$appDir/application' && QMAKE=`$(command -v qmake-qt5 2>/dev/null || command -v qmake) && `$QMAKE Core.pro -r -spec win32-g++ 'CONFIG+=release' && mingw32-make -f Makefile-Core -j`$(nproc)
+cd '$appDir/application' && $generateProtos && QMAKE=`$(command -v qmake-qt5 2>/dev/null || command -v qmake) && `$QMAKE Core.pro -r -spec win32-g++ 'CONFIG+=release' && mingw32-make -f Makefile-Core -j`$(nproc)
 "@
     $buildGUI = @"
-cd '$appDir/application' && QMAKE=`$(command -v qmake-qt5 2>/dev/null || command -v qmake) && `$QMAKE GUI.pro -r -spec win32-g++ 'CONFIG+=release' && mingw32-make -f Makefile-GUI -j`$(nproc)
+cd '$appDir/application' && $generateProtos && QMAKE=`$(command -v qmake-qt5 2>/dev/null || command -v qmake) && `$QMAKE GUI.pro -r -spec win32-g++ 'CONFIG+=release' && mingw32-make -f Makefile-GUI -j`$(nproc)
 "@
 
     Write-Host "`n=== Building Core ===" -ForegroundColor Green

@@ -69,6 +69,7 @@ namespace FM
       QList<Common::SharedEntry> getSharedEntries() const;
       SharedDirectory* getSharedEntry(const Common::Hash& ID) const;
       SharedEntry* getSharedEntry(const QString& path) const;
+      QList<Entry*> getRootEntries() const;
       void setSharedPaths(const QList<Common::Path>& paths);
       QPair<Common::SharedEntry, QString> addASharedEntry(const QString& absoluteDir);
       void removeSharedEntry(SharedEntry* dir, Directory* dir2 = nullptr);

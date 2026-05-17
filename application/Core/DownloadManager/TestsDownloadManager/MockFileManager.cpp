@@ -15,6 +15,11 @@ void MockFileManager::setSharedPaths(const QStringList& paths)
 
 }
 
+void MockFileManager::rescanSharedPaths(bool fullScan)
+{
+
+}
+
 QPair<Common::SharedEntry, QString> MockFileManager::addASharedPath(const QString& absolutePath)
 {
    return qMakePair(Common::SharedEntry(), QString());

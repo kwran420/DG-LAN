@@ -60,6 +60,13 @@ namespace FM
       virtual void setSharedPaths(const QStringList& paths) = 0;
 
       /**
+        * Queue all shared paths for a rescan.
+        * When fullScan is true, genuinely new files/directories are indexed.
+        * When false, only entries already known in the cache are refreshed.
+        */
+      virtual void rescanSharedPaths(bool fullScan) = 0;
+
+      /**
         * Add a shared item and return a 'Common::SharedEntry' object and the relative path into the shared directory (not for file item).
         * If the given absolute directory or file is a child of an existing shared directory, no new shared directory is created and
         * the existing one is returned.

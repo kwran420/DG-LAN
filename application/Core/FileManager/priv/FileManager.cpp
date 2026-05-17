@@ -108,6 +108,11 @@ void FileManager::setSharedPaths(const QStringList& paths)
    this->cache.setSharedPaths(pathList);
 }
 
+void FileManager::rescanSharedPaths(bool fullScan)
+{
+   this->fileUpdater.scanRoots(this->cache.getRootEntries(), fullScan);
+}
+
 /**
   * @exception ItemsNotFoundException
   */

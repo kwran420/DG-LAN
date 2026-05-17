@@ -104,8 +104,8 @@ void FileUpdater::addRoot(SharedEntry* sharedEntry)
 
    this->entriesToScan << sharedEntry->getRootEntry();
 
-   // In master mode, do a full scan (index all files).
-   // In client mode, skip — only files already in cache or downloaded via DG-LAN are rehosted.
+   // In master mode, do a full scan and index all files.
+   // In client mode, only files already in cache or downloaded via DG-LAN are rehosted.
    if (!SETTINGS.get<bool>("client_mode"))
       this->fullScanEntries << sharedEntry->getRootEntry();
 
@@ -147,6 +147,26 @@ void FileUpdater::rmRoot(SharedEntry* sharedEntry, Directory* dir2)
       this->fullScanEntries.remove(sharedEntry->getRootEntry());
       this->unwatchableEntries.removeOne(sharedEntry->getRootEntry());
       this->entriesToRemove << sharedEntry->getRootEntry();
+   }
+
+   this->dirEvent->release();
+}
+
+void FileUpdater::scanRoots(const QList<Entry*>& roots, bool fullScan)
+{
+   QMutexLocker locker(&this->mutex);
+
+   for (QListIterator<Entry*> i(roots); i.hasNext();)
+   {
+      Entry* root = i.next();
+      if (!root)
+         continue;
+
+      if (!this->entriesToScan.contains(root))
+         this->entriesToScan << root;
+
+      if (fullScan)
+         this->fullScanEntries << root;
    }
 
    this->dirEvent->release();
@@ -267,13 +287,14 @@ void FileUpdater::run()
          if (!this->entriesToScan.isEmpty())
          {
             addedDir = this->entriesToScan.takeLast();
-            isFullScan = this->fullScanEntries.remove(addedDir);
+            const bool requestedFullScan = this->fullScanEntries.remove(addedDir);
+            isFullScan = requestedFullScan || !SETTINGS.get<bool>("client_mode");
          }
          this->mutex.unlock();
 
          // Synchronize the new directory.
-         // Full scan (new shared dir): index all files.
-         // Watcher scan (filesystem event): skip genuinely new files (only rehost what was already there or downloaded via DG-LAN).
+         // Master mode indexes all files. Client mode only refreshes files already
+         // known in cache or created by DG-LAN downloads.
          if (addedDir)
          {
             this->currentScanIsFullScan = isFullScan;
@@ -303,11 +324,12 @@ void FileUpdater::run()
          QList<Entry*> unwatchableEntriesCopy = this->unwatchableEntries;
          this->mutex.unlock();
 
-         // Synchronize unwatchable directories (periodic rescan, not full scan).
+         // Synchronize unwatchable directories. Masters index new files during the
+         // periodic rescan; clients only refresh entries already in cache.
          for (QListIterator<Entry*> i(unwatchableEntriesCopy); i.hasNext();)
          {
             Entry* dir = i.next();
-            this->currentScanIsFullScan = false;
+            this->currentScanIsFullScan = !SETTINGS.get<bool>("client_mode");
             this->scan(dir);
             this->currentScanIsFullScan = true;
          }
@@ -467,7 +489,7 @@ void FileUpdater::scan(Entry* entry, bool addUnfinished)
 
          if (fileInfo.isDir())
          {
-            // During watcher-driven rescans, skip genuinely new directories
+            // In client-mode refreshes, skip genuinely new directories
             // (e.g., from file extraction). Only traverse directories already in cache.
             if (!this->currentScanIsFullScan && !currentDir->getSubDir(fileInfo.fileName()))
                continue;
@@ -512,8 +534,8 @@ void FileUpdater::scan(Entry* entry, bool addUnfinished)
 
             if (!file)
             {
-               // During watcher-driven rescans, skip genuinely new files.
-               // Only files already present at scan time or downloaded via DG-LAN are rehosted.
+               // In client-mode refreshes, skip genuinely new files.
+               // Only files already present in cache or downloaded via DG-LAN are rehosted.
                // Replaced files (wasExisting) are re-created to keep the index consistent.
                if (!wasExisting && !this->currentScanIsFullScan)
                   continue;

@@ -57,6 +57,7 @@ namespace FM
 
       void addRoot(SharedEntry* sharedEntry);
       void rmRoot(SharedEntry* sharedEntry, Directory* dir2 = nullptr);
+      void scanRoots(const QList<Entry*>& roots, bool fullScan);
 
       void setFileCache(const Protos::FileCache::Hashes* savedCache);
 
@@ -120,8 +121,8 @@ namespace FM
       QList<Entry*> unwatchableEntries;
       QElapsedTimer timerScanUnwatchable;
       QList<Entry*> entriesToScan; ///< When something change in a directory or in a file we put it in this list until it is scanned.
-      QSet<Entry*> fullScanEntries; ///< Entries from addRoot() that need a full scan (index all files). Watcher-driven rescans skip genuinely new files.
-      bool currentScanIsFullScan; ///< True during initial scan or new shared directory scan; false during watcher-triggered rescans.
+      QSet<Entry*> fullScanEntries; ///< Entries explicitly queued for full scanning.
+      bool currentScanIsFullScan; ///< True when genuinely new files/directories should be indexed.
       Entry* currentScanningEntry;
       QWaitCondition scanningStopped;
       mutable QMutex scanningMutex;

@@ -546,18 +546,9 @@ void RemoteConnection::onNewMessage(const Common::Message& message)
          if (coreSettingsMessage.enable_integrity_check() != Protos::Common::TS_NO_CHANGE)
             SETTINGS.set("check_received_data_integrity", coreSettingsMessage.enable_integrity_check() == Protos::Common::TriState::TS_TRUE);
 
-         try
-         {
-            QStringList sharedPaths;
-            for (int i = 0; i < coreSettingsMessage.shared_paths().path_size(); i++)
-               sharedPaths << Common::ProtoHelper::getRepeatedStr(coreSettingsMessage.shared_paths(), &Protos::GUI::CoreSettings::SharedPaths::path, i);
-            this->fileManager->setSharedPaths(sharedPaths);
-         }
-         catch (FM::ItemsNotFoundException& e)
-         {
-            foreach (QString path, e.paths)
-               L_WARN(QString("Shared path not found (may have been removed): %1").arg(path));
-         }
+         QStringList sharedPaths;
+         for (int i = 0; i < coreSettingsMessage.shared_paths().path_size(); i++)
+            sharedPaths << Common::ProtoHelper::getRepeatedStr(coreSettingsMessage.shared_paths(), &Protos::GUI::CoreSettings::SharedPaths::path, i);
 
          QString currentAddressToListenTo = SETTINGS.get<QString>("listen_address");
          Protos::Common::Interface::Address::Protocol currentProtocol = static_cast<Protos::Common::Interface::Address::Protocol>(SETTINGS.get<quint32>("listen_any"));
@@ -581,11 +572,12 @@ void RemoteConnection::onNewMessage(const Common::Message& message)
             SETTINGS.set("master_key_was_reset", true);
          }
 
+         const bool wasClientMode = SETTINGS.get<bool>("client_mode");
          if (coreSettingsMessage.client_mode() != Protos::Common::TS_NO_CHANGE)
          {
             if (coreSettingsMessage.client_mode() == Protos::Common::TriState::TS_TRUE)
             {
-               // Anyone can become a client — no password needed.
+               // Anyone can become a client; no password needed.
                SETTINGS.set("client_mode", true);
             }
             else
@@ -614,6 +606,21 @@ void RemoteConnection::onNewMessage(const Common::Message& message)
                }
             }
          }
+
+         const bool becameMaster = wasClientMode && !SETTINGS.get<bool>("client_mode");
+
+         try
+         {
+            this->fileManager->setSharedPaths(sharedPaths);
+         }
+         catch (FM::ItemsNotFoundException& e)
+         {
+            foreach (QString path, e.paths)
+               L_WARN(QString("Shared path not found (may have been removed): %1").arg(path));
+         }
+
+         if (becameMaster)
+            this->fileManager->rescanSharedPaths(true);
 
          SETTINGS.save();
          this->refresh();
