@@ -216,6 +216,19 @@ QVariant SharedEntryListModel::data(const QModelIndex& index, int role) const
    case Qt::TextAlignmentRole:
       return index.column() == 0 ? Qt::AlignLeft : Qt::AlignRight;
 
+   case Qt::ToolTipRole:
+      if (index.column() == 2 || index.column() == 3)
+      {
+         const qint64 bytes = index.column() == 2 ?
+            this->sharedEntries[index.row()].size :
+            this->sharedEntries[index.row()].freeSpace;
+         return tr("%1\n%2 decimal\n%3 bytes")
+            .arg(Common::Global::formatByteSize(bytes, 2))
+            .arg(Common::Global::formatByteSizeDecimal(bytes, 2))
+            .arg(QString::number(bytes));
+      }
+      return QVariant();
+
    default: return QVariant();
    }
 }

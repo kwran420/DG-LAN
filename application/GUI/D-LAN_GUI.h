@@ -28,6 +28,7 @@
 #include <QUrl>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
+#include <QTimer>
 
 #include <MainWindow.h>
 #include <UpdateChecker.h>
@@ -59,6 +60,7 @@ namespace GUI
       void exit(bool stopTheCore = true);
 
       void checkForUpdates();   // manual tray menu action
+      void checkForUpdatesAutomatically();
 
       // UpdateChecker result slots
       void onUpdateAvailable(QString latestVersion, QString releaseUrl, QString downloadUrl);
@@ -100,6 +102,7 @@ namespace GUI
 
       QNetworkAccessManager autoUpdateNam;
       QNetworkReply* autoUpdateReply = nullptr;
+      QTimer autoUpdateTimer;
       QString autoUpdateReleaseUrl;
       QString autoUpdateTempFile;
       bool autoUpdateInProgress = false;

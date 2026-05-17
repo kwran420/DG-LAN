@@ -126,11 +126,15 @@ void StatusBar::setTotalSharing(int nbPeer, qint64 amount, qint64 localSharing)
       .arg(Common::Global::formatByteSize(amount));
    this->ui->lblTotalSharing->setText(text);
    this->ui->lblTotalSharing->setToolTip(
-      tr("You are sharing %1 with the network.\n%2 %3 sharing %4 total.")
+      tr("You are sharing %1 with the network (%2 decimal, %3 bytes).\n%4 %5 sharing %6 total (%7 decimal, %8 bytes).")
          .arg(Common::Global::formatByteSize(localSharing))
+         .arg(Common::Global::formatByteSizeDecimal(localSharing))
+         .arg(QString::number(localSharing))
          .arg(QString::number(nbPeer))
          .arg(peerLabel)
          .arg(Common::Global::formatByteSize(amount))
+         .arg(Common::Global::formatByteSizeDecimal(amount))
+         .arg(QString::number(amount))
    );
 }
 

@@ -50,6 +50,7 @@ namespace Common
 
       static int nCombinations(int n, int k);
       static QString formatByteSize(qint64 bytes, int precision = 1);
+      static QString formatByteSizeDecimal(qint64 bytes, int precision = 1);
       static QString formatTime(quint64 seconds);
       static QString formatIP(const QHostAddress& address, quint16 port);
       static qint64 availableDiskSpace(const QString& path);

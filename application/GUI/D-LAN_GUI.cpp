@@ -51,6 +51,7 @@ using namespace GUI;
 
 const QString D_LAN_GUI::SHARED_MEMORY_KEYNAME("DG-LAN GUI instance");
 static const QString IPC_SERVER_NAME("DG-LAN-GUI-IPC");
+static const int AUTO_UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
 /**
   * @class GUI::D_LAN_GUI
@@ -136,9 +137,16 @@ D_LAN_GUI::D_LAN_GUI(int& argc, char* argv[]) :
    connect(this->updateChecker, &UpdateChecker::checkFailed,
            this, &D_LAN_GUI::onUpdateCheckFailed);
 
-   // Auto check on launch (delayed so the window is up first).
+   connect(&this->autoUpdateTimer, &QTimer::timeout,
+           this, &D_LAN_GUI::checkForUpdatesAutomatically);
+   this->autoUpdateTimer.setInterval(AUTO_UPDATE_CHECK_INTERVAL_MS);
+
+   // Auto check regularly. The first check is delayed so the window is up first.
    if (UpdateChecker::isAutoCheckEnabled())
-      QTimer::singleShot(3000, this->updateChecker, &UpdateChecker::check);
+   {
+      QTimer::singleShot(3000, this, &D_LAN_GUI::checkForUpdatesAutomatically);
+      this->autoUpdateTimer.start();
+   }
 
    this->updateTrayIconMenu();
 
@@ -253,6 +261,19 @@ void D_LAN_GUI::exit(bool stopTheCore)
 void D_LAN_GUI::checkForUpdates()
 {
    this->manualUpdateCheck = true;
+   this->updateChecker->check();
+}
+
+void D_LAN_GUI::checkForUpdatesAutomatically()
+{
+   if (!UpdateChecker::isAutoCheckEnabled() || this->manualUpdateCheck || this->autoUpdateInProgress)
+   {
+      if (!UpdateChecker::isAutoCheckEnabled())
+         this->autoUpdateTimer.stop();
+      return;
+   }
+
+   this->manualUpdateCheck = false;
    this->updateChecker->check();
 }
 
