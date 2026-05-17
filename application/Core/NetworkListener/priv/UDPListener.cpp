@@ -472,6 +472,19 @@ void UDPListener::sendUnicastIMAlive(const QHostAddress& addr, quint16 port)
    Common::ProtoHelper::setStr(msg, &Protos::Core::IMAlive::mutable_nick,
       nick.length() > MAX_NICK_LENGTH ? nick.left(MAX_NICK_LENGTH) : nick);
    msg.set_amount(this->fileManager->getAmount());
+   msg.set_download_rate(this->downloadManager->getDownloadRate());
+   msg.set_upload_rate(this->uploadManager->getUploadRate());
+   msg.set_lan_speed(SETTINGS.get<quint32>("lan_speed"));
+
+   const Common::Hash localMasterKey = SETTINGS.get<Common::Hash>("master_key_hash");
+   if (!localMasterKey.isNull())
+      msg.mutable_master_key_hash()->set_hash(localMasterKey.getData(), Common::Hash::HASH_SIZE);
+
+   msg.set_is_master(!SETTINGS.get<bool>("client_mode"));
+
+   if (SETTINGS.get<bool>("http_server_enabled"))
+      msg.set_http_port(SETTINGS.get<quint32>("http_server_port"));
+
    msg.set_tag(this->currentIMAliveTag);
 
    const int messageSize = this->writeMessageToBuffer(Common::MessageHeader::CORE_IM_ALIVE, msg);

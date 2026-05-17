@@ -136,7 +136,7 @@ namespace GUI
       FileSortProxy fileSortProxy;
       ProgressDelegate progressDelegate;
 
-      Common::Hash masterPeerID;
+      QSet<Common::Hash> masterPeerIDs;
       Common::Hash localPeerID;
       QSet<Common::Hash> browsedPeers;
       DownloadMenu downloadMenu;

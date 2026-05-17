@@ -156,12 +156,9 @@ All releases are built locally on their native platform via:
 
 Each script handles version bumping, tagging, and GitHub Release creation.
 
-### Fallback: GitHub Actions
+### GitHub Actions
 
-**File**: `.github/workflows/build.yml`  
-**Trigger**: Push a `v*` tag OR manual `workflow_dispatch`  
-**Runner**: `ubuntu-latest` (lightweight — no compile)  
-**Behavior**: If a GitHub Release already exists (created by `build-release.ps1` or `build-release.sh`), CI exits. Otherwise, it creates a **draft** release so you can manually upload the installer.
+The current branch does not contain an active `.github/workflows/build.yml` release workflow. Releases are expected to be built and published from the native local scripts.
 
 ### Future (Phase 2): GitHub Actions Matrix Builds
 
@@ -340,5 +337,4 @@ DG-LAN is transitioning from a stable but aging C++17 + Qt5 + qmake stack to a m
 | `application/Core/NetworkListener/priv/UDPListener.h/.cpp` | Discovery (multicast, broadcast, scan, gossip) |
 | `application/Core/FileManager/priv/FileUpdater/FileUpdater.h/.cpp` | File scanning + selective rehosting |
 | `application/Setups/Windows/windows_setup.iss` | Inno Setup installer script |
-| `.github/workflows/build.yml` | CI fallback (draft release) |
 | `build-release.ps1` | Primary build + publish script |

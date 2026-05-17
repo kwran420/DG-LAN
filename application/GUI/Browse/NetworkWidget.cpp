@@ -335,9 +335,9 @@ void NetworkWidget::onNewState(const Protos::GUI::State& state)
    if (state.peer_size() > 0)
       this->localPeerID = Common::Hash(state.peer(0).peer_id().hash().data());
 
-   // Find the master peer with the highest version from the state's peer list.
-   // Multiple masters can exist on the network; pick the one running the newest
-   // version so that the update prompt uses the authoritative target.
+   // Track every master as an authoritative file-list source. The highest
+   // version master is used only for update enforcement.
+   QSet<Common::Hash> newMasterIDs;
    Common::Hash newMasterID;
    QString masterVersion;
    QVersionNumber bestMasterVer;
@@ -346,6 +346,7 @@ void NetworkWidget::onNewState(const Protos::GUI::State& state)
       if (!state.peer(i).is_master())
          continue;
       const Common::Hash peerID(state.peer(i).peer_id().hash().data());
+      newMasterIDs.insert(peerID);
       const QString ver = QString::fromStdString(state.peer(i).core_version());
       const QVersionNumber peerVer = QVersionNumber::fromString(ver);
       if (peerVer > bestMasterVer)
@@ -408,9 +409,9 @@ void NetworkWidget::onNewState(const Protos::GUI::State& state)
       }
    }
 
-   if (newMasterID != this->masterPeerID)
+   if (newMasterIDs != this->masterPeerIDs)
    {
-      this->masterPeerID = newMasterID;
+      this->masterPeerIDs = newMasterIDs;
       this->browsedPeers.clear();
       this->activeBrowseResults.clear();
       this->browseGeneration++;
@@ -448,7 +449,7 @@ void NetworkWidget::onNewState(const Protos::GUI::State& state)
 void NetworkWidget::coreDisconnected()
 {
    this->activeBrowseResults.clear();
-   this->masterPeerID = Common::Hash();
+   this->masterPeerIDs.clear();
    this->browsedPeers.clear();
    this->networkFileModel.clear();
 }
@@ -480,7 +481,7 @@ void NetworkWidget::browseRootResult(const google::protobuf::RepeatedPtrField<Pr
    auto* senderObj = sender();
    QByteArray idData = senderObj->property("peerID").toByteArray();
    Common::Hash peerID(idData.constData());
-   bool fromMaster = (peerID == this->masterPeerID);
+   bool fromMaster = this->masterPeerIDs.contains(peerID);
 
    for (int i = 0; i < this->activeBrowseResults.size(); ++i)
    {
@@ -528,7 +529,7 @@ void NetworkWidget::browseSubResult(const google::protobuf::RepeatedPtrField<Pro
    auto* senderObj = sender();
    QByteArray idData = senderObj->property("peerID").toByteArray();
    Common::Hash peerID(idData.constData());
-   bool fromMaster = (peerID == this->masterPeerID);
+   bool fromMaster = this->masterPeerIDs.contains(peerID);
 
    for (int i = 0; i < this->activeBrowseResults.size(); ++i)
    {

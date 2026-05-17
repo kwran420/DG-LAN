@@ -506,8 +506,8 @@ Run once (non-admin), replacing the path with your install location:
 ```bat
 reg add "HKCU\Software\Classes\dglan"                          /ve /d "DG-LAN Protocol" /f
 reg add "HKCU\Software\Classes\dglan"                          /v "URL Protocol" /d "" /f
-reg add "HKCU\Software\Classes\dglan\DefaultIcon"              /ve /d "\"C:\Program Files\DG-LAN\D-LAN.GUI.exe\",0" /f
-reg add "HKCU\Software\Classes\dglan\shell\open\command"       /ve /d "\"C:\Program Files\DG-LAN\D-LAN.GUI.exe\" \"%1\"" /f
+reg add "HKCU\Software\Classes\dglan\DefaultIcon"              /ve /d "\"C:\Program Files\DG-LAN\DG-LAN.GUI.exe\",0" /f
+reg add "HKCU\Software\Classes\dglan\shell\open\command"       /ve /d "\"C:\Program Files\DG-LAN\DG-LAN.GUI.exe\" \"%1\"" /f
 ```
 
 Remove: `reg delete "HKCU\Software\Classes\dglan" /f`
@@ -519,7 +519,7 @@ Create `~/.local/share/applications/dglan-handler.desktop`:
 ```ini
 [Desktop Entry]
 Name=DG-LAN URL handler
-Exec=/path/to/D-LAN.GUI %u
+Exec=/path/to/DG-LAN.GUI %u
 MimeType=x-scheme-handler/dglan;
 Type=Application
 NoDisplay=true
@@ -533,7 +533,7 @@ update-desktop-database ~/.local/share/applications
 
 ### macOS
 
-Add to `D-LAN.GUI.app/Contents/Info.plist`:
+Add to `DG-LAN.GUI.app/Contents/Info.plist`:
 
 ```xml
 <key>CFBundleURLTypes</key>
@@ -552,7 +552,7 @@ Add to `D-LAN.GUI.app/Contents/Info.plist`:
 Then re-register:
 ```bash
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
-    -f /Applications/D-LAN.GUI.app
+    -f /Applications/DG-LAN.GUI.app
 ```
 
 ---

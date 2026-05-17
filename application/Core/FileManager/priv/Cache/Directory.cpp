@@ -226,6 +226,7 @@ void Directory::fileDeleted(File* file)
 void Directory::subDirDeleted(Directory* dir)
 {
    QMutexLocker locker(&this->mutex);
+   (*this) -= dir->getSize();
    this->subDirs.removeOne(dir);
 }
 
@@ -417,6 +418,7 @@ void Directory::add(Directory* dir)
 {
    QMutexLocker locker(&this->mutex);
    this->subDirs.insert(dir);
+   (*this) += dir->getSize();
 }
 
 bool Directory::isScanned() const

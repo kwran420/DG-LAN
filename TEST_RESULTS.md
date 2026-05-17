@@ -1,7 +1,7 @@
 # DG-LAN — Test Results
 
-**Last updated:** April 2026  
-**Version:** 1.2.86 Alpha  
+**Last updated:** 17 May 2026
+**Version:** 1.2.112 Alpha
 **Platform:** Windows 10/11 x64 (MSYS2 MinGW64 runtime)
 
 ---
@@ -70,5 +70,25 @@
 ## Build Information
 
 - **Repository:** https://github.com/kwran420/DG-LAN
+- **Current local head:** `e02b4444`
+- **Latest GitHub release checked:** `v1.2.112` (`DG-LAN-1.2.112Alpha-2026-04-12_03-18-Setup.exe`)
 - **Toolchain:** GCC (MinGW64), Qt 5.15.x, Protobuf 3.x
 - **Build script:** `.\build-release.ps1`
+
+## Validation Run on This Checkout
+
+Executed on 17 May 2026:
+
+```bash
+python validate.py
+```
+
+| Layer | Result | Notes |
+|-------|--------|-------|
+| Python bridge tests | PASS | 59/59 pytest cases passed |
+| Core release build | PASS | `qmake-qt5 Core.pro` + `mingw32-make -f Makefile-Core` completed |
+| GUI release build | PASS | `qmake-qt5 GUI.pro` + `mingw32-make -f Makefile-GUI` completed |
+| Core rebuild after multi-master/shared-size fixes | PASS | `qmake-qt5 Core.pro` + `mingw32-make -f Makefile-Core -j4` completed |
+| Desktop Qt/C++ validation build | PASS | `bash 3.compile_all_components.sh --validation` completed with MSYS2 tools on `PATH` |
+| Desktop Qt/C++ validation tests | FAIL | `TestsCommon.exe` exited with code 1 and no diagnostic output before later suites ran |
+| FileManager test binary | FAIL | `TestsFileManager.exe` starts, then fails at `Tests::addInexistingSharedDirectory()` with an unhandled `FM::DirsNotFoundException` |
