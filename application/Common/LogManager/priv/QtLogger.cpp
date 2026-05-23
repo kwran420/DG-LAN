@@ -20,6 +20,7 @@
 using namespace LM;
 
 #include <QtGlobal>
+#include <QScopedValueRollback>
 
 #include <IEntry.h>
 
@@ -35,6 +36,15 @@ using namespace LM;
 
 void handler(QtMsgType type, const QMessageLogContext&, const QString& msg)
 {
+   if (msg.startsWith("QEventDispatcherWin32::registerTimer: Failed to create a timer"))
+      return;
+
+   static thread_local bool handlingMessage = false;
+   if (handlingMessage)
+      return;
+
+   QScopedValueRollback<bool> guard(handlingMessage, true);
+
    Severity s =
          type == QtDebugMsg ? SV_DEBUG :
          type == QtWarningMsg ? SV_WARNING :
